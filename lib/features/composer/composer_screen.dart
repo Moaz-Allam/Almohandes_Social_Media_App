@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../shared/widgets/app_avatar.dart';
+import 'project_form_screen.dart';
+import 'widgets/composer_top_bar.dart';
 
 class ComposerScreen extends StatelessWidget {
   const ComposerScreen({super.key, required this.onClose});
@@ -9,58 +11,44 @@ class ComposerScreen extends StatelessWidget {
   final VoidCallback onClose;
 
   static const _options = [
-    _ComposerOption(Icons.image_outlined, 'إضافة صورة'),
-    _ComposerOption(Icons.videocam_outlined, 'تصوير فيديو'),
-    _ComposerOption(Icons.celebration_outlined, 'الاحتفال بمناسبة'),
-    _ComposerOption(Icons.description_outlined, 'إضافة مستند'),
-    _ComposerOption(Icons.work_outline, 'مشاركة أنك توظف'),
-    _ComposerOption(Icons.badge_outlined, 'العثور على خبير'),
-    _ComposerOption(Icons.poll_outlined, 'إنشاء استطلاع'),
-    _ComposerOption(Icons.event_available_outlined, 'إنشاء حدث'),
+    _ComposerOption(Icons.image_outlined, 'إضافة صورة', _ComposerAction.photo),
+    _ComposerOption(
+      Icons.smart_display_outlined,
+      'إضافة ريل',
+      _ComposerAction.reel,
+    ),
+    _ComposerOption(
+      Icons.folder_special_outlined,
+      'إضافة مشروع',
+      _ComposerAction.project,
+    ),
   ];
+
+  void _handleOption(BuildContext context, _ComposerOption option) {
+    switch (option.action) {
+      case _ComposerAction.photo:
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم اختيار إضافة صورة')));
+        return;
+      case _ComposerAction.reel:
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم اختيار إضافة ريل')));
+        return;
+      case _ComposerAction.project:
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ProjectFormScreen()));
+        return;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SafeArea(
-          bottom: false,
-          child: Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close),
-                  tooltip: 'إغلاق',
-                ),
-                const SizedBox(width: 4),
-                const Expanded(
-                  child: Text(
-                    'مشاركة منشور',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text(
-                    'نشر',
-                    style: TextStyle(
-                      color: AppColors.muted,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        ComposerTopBar(title: 'مشاركة منشور', onClose: onClose),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
@@ -167,7 +155,7 @@ class ComposerScreen extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        onTap: () {},
+                        onTap: () => _handleOption(context, option),
                       ),
                   ],
                 ),
@@ -181,8 +169,11 @@ class ComposerScreen extends StatelessWidget {
 }
 
 final class _ComposerOption {
-  const _ComposerOption(this.icon, this.label);
+  const _ComposerOption(this.icon, this.label, this.action);
 
   final IconData icon;
   final String label;
+  final _ComposerAction action;
 }
+
+enum _ComposerAction { photo, reel, project }

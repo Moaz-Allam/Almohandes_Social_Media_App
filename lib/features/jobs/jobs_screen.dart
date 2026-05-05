@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/job_item.dart';
+import '../../models/saved_content.dart';
+import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'widgets/job_card.dart';
 
@@ -29,8 +31,38 @@ class JobsScreen extends StatelessWidget {
     ),
   ];
 
+  String _jobId(JobItem job) => 'job:${job.title}:${job.company}';
+
+  void _toggleSavedJob(BuildContext context, JobItem job) {
+    final controller = AppScope.read(context);
+    final id = _jobId(job);
+
+    if (controller.isSaved(id)) {
+      controller.removeSavedContent(id);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تمت إزالة الوظيفة')));
+      return;
+    }
+
+    controller.saveContent(
+      SavedContent(
+        id: id,
+        type: SavedContentType.job,
+        title: job.title,
+        subtitle: job.company,
+        detail: job.detail,
+      ),
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم حفظ الوظيفة')));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final controller = AppScope.watch(context);
+
     return Column(
       children: [
         HomeTopBar(
@@ -80,7 +112,12 @@ class JobsScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 10),
-              for (final job in _jobs) JobCard(job: job),
+              for (final job in _jobs)
+                JobCard(
+                  job: job,
+                  isSaved: controller.isSaved(_jobId(job)),
+                  onBookmark: () => _toggleSavedJob(context, job),
+                ),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(16),

@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/saved_content.dart';
 import '../../shared/painters/card_pattern_painter.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../state/app_scope.dart';
+import 'models/profile_content_item.dart';
+import 'profile_content_screen.dart';
+import 'widgets/profile_content_tabs.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
@@ -32,6 +37,13 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final savedItems = isMe
+        ? AppScope.watch(context).savedItems
+        : const <SavedContent>[];
+    final contentTabs = isMe
+        ? _myProfileContentTabs(savedItems)
+        : _publicProfileContentTabs(name);
+
     return Scaffold(
       body: SafeArea(
         child: CustomScrollView(
@@ -69,33 +81,17 @@ class ProfileScreen extends StatelessWidget {
                     color: AppColors.soft,
                   ),
                   _ProfileSection(
-                    title: 'النشاط',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isMe ? '2,900 متابع' : '398 متابع',
-                          style: const TextStyle(color: AppColors.muted),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isMe
-                              ? 'شاركت مؤخرا منشورا عن تحسين تجربة التسجيل.'
-                              : '$name ليس لديه منشورات حديثة',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                    title: 'المحتوى',
+                    child: ProfileContentPreview(
+                      tabs: contentTabs,
+                      onExplore: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProfileContentScreen(
+                            ownerName: name,
+                            tabs: contentTabs,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'ستظهر هنا أحدث المنشورات والتفاعلات المهنية.',
-                          style: TextStyle(
-                            color: AppColors.muted,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   const Divider(
@@ -273,67 +269,220 @@ class _ProfileHeroState extends State<_ProfileHero> {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: isMe
-                          ? () {}
-                          : _connectionPending
-                          ? null
-                          : _requestConnection,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: isMe || !_connectionPending
-                            ? AppColors.blue
-                            : AppColors.soft,
-                        disabledBackgroundColor: AppColors.soft,
-                        disabledForegroundColor: AppColors.muted,
-                        minimumSize: const Size.fromHeight(46),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+              if (!isMe) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _connectionPending
+                            ? null
+                            : _requestConnection,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: !_connectionPending
+                              ? AppColors.blue
+                              : AppColors.soft,
+                          disabledBackgroundColor: AppColors.soft,
+                          disabledForegroundColor: AppColors.muted,
+                          minimumSize: const Size.fromHeight(46),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: Text(
+                          _connectionPending ? 'قيد الانتظار' : 'تواصل',
                         ),
                       ),
-                      child: Text(
-                        isMe
-                            ? 'متاح لـ'
-                            : _connectionPending
-                            ? 'قيد الانتظار'
-                            : 'تواصل',
-                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {},
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.blue,
-                        minimumSize: const Size.fromHeight(46),
-                        side: const BorderSide(color: AppColors.blue),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {},
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.blue,
+                          minimumSize: const Size.fromHeight(46),
+                          side: const BorderSide(color: AppColors.blue),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
                         ),
+                        child: const Text('متابعة'),
                       ),
-                      child: Text(isMe ? 'إضافة قسم' : 'متابعة'),
-                    ),
-                  ),
-                  if (isMe) ...[
-                    const SizedBox(width: 8),
-                    IconButton.outlined(
-                      onPressed: () {},
-                      icon: const Icon(Icons.more_horiz),
-                      tooltip: 'المزيد',
                     ),
                   ],
-                ],
-              ),
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
   }
+}
+
+List<ProfileContentTabData> _myProfileContentTabs(
+  List<SavedContent> savedItems,
+) {
+  return [
+    const ProfileContentTabData(
+      label: 'منشوراتي',
+      items: [
+        ProfileContentItem(
+          icon: Icons.article_outlined,
+          title: 'كيف أعدنا تصميم رحلة إنشاء الحساب',
+          subtitle: 'منشور · 77 إعجاب · 52 تعليق',
+          detail: 'ملاحظات قصيرة عن الاختبار السريع وتحسين أول خطوة.',
+        ),
+        ProfileContentItem(
+          icon: Icons.auto_graph_outlined,
+          title: 'نتائج بحث المستخدمين لهذا الأسبوع',
+          subtitle: 'منشور · 43 إعجاب',
+          detail: 'ملخص عن أهم الأنماط التي ظهرت في مقابلات المنتج.',
+        ),
+        ProfileContentItem(
+          icon: Icons.lightbulb_outline,
+          title: 'خريطة قرارات الواجهة قبل التسليم',
+          subtitle: 'منشور · 29 تعليق',
+          detail: 'طريقة مبسطة لتوثيق البدائل التي ناقشها الفريق.',
+        ),
+        ProfileContentItem(
+          icon: Icons.groups_outlined,
+          title: 'ما تعلمته من جلسات اختبار قابلية الاستخدام',
+          subtitle: 'منشور · 118 تفاعل',
+          detail: 'ثلاث ملاحظات عملية ساعدت في تقليل الاحتكاك.',
+        ),
+      ],
+    ),
+    const ProfileContentTabData(
+      label: 'ريلز',
+      items: [
+        ProfileContentItem(
+          icon: Icons.smart_display_outlined,
+          title: 'لقطة من ورشة تصميم نظام الألوان',
+          subtitle: 'ريل · 8.2K إعجاب',
+          detail: 'فيديو قصير عن ترتيب الحالات والواجهات قبل التسليم.',
+        ),
+        ProfileContentItem(
+          icon: Icons.smart_display_outlined,
+          title: 'تجربة نموذج أولي على الهاتف',
+          subtitle: 'ريل · 3.1K مشاهدة',
+          detail: 'استعراض سريع للتنقل بين الرسائل والملف الشخصي.',
+        ),
+        ProfileContentItem(
+          icon: Icons.smart_display_outlined,
+          title: 'قبل وبعد تحسين صفحة الملف الشخصي',
+          subtitle: 'ريل · 1.9K مشاهدة',
+          detail: 'مقارنة سريعة بين النسخة القديمة والنسخة الجديدة.',
+        ),
+      ],
+    ),
+    ProfileContentTabData(
+      label: 'المحفوظات',
+      items: savedItems.map(_savedContentItem).toList(),
+    ),
+  ];
+}
+
+List<ProfileContentTabData> _publicProfileContentTabs(String name) {
+  return [
+    ProfileContentTabData(
+      label: 'المنشورات',
+      items: [
+        ProfileContentItem(
+          icon: Icons.article_outlined,
+          title: 'منشور حديث من $name',
+          subtitle: 'منشور · 398 تفاعل',
+          detail: 'مشاركة عن تحديات العمل اليومي وبناء شبكة مهنية نشطة.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.groups_outlined,
+          title: 'نقاش حول فرص التعاون',
+          subtitle: 'منشور · 64 تعليق',
+          detail: 'أسئلة مفتوحة عن المهارات المطلوبة في الفرق الحديثة.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.trending_up_outlined,
+          title: 'أدوات يستخدمها الفريق لإنهاء العمل بسرعة',
+          subtitle: 'منشور · 91 تفاعل',
+          detail: 'قائمة مختصرة بأدوات التخطيط والتسليم الأسبوعي.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.school_outlined,
+          title: 'نصيحة للطلاب قبل أول تدريب',
+          subtitle: 'منشور · 22 تعليق',
+          detail: 'خطوات صغيرة لبناء ملف مهني واضح من البداية.',
+        ),
+      ],
+    ),
+    ProfileContentTabData(
+      label: 'الريلز',
+      items: [
+        ProfileContentItem(
+          icon: Icons.smart_display_outlined,
+          title: 'ريل من $name',
+          subtitle: 'ريل · 2.4K مشاهدة',
+          detail: 'لحظة قصيرة من يوم عمل وملاحظات عن الإنتاجية.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.smart_display_outlined,
+          title: 'لقطة من اجتماع مراجعة منتج',
+          subtitle: 'ريل · 980 مشاهدة',
+          detail: 'شرح سريع لكيفية ترتيب الملاحظات بعد الاجتماع.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.smart_display_outlined,
+          title: 'روتين صباحي قبل تسليم مهم',
+          subtitle: 'ريل · 1.2K مشاهدة',
+          detail: 'تحضير اليوم وترتيب الأولويات قبل بداية العمل.',
+        ),
+      ],
+    ),
+    ProfileContentTabData(
+      label: 'الوظائف',
+      items: [
+        ProfileContentItem(
+          icon: Icons.work_outline,
+          title: 'فرصة عمل نشرها $name',
+          subtitle: 'وظيفة · هجين',
+          detail: 'مطلوب عضو فريق لديه اهتمام بالمنتج والتواصل.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.work_outline,
+          title: 'مصمم واجهات مستقل',
+          subtitle: 'وظيفة · عن بعد',
+          detail: 'مشروع قصير لتصميم لوحة تحكم عربية.',
+        ),
+        const ProfileContentItem(
+          icon: Icons.work_outline,
+          title: 'متدرب تجربة مستخدم',
+          subtitle: 'تدريب · القاهرة',
+          detail: 'تدريب عملي على البحث واختبار النماذج الأولية.',
+        ),
+      ],
+    ),
+  ];
+}
+
+ProfileContentItem _savedContentItem(SavedContent item) {
+  final icon = switch (item.type) {
+    SavedContentType.post => Icons.article_outlined,
+    SavedContentType.reel => Icons.smart_display_outlined,
+    SavedContentType.job => Icons.work_outline,
+    SavedContentType.company => Icons.business_outlined,
+  };
+  final typeLabel = switch (item.type) {
+    SavedContentType.post => 'منشور محفوظ',
+    SavedContentType.reel => 'ريل محفوظ',
+    SavedContentType.job => 'وظيفة محفوظة',
+    SavedContentType.company => 'شركة محفوظة',
+  };
+
+  return ProfileContentItem(
+    icon: icon,
+    title: item.title,
+    subtitle: '$typeLabel · ${item.subtitle}',
+    detail: item.detail,
+  );
 }
 
 class _ProfileSection extends StatelessWidget {

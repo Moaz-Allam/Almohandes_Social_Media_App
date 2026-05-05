@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../models/feed_post_model.dart';
+import '../../../models/saved_content.dart';
 import '../../../shared/painters/post_media_painter.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/comments_bottom_sheet.dart';
 import '../../../shared/widgets/like_burst.dart';
+import '../../../state/app_scope.dart';
 import '../../messages/share_contact_screen.dart';
 import '../../profile/profile_screen.dart';
 
@@ -86,6 +88,30 @@ class _FeedPostCardState extends State<FeedPostCard> {
     ).push(MaterialPageRoute(builder: (_) => ShareContactScreen(post: post)));
   }
 
+  void _handleMenuSelection(BuildContext context, String value) {
+    switch (value) {
+      case 'save':
+        AppScope.read(context).saveContent(
+          SavedContent(
+            id: 'post:${post.name}:${post.time}',
+            type: SavedContentType.post,
+            title: post.body,
+            subtitle: post.name,
+            detail: 'منشور محفوظ · ${post.comments}',
+          ),
+        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم الحفظ في المحفوظات')));
+        return;
+      case 'report':
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم إرسال البلاغ')));
+        return;
+    }
+  }
+
   Future<void> _confirmRepost(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -152,7 +178,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert, color: AppColors.muted),
                       tooltip: 'خيارات المنشور',
-                      onSelected: (_) {},
+                      onSelected: (value) =>
+                          _handleMenuSelection(context, value),
                       itemBuilder: (context) => const [
                         PopupMenuItem(value: 'save', child: Text('حفظ')),
                         PopupMenuItem(value: 'report', child: Text('إبلاغ')),

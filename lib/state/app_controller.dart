@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../data/session/session_store.dart';
 import '../models/app_tab.dart';
 import '../models/profile_form.dart';
+import '../models/saved_content.dart';
 
 final class AppController extends ChangeNotifier {
   AppController({required SessionStore sessionStore})
@@ -14,6 +15,29 @@ final class AppController extends ChangeNotifier {
   bool _isSignedIn = false;
   AppTab _selectedTab = AppTab.feed;
   ProfileForm? _profile;
+  final List<SavedContent> _savedItems = [
+    const SavedContent(
+      id: 'sample:post:onboarding',
+      type: SavedContentType.post,
+      title: 'منشور عن تحسين تجربة التسجيل',
+      subtitle: 'ريم حسن',
+      detail: 'محفوظ من الصفحة الرئيسية',
+    ),
+    const SavedContent(
+      id: 'sample:reel:workshop',
+      type: SavedContentType.reel,
+      title: 'ريل ورشة تصميم منتج',
+      subtitle: 'ناتالي منصور',
+      detail: 'محفوظ من ريلز',
+    ),
+    const SavedContent(
+      id: 'sample:job:flutter',
+      type: SavedContentType.job,
+      title: 'مطور Flutter',
+      subtitle: 'Cairo Mobility',
+      detail: 'وظيفة محفوظة · عن بعد',
+    ),
+  ];
 
   bool get isBootstrapped => _isBootstrapped;
 
@@ -22,6 +46,12 @@ final class AppController extends ChangeNotifier {
   AppTab get selectedTab => _selectedTab;
 
   ProfileForm? get profile => _profile;
+
+  List<SavedContent> get savedItems => List.unmodifiable(_savedItems);
+
+  bool isSaved(String id) {
+    return _savedItems.any((item) => item.id == id);
+  }
 
   Future<void> bootstrap() async {
     _isSignedIn = await _sessionStore.isSignedIn();
@@ -55,6 +85,19 @@ final class AppController extends ChangeNotifier {
       return;
     }
     _selectedTab = tab;
+    notifyListeners();
+  }
+
+  void saveContent(SavedContent content) {
+    if (isSaved(content.id)) {
+      return;
+    }
+    _savedItems.insert(0, content);
+    notifyListeners();
+  }
+
+  void removeSavedContent(String id) {
+    _savedItems.removeWhere((item) => item.id == id);
     notifyListeners();
   }
 }

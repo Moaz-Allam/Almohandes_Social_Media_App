@@ -4,9 +4,16 @@ import '../../../core/constants/app_colors.dart';
 import '../../../models/job_item.dart';
 
 class JobCard extends StatelessWidget {
-  const JobCard({super.key, required this.job});
+  const JobCard({
+    super.key,
+    required this.job,
+    required this.isSaved,
+    required this.onBookmark,
+  });
 
   final JobItem job;
+  final bool isSaved;
+  final VoidCallback onBookmark;
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +66,11 @@ class JobCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.bookmark_border, color: AppColors.muted),
+            onPressed: onBookmark,
+            icon: Icon(
+              isSaved ? Icons.bookmark : Icons.bookmark_border,
+              color: isSaved ? AppColors.blue : AppColors.muted,
+            ),
           ),
         ],
       ),

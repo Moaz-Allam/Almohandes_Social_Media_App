@@ -35,23 +35,6 @@ class NetworkCard extends StatelessWidget {
                     child: const SizedBox.expand(),
                   ),
                 ),
-                PositionedDirectional(
-                  top: 6,
-                  end: 6,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: .55),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
                 Positioned(
                   bottom: -38,
                   left: 0,
@@ -103,16 +86,22 @@ class NetworkCard extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.school_outlined, color: AppColors.muted, size: 18),
-                  SizedBox(width: 4),
+                  Icon(
+                    person.isCompany
+                        ? Icons.business_outlined
+                        : Icons.school_outlined,
+                    color: AppColors.muted,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      'جامعة القاهرة',
+                      person.contextLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: AppColors.muted, fontSize: 11),
@@ -136,9 +125,9 @@ class NetworkCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  child: const Text(
-                    'تواصل',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                  child: Text(
+                    person.actionLabel,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
               ),

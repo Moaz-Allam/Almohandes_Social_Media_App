@@ -167,7 +167,23 @@ void main() {
     expect(find.text('متاح لـ'), findsNothing);
     expect(find.text('إضافة قسم'), findsNothing);
     expect(find.byIcon(Icons.more_horiz), findsNothing);
+    expect(find.text('استكشاف كل المحتوى'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('استكشاف كل المحتوى'));
+    await tester.pump();
+    await tester.tap(find.text('استكشاف كل المحتوى'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('كل محتوى'), findsOneWidget);
+    expect(find.text('المنشورات'), findsWidgets);
+    expect(find.text('الريلز'), findsWidgets);
+    expect(find.text('الوظائف'), findsWidgets);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('تواصل'));
+    await tester.pump();
     await tester.tap(find.text('تواصل'));
     await tester.pumpAndSettle();
 
@@ -224,5 +240,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('اكتب رسالة...'), findsOneWidget);
+  });
+
+  testWidgets('composer project flow is reachable', (tester) async {
+    SharedPreferences.setMockInitialValues({'session.signedIn': true});
+
+    await tester.pumpWidget(const LinkedArabicApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('نشر'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('إضافة صورة'), findsOneWidget);
+    expect(find.text('إضافة ريل'), findsOneWidget);
+    expect(find.text('إضافة مشروع'), findsOneWidget);
+    expect(find.text('تصوير فيديو'), findsNothing);
+
+    await tester.tap(find.text('إضافة مشروع'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('مشاركة مشروع'), findsOneWidget);
+    expect(find.text('أساسيات المشروع'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'منصة فرص');
+    await tester.enterText(find.byType(TextFormField).at(1), 'تطبيق موبايل');
+    await tester.enterText(
+      find.byType(TextFormField).at(2),
+      'تجربة تساعد الباحثين عن عمل',
+    );
+    await tester.tap(find.text('التالي').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('الدور وطريقة التنفيذ'), findsOneWidget);
   });
 }
