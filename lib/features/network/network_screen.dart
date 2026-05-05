@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../models/network_person.dart';
 import '../../state/app_scope.dart';
@@ -182,7 +183,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                   subtitle: 'لديك 5 دعوات معلقة',
                   onTap: () => _openInvitations(context),
                 ),
-                const Divider(height: 9, thickness: 8, color: AppColors.soft),
+                Divider(height: 9, thickness: 8, color: context.appSoft),
                 if (categories.length > 1)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -266,7 +267,7 @@ class _NetworkCategoryTabs extends StatelessWidget {
     return Container(
       height: 46,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurfaceAlt,
         borderRadius: BorderRadius.circular(23),
       ),
       child: Row(

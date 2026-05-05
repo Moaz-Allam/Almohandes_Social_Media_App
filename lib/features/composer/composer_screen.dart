@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
@@ -168,8 +169,8 @@ class _ComposerOptionsPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.only(top: 12),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        border: Border.all(color: AppColors.border),
+        color: context.appSurface,
+        border: Border.all(color: context.appBorder),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
@@ -193,7 +194,7 @@ class _ComposerOptionsPanel extends StatelessWidget {
           const SizedBox(height: 14),
           for (final option in options)
             ListTile(
-              leading: Icon(option.icon, color: AppColors.muted),
+              leading: Icon(option.icon, color: context.appMuted),
               title: Text(
                 option.label,
                 style: const TextStyle(

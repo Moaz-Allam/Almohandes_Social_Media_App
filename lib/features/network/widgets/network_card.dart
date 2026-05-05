@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/network_person.dart';
 import '../../../shared/painters/card_pattern_painter.dart';
 import '../../../shared/widgets/app_avatar.dart';
@@ -14,9 +15,9 @@ class NetworkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.white,
+      color: context.appSurface,
       shape: RoundedRectangleBorder(
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: context.appBorder),
         borderRadius: BorderRadius.circular(6),
       ),
       clipBehavior: Clip.antiAlias,
@@ -29,7 +30,7 @@ class NetworkCard extends StatelessWidget {
               children: [
                 Container(
                   height: 64,
-                  color: AppColors.surface,
+                  color: context.appSurfaceAlt,
                   child: CustomPaint(
                     painter: CardPatternPainter(color: person.color),
                     child: const SizedBox.expand(),
@@ -77,8 +78,8 @@ class NetworkCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.muted,
+                  style: TextStyle(
+                    color: context.appMuted,
                     fontSize: 12.5,
                     height: 1.2,
                   ),
@@ -95,7 +96,7 @@ class NetworkCard extends StatelessWidget {
                     person.isCompany
                         ? Icons.business_outlined
                         : Icons.school_outlined,
-                    color: AppColors.muted,
+                    color: context.appMuted,
                     size: 18,
                   ),
                   const SizedBox(width: 4),
@@ -104,7 +105,7 @@ class NetworkCard extends StatelessWidget {
                       person.contextLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: AppColors.muted, fontSize: 11),
+                      style: TextStyle(color: context.appMuted, fontSize: 11),
                     ),
                   ),
                 ],

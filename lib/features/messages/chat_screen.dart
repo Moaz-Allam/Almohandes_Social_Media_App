@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/message_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 
@@ -18,9 +19,9 @@ class ChatScreen extends StatelessWidget {
             Container(
               height: 62,
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(bottom: BorderSide(color: context.appBorder)),
               ),
               child: Row(
                 children: [
@@ -92,9 +93,9 @@ class ChatScreen extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(top: BorderSide(color: context.appBorder)),
               ),
               child: Row(
                 children: [
@@ -114,7 +115,7 @@ class ChatScreen extends StatelessWidget {
                       decoration: InputDecoration(
                         hintText: 'اكتب رسالة...',
                         filled: true,
-                        fillColor: AppColors.soft,
+                        fillColor: context.appSoft,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -160,7 +161,7 @@ class _MessageBubble extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: incoming ? AppColors.soft : AppColors.paleBlue,
+          color: incoming ? context.appSoft : context.appPaleBlue,
           borderRadius: BorderRadius.circular(16).copyWith(
             topRight: incoming ? const Radius.circular(4) : null,
             topLeft: incoming ? null : const Radius.circular(4),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/onboarding_slide.dart';
 import '../../shared/painters/onboarding_scene_painter.dart';
 import '../../shared/widgets/linkedin_logo.dart';
@@ -135,7 +136,7 @@ class _OnboardingSlide extends StatelessWidget {
               copy.title,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppColors.ink,
+                color: context.appText,
                 fontSize: compact ? 18 : 22,
                 height: 1.25,
                 fontWeight: FontWeight.w800,
@@ -150,7 +151,7 @@ class _OnboardingSlide extends StatelessWidget {
                 maxLines: compact ? 2 : 4,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: AppColors.muted,
+                  color: context.appMuted,
                   fontSize: compact ? 12 : 14,
                   height: 1.4,
                 ),
@@ -182,8 +183,8 @@ class _Dots extends StatelessWidget {
           height: selected ? 8 : 6,
           margin: const EdgeInsets.symmetric(horizontal: 5),
           decoration: BoxDecoration(
-            color: selected ? AppColors.muted : Colors.white,
-            border: Border.all(color: AppColors.muted),
+            color: selected ? context.appMuted : context.appSurface,
+            border: Border.all(color: context.appMuted),
             shape: BoxShape.circle,
           ),
         );

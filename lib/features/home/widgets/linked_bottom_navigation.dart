@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/app_tab.dart';
 
 class LinkedBottomNavigation extends StatelessWidget {
@@ -16,9 +17,9 @@ class LinkedBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: AppColors.white,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        border: Border(top: BorderSide(color: context.appBorder)),
       ),
       child: SafeArea(
         top: false,
@@ -82,7 +83,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.black : AppColors.muted;
+    final color = selected ? context.appText : context.appMuted;
     return Expanded(
       child: InkWell(
         onTap: onTap,

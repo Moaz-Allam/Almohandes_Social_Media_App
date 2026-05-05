@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
 import '../messages/messages_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../premium/premium_dashboard_screen.dart';
 import '../profile/profile_screen.dart';
 
 class LinkedInMenuDrawer extends StatelessWidget {
@@ -38,6 +40,33 @@ class LinkedInMenuDrawer extends StatelessWidget {
     );
   }
 
+  Future<void> _openPremiumDashboard(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final app = AppScope.read(context);
+    final wasUnlocked = app.hasPremiumLibrary;
+
+    app.unlockPremiumLibrary();
+    await navigator.maybePop();
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            wasUnlocked ? 'تم فتح لوحة Premium' : 'تم تفعيل Premium بنجاح',
+          ),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+    await Future<void>.delayed(const Duration(milliseconds: 650));
+    if (!navigator.mounted) {
+      return;
+    }
+    navigator.push(
+      MaterialPageRoute(builder: (_) => const PremiumDashboardScreen()),
+    );
+  }
+
   Future<void> _signOut(BuildContext context) async {
     await AppScope.read(context).signOut();
     if (!context.mounted) {
@@ -51,9 +80,11 @@ class LinkedInMenuDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = AppScope.watch(context);
+
     return Drawer(
       width: 304,
-      backgroundColor: AppColors.white,
+      backgroundColor: context.appSurface,
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -103,7 +134,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: context.appBorder),
             ListTile(
               leading: Container(
                 width: 20,
@@ -113,13 +144,15 @@ class LinkedInMenuDrawer extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              title: const Text(
-                'الوصول إلى Premium',
-                style: TextStyle(fontWeight: FontWeight.w800),
+              title: Text(
+                controller.hasPremiumLibrary
+                    ? 'لوحة Premium'
+                    : 'الوصول إلى Premium',
+                style: const TextStyle(fontWeight: FontWeight.w800),
               ),
-              onTap: () {},
+              onTap: () => _openPremiumDashboard(context),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: context.appBorder),
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
@@ -151,7 +184,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
               text: 'ريل جديد من ريم حسن',
               time: 'اليوم',
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: context.appBorder),
             ListTile(
               title: const Text(
                 'عرض كل الإشعارات',
@@ -163,7 +196,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
               onTap: () => _openAllNotifications(context),
             ),
-            const Divider(height: 1),
+            Divider(height: 1, color: context.appBorder),
             ListTile(
               leading: const Icon(
                 Icons.settings_outlined,
@@ -208,7 +241,7 @@ class _SidebarNotification extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       dense: true,
-      leading: Icon(icon, color: AppColors.muted, size: 22),
+      leading: Icon(icon, color: context.appMuted, size: 22),
       title: Text(
         text,
         maxLines: 1,
@@ -219,7 +252,7 @@ class _SidebarNotification extends StatelessWidget {
         time,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: AppColors.muted, fontSize: 12),
+        style: TextStyle(color: context.appMuted, fontSize: 12),
       ),
       onTap: () {},
     );

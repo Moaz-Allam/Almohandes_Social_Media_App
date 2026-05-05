@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/notification_item_model.dart';
 import '../../../shared/widgets/app_avatar.dart';
 
@@ -12,7 +13,7 @@ class NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: item.unread ? AppColors.paleBlue : AppColors.white,
+      color: item.unread ? context.appPaleBlue : context.appSurface,
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,10 +46,7 @@ class NotificationTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      item.time,
-                      style: const TextStyle(color: AppColors.muted),
-                    ),
+                    Text(item.time, style: TextStyle(color: context.appMuted)),
                     IconButton(
                       onPressed: () {},
                       icon: const Icon(Icons.more_vert, color: AppColors.muted),
@@ -60,9 +58,9 @@ class NotificationTile extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 6),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: item.unread ? AppColors.white : AppColors.soft,
+                    color: item.unread ? context.appSurface : context.appSoft,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.appBorder),
                   ),
                   child: Text(
                     item.preview,
@@ -72,9 +70,9 @@ class NotificationTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 7),
-                const Text(
+                Text(
                   '2,487 تفاعل · 275 تعليق',
-                  style: TextStyle(color: AppColors.muted),
+                  style: TextStyle(color: context.appMuted),
                 ),
               ],
             ),

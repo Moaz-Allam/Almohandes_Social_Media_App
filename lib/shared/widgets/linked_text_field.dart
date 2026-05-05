@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 
 class LinkedTextField extends StatelessWidget {
   const LinkedTextField({
@@ -27,8 +27,8 @@ class LinkedTextField extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.muted,
+          style: TextStyle(
+            color: context.appMuted,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),

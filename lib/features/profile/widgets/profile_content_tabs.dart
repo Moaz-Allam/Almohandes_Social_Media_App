@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../models/profile_content_item.dart';
 
 class ProfileContentPreview extends StatelessWidget {
@@ -73,7 +74,7 @@ class ProfileContentTabBar extends StatelessWidget {
       height: 46,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurfaceAlt,
         borderRadius: BorderRadius.circular(23),
       ),
       child: TabBar(
@@ -121,7 +122,8 @@ class ProfileContentList extends StatelessWidget {
           children: [
             for (var index = 0; index < items.length; index++) ...[
               ProfileContentTile(item: items[index]),
-              if (index != items.length - 1) const Divider(height: 18),
+              if (index != items.length - 1)
+                Divider(height: 18, color: context.appBorder),
             ],
           ],
         ),
@@ -131,7 +133,8 @@ class ProfileContentList extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 28),
       itemBuilder: (context, index) => ProfileContentTile(item: items[index]),
-      separatorBuilder: (context, index) => const Divider(height: 24),
+      separatorBuilder: (context, index) =>
+          Divider(height: 24, color: context.appBorder),
       itemCount: items.length,
     );
   }
@@ -151,7 +154,7 @@ class ProfileContentTile extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.appSurfaceAlt,
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(item.icon, color: AppColors.blue),
@@ -176,14 +179,14 @@ class ProfileContentTile extends StatelessWidget {
                 item.subtitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppColors.muted),
+                style: TextStyle(color: context.appMuted),
               ),
               const SizedBox(height: 5),
               Text(
                 item.detail,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppColors.muted, height: 1.3),
+                style: TextStyle(color: context.appMuted, height: 1.3),
               ),
             ],
           ),

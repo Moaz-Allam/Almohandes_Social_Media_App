@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 
 class SocialButton extends StatelessWidget {
   const SocialButton({
@@ -30,8 +30,8 @@ class SocialButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.ink,
-          side: const BorderSide(color: AppColors.muted),
+          foregroundColor: context.appText,
+          side: BorderSide(color: context.appMuted),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -50,7 +50,7 @@ class SocialButton extends StatelessWidget {
                 ),
               )
             else
-              Icon(icon, color: Colors.black, size: 24),
+              Icon(icon, color: context.appText, size: 24),
             const SizedBox(width: 8),
             Text(
               label,

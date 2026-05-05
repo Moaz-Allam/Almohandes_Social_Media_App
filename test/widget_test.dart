@@ -63,6 +63,33 @@ void main() {
     expect(find.text('القصص'), findsOneWidget);
   });
 
+  testWidgets('settings toggles dark mode immediately', (tester) async {
+    SharedPreferences.setMockInitialValues({'session.signedIn': true});
+
+    await tester.pumpWidget(const LinkedArabicApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('يوظف').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('الإعدادات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الوضع الداكن'), findsOneWidget);
+    expect(
+      Theme.of(tester.element(find.text('الإعدادات'))).brightness,
+      Brightness.light,
+    );
+
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+
+    expect(
+      Theme.of(tester.element(find.text('الإعدادات'))).brightness,
+      Brightness.dark,
+    );
+    expect(find.text('التطبيق يستخدم ألوانا داكنة'), findsOneWidget);
+  });
+
   testWidgets('post like toggles primary color and reaction count', (
     tester,
   ) async {
@@ -277,6 +304,38 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('اكتب رسالة...'), findsOneWidget);
+  });
+
+  testWidgets('premium entry opens courses dashboard and playlists', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'session.signedIn': true});
+
+    await tester.pumpWidget(const LinkedArabicApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('يوظف').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('الوصول إلى Premium'), findsOneWidget);
+
+    await tester.tap(find.text('الوصول إلى Premium'));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('تم تفعيل Premium بنجاح'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('لوحة Premium'), findsOneWidget);
+    expect(find.text('مكتبة الدورات'), findsOneWidget);
+    expect(find.text('إدارة المشاريع الإنشائية'), findsOneWidget);
+
+    await tester.tap(find.text('إدارة المشاريع الإنشائية'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('قوائم التشغيل'), findsOneWidget);
+    expect(find.text('تخطيط المشروع'), findsOneWidget);
+    expect(find.text('قراءة متطلبات المشروع'), findsOneWidget);
   });
 
   testWidgets('composer project flow is reachable', (tester) async {

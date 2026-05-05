@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/settings_item.dart';
+import '../../state/app_scope.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -36,15 +38,18 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = AppScope.watch(context);
+
     return Scaffold(
+      backgroundColor: context.appBackground,
       body: SafeArea(
         child: Column(
           children: [
             Container(
               height: 58,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(bottom: BorderSide(color: context.appBorder)),
               ),
               child: Row(
                 children: [
@@ -72,16 +77,51 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: _sections.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemCount: _sections.length + 1,
+                separatorBuilder: (context, index) =>
+                    Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
-                  final section = _sections[index];
+                  if (index == 0) {
+                    return SwitchListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
+                      secondary: Icon(
+                        controller.isDarkMode
+                            ? Icons.dark_mode
+                            : Icons.light_mode_outlined,
+                        color: AppColors.blue,
+                      ),
+                      title: const Text(
+                        'الوضع الداكن',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      subtitle: Text(
+                        controller.isDarkMode
+                            ? 'التطبيق يستخدم ألوانا داكنة'
+                            : 'فعّل تجربة مريحة في الإضاءة المنخفضة',
+                        style: TextStyle(
+                          color: context.appMuted,
+                          fontSize: 14.5,
+                          height: 1.25,
+                        ),
+                      ),
+                      value: controller.isDarkMode,
+                      activeThumbColor: AppColors.blue,
+                      onChanged: controller.setDarkMode,
+                    );
+                  }
+                  final section = _sections[index - 1];
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 18,
                       vertical: 12,
                     ),
-                    leading: Icon(section.icon, color: AppColors.muted),
+                    leading: Icon(section.icon, color: context.appMuted),
                     title: Text(
                       section.title,
                       style: const TextStyle(
@@ -91,8 +131,8 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     subtitle: Text(
                       section.subtitle,
-                      style: const TextStyle(
-                        color: AppColors.muted,
+                      style: TextStyle(
+                        color: context.appMuted,
                         fontSize: 14.5,
                         height: 1.25,
                       ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import 'models/profile_content_item.dart';
 import 'widgets/profile_content_tabs.dart';
 
@@ -20,8 +20,8 @@ class ProfileContentScreen extends StatelessWidget {
       length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: AppColors.white,
-          foregroundColor: AppColors.ink,
+          backgroundColor: context.appSurface,
+          foregroundColor: context.appText,
           title: Text(
             'كل محتوى $ownerName',
             maxLines: 1,

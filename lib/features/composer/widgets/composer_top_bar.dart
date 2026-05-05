@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 
 class ComposerTopBar extends StatelessWidget {
   const ComposerTopBar({
@@ -27,9 +28,9 @@ class ComposerTopBar extends StatelessWidget {
       child: Container(
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          border: Border(bottom: BorderSide(color: AppColors.border)),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          border: Border(bottom: BorderSide(color: context.appBorder)),
         ),
         child: Row(
           children: [

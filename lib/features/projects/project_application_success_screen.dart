@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/project_item.dart';
 
 class ProjectApplicationSuccessScreen extends StatelessWidget {
@@ -11,7 +12,7 @@ class ProjectApplicationSuccessScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: context.appBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
@@ -41,7 +42,7 @@ class ProjectApplicationSuccessScreen extends StatelessWidget {
               Text(
                 'تمت إضافة "${project.title}" إلى المحفوظات في ملفك الشخصي حتى تتابع حالة التقديم بسهولة.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted, height: 1.4),
+                style: TextStyle(color: context.appMuted, height: 1.4),
               ),
               const Spacer(),
               SizedBox(

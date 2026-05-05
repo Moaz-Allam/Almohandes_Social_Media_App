@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/saved_content.dart';
 import '../../shared/painters/card_pattern_painter.dart';
 import '../../shared/widgets/app_avatar.dart';
@@ -50,8 +51,8 @@ class ProfileScreen extends StatelessWidget {
           slivers: [
             SliverAppBar(
               pinned: true,
-              backgroundColor: AppColors.white,
-              foregroundColor: AppColors.ink,
+              backgroundColor: context.appSurface,
+              foregroundColor: context.appText,
               leading: IconButton(
                 onPressed: () => Navigator.of(context).maybePop(),
                 icon: const Icon(Icons.arrow_back),
@@ -75,11 +76,7 @@ class ProfileScreen extends StatelessWidget {
                     location: location,
                     isMe: isMe,
                   ),
-                  const Divider(
-                    height: 10,
-                    thickness: 10,
-                    color: AppColors.soft,
-                  ),
+                  Divider(height: 10, thickness: 10, color: context.appSoft),
                   _ProfileSection(
                     title: 'المحتوى',
                     child: ProfileContentPreview(
@@ -94,11 +91,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Divider(
-                    height: 10,
-                    thickness: 10,
-                    color: AppColors.soft,
-                  ),
+                  Divider(height: 10, thickness: 10, color: context.appSoft),
                   const _ProfileSection(
                     title: 'الخبرة',
                     child: Column(
@@ -129,11 +122,7 @@ class ProfileScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Divider(
-                    height: 10,
-                    thickness: 10,
-                    color: AppColors.soft,
-                  ),
+                  Divider(height: 10, thickness: 10, color: context.appSoft),
                   const _ProfileSection(
                     title: 'التعليم',
                     child: _ExperienceRow(
@@ -257,10 +246,7 @@ class _ProfileHeroState extends State<_ProfileHero> {
                 style: const TextStyle(fontSize: 18, height: 1.3),
               ),
               const SizedBox(height: 6),
-              Text(
-                widget.location,
-                style: const TextStyle(color: AppColors.muted),
-              ),
+              Text(widget.location, style: TextStyle(color: context.appMuted)),
               const SizedBox(height: 8),
               Text(
                 isMe ? '2,900 متابع · 1,300 اتصال' : '370 اتصال',
@@ -281,9 +267,9 @@ class _ProfileHeroState extends State<_ProfileHero> {
                         style: FilledButton.styleFrom(
                           backgroundColor: !_connectionPending
                               ? AppColors.blue
-                              : AppColors.soft,
-                          disabledBackgroundColor: AppColors.soft,
-                          disabledForegroundColor: AppColors.muted,
+                              : context.appSoft,
+                          disabledBackgroundColor: context.appSoft,
+                          disabledForegroundColor: context.appMuted,
                           minimumSize: const Size.fromHeight(46),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
@@ -552,8 +538,8 @@ class _ExperienceRow extends StatelessWidget {
                 ),
               ),
               Text(company, style: const TextStyle(fontSize: 16)),
-              Text(date, style: const TextStyle(color: AppColors.muted)),
-              Text(place, style: const TextStyle(color: AppColors.muted)),
+              Text(date, style: TextStyle(color: context.appMuted)),
+              Text(place, style: TextStyle(color: context.appMuted)),
             ],
           ),
         ),

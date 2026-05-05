@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/story_item.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../stories/story_viewer_screen.dart';
@@ -29,21 +30,21 @@ class StoriesStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        border: Border(bottom: BorderSide(color: context.appBorder)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
             onTap: () => _openStory(context, 0),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 'القصص',
                 style: TextStyle(
-                  color: AppColors.ink,
+                  color: context.appText,
                   fontSize: 17,
                   fontWeight: FontWeight.w900,
                 ),
@@ -85,7 +86,7 @@ class _CreateStoryCard extends StatelessWidget {
       height: 126,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.paleBlue,
+          color: context.appPaleBlue,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.blue, width: 2),
         ),
@@ -139,10 +140,10 @@ class _StoryCard extends StatelessWidget {
         key: cardKey,
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
+          backgroundColor: context.appSurface,
           padding: EdgeInsets.zero,
           side: BorderSide(
-            color: story.isNew ? AppColors.blue : AppColors.border,
+            color: story.isNew ? AppColors.blue : context.appBorder,
             width: story.isNew ? 2 : 1,
           ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -158,8 +159,8 @@ class _StoryCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.ink,
+                style: TextStyle(
+                  color: context.appText,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),

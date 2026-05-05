@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../state/app_scope.dart';
 import 'widgets/composer_top_bar.dart';
@@ -79,7 +80,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
     if (!accountType.canPostProjects) {
       return Scaffold(
-        backgroundColor: AppColors.white,
+        backgroundColor: context.appBackground,
         body: Column(
           children: [
             ComposerTopBar(
@@ -104,7 +105,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     }
 
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: context.appBackground,
       body: Column(
         children: [
           ComposerTopBar(
@@ -116,7 +117,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
           LinearProgressIndicator(
             value: (_step + 1) / _projectSteps.length,
             minHeight: 4,
-            backgroundColor: AppColors.surface,
+            backgroundColor: context.appSurfaceAlt,
             valueColor: const AlwaysStoppedAnimation<Color>(AppColors.blue),
           ),
           Expanded(
@@ -471,7 +472,7 @@ class _ProjectStepView extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: const TextStyle(color: AppColors.muted, height: 1.35),
+            style: TextStyle(color: context.appMuted, height: 1.35),
           ),
           const SizedBox(height: 22),
           for (final child in children) ...[child, const SizedBox(height: 14)],
@@ -611,7 +612,7 @@ class _ChipSelector extends StatelessWidget {
                 selected: selected.contains(option),
                 selectedColor: AppColors.paleBlue,
                 checkmarkColor: AppColors.blue,
-                side: const BorderSide(color: AppColors.border),
+                side: BorderSide(color: context.appBorder),
                 onSelected: (_) => onToggle(option),
               ),
           ],
@@ -632,9 +633,9 @@ class _ProjectPreview extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurfaceAlt,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,7 +649,7 @@ class _ProjectPreview extends StatelessWidget {
             draft.tagline.text.isEmpty
                 ? 'سيظهر وصفك المختصر هنا.'
                 : draft.tagline.text,
-            style: const TextStyle(color: AppColors.muted, height: 1.35),
+            style: TextStyle(color: context.appMuted, height: 1.35),
           ),
           const SizedBox(height: 14),
           _PreviewLine('التصنيف', draft.category),
@@ -688,8 +689,8 @@ class _PreviewLine extends StatelessWidget {
             width: 112,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AppColors.muted,
+              style: TextStyle(
+                color: context.appMuted,
                 fontWeight: FontWeight.w800,
               ),
             ),

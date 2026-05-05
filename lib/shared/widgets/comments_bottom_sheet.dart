@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import 'app_avatar.dart';
 
 Future<void> showLinkedCommentsSheet(BuildContext context) {
@@ -8,7 +9,7 @@ Future<void> showLinkedCommentsSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.white,
+    backgroundColor: context.appSurface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -65,7 +66,7 @@ class LinkedCommentsSheet extends StatelessWidget {
                 width: 58,
                 height: 5,
                 decoration: BoxDecoration(
-                  color: AppColors.ink,
+                  color: context.appText,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
@@ -102,9 +103,9 @@ class LinkedCommentsSheet extends StatelessWidget {
               ),
               Container(
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: AppColors.border)),
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  border: Border(top: BorderSide(color: context.appBorder)),
                 ),
                 child: Row(
                   children: [
@@ -120,22 +121,18 @@ class LinkedCommentsSheet extends StatelessWidget {
                         decoration: InputDecoration(
                           hintText: 'أضف تعليقا...',
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: context.appSurfaceAlt,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 11,
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(26),
-                            borderSide: const BorderSide(
-                              color: AppColors.border,
-                            ),
+                            borderSide: BorderSide(color: context.appBorder),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(26),
-                            borderSide: const BorderSide(
-                              color: AppColors.border,
-                            ),
+                            borderSide: BorderSide(color: context.appBorder),
                           ),
                         ),
                       ),
@@ -184,7 +181,7 @@ class _CommentTile extends StatelessWidget {
                     ),
                     Text(
                       comment.time,
-                      style: const TextStyle(color: AppColors.muted),
+                      style: TextStyle(color: context.appMuted),
                     ),
                     IconButton(
                       onPressed: () {},
@@ -197,7 +194,7 @@ class _CommentTile extends StatelessWidget {
                   comment.role,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.muted),
+                  style: TextStyle(color: context.appMuted),
                 ),
                 const SizedBox(height: 8),
                 Text(

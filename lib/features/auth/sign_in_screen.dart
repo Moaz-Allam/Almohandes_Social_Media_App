@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../features/home/main_shell.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
@@ -48,10 +49,10 @@ class SignInScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 42),
-            const Text(
+            Text(
               'تسجيل الدخول',
               style: TextStyle(
-                color: AppColors.ink,
+                color: context.appText,
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
               ),
@@ -60,7 +61,7 @@ class SignInScreen extends StatelessWidget {
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Text('أو ', style: TextStyle(color: AppColors.muted)),
+                Text('أو ', style: TextStyle(color: context.appMuted)),
                 InkWell(
                   onTap: () => _join(context),
                   child: const Text(

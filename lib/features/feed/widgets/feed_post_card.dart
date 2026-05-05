@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/saved_content.dart';
 import '../../../shared/painters/post_media_painter.dart';
@@ -145,11 +146,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
       children: [
         Container(
           margin: const EdgeInsets.only(bottom: 8),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: context.appSurface,
             border: Border(
-              top: BorderSide(color: AppColors.border),
-              bottom: BorderSide(color: AppColors.border),
+              top: BorderSide(color: context.appBorder),
+              bottom: BorderSide(color: context.appBorder),
             ),
           ),
           child: Column(
@@ -192,10 +193,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                 child: Text(
                   post.body,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15.5,
                     height: 1.36,
-                    color: Colors.black,
+                    color: context.appText,
                   ),
                 ),
               ),
@@ -222,7 +223,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              Divider(height: 1, color: context.appBorder),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
@@ -275,7 +276,7 @@ class _PostHeader extends StatelessWidget {
       children: [
         RichText(
           text: TextSpan(
-            style: const TextStyle(color: AppColors.ink, fontSize: 16),
+            style: TextStyle(color: context.appText, fontSize: 16),
             children: [
               TextSpan(
                 text: post.name,
@@ -289,16 +290,16 @@ class _PostHeader extends StatelessWidget {
           post.headline,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: AppColors.muted, fontSize: 14),
+          style: TextStyle(color: context.appMuted, fontSize: 14),
         ),
         Row(
           children: [
             Text(
               post.time,
-              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+              style: TextStyle(color: context.appMuted, fontSize: 13),
             ),
             const SizedBox(width: 5),
-            const Icon(Icons.public, color: AppColors.muted, size: 14),
+            Icon(Icons.public, color: context.appMuted, size: 14),
           ],
         ),
       ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/search_pill.dart';
 import '../../search/search_screen.dart';
@@ -29,9 +30,9 @@ class HomeTopBar extends StatelessWidget {
       bottom: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          border: Border(bottom: BorderSide(color: AppColors.border)),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          border: Border(bottom: BorderSide(color: context.appBorder)),
         ),
         child: Row(
           children: [

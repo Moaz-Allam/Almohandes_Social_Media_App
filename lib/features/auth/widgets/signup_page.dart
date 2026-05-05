@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 
 class SignupPage extends StatelessWidget {
   const SignupPage({
@@ -31,8 +32,8 @@ class SignupPage extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           title,
-          style: const TextStyle(
-            color: AppColors.ink,
+          style: TextStyle(
+            color: context.appText,
             fontSize: 28,
             fontWeight: FontWeight.w900,
             height: 1.2,
@@ -41,11 +42,7 @@ class SignupPage extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           subtitle,
-          style: const TextStyle(
-            color: AppColors.muted,
-            fontSize: 15,
-            height: 1.45,
-          ),
+          style: TextStyle(color: context.appMuted, fontSize: 15, height: 1.45),
         ),
         const SizedBox(height: 24),
         ...children,

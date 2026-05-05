@@ -38,28 +38,31 @@ class _LinkedArabicAppState extends State<LinkedArabicApp> {
   Widget build(BuildContext context) {
     return AppScope(
       controller: _controller,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'المهندس',
-        locale: const Locale('ar'),
-        builder: (context, child) {
-          return Directionality(
-            textDirection: TextDirection.rtl,
-            child: child ?? const SizedBox.shrink(),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'المهندس',
+            locale: const Locale('ar'),
+            builder: (context, child) {
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: _controller.isDarkMode
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            home: _controller.isBootstrapped
+                ? (_controller.isSignedIn
+                      ? const MainShell()
+                      : const OnboardingScreen())
+                : const SplashScreen(),
           );
         },
-        theme: AppTheme.light,
-        home: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
-            if (!_controller.isBootstrapped) {
-              return const SplashScreen();
-            }
-            return _controller.isSignedIn
-                ? const MainShell()
-                : const OnboardingScreen();
-          },
-        ),
       ),
     );
   }

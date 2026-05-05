@@ -13,6 +13,8 @@ final class AppController extends ChangeNotifier {
 
   bool _isBootstrapped = false;
   bool _isSignedIn = false;
+  bool _isDarkMode = false;
+  bool _hasPremiumLibrary = false;
   AppTab _selectedTab = AppTab.feed;
   ProfileForm? _profile;
   final List<SavedContent> _savedItems = [
@@ -43,6 +45,10 @@ final class AppController extends ChangeNotifier {
 
   bool get isSignedIn => _isSignedIn;
 
+  bool get isDarkMode => _isDarkMode;
+
+  bool get hasPremiumLibrary => _hasPremiumLibrary;
+
   AppTab get selectedTab => _selectedTab;
 
   ProfileForm? get profile => _profile;
@@ -54,7 +60,12 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> bootstrap() async {
-    _isSignedIn = await _sessionStore.isSignedIn();
+    final (signedIn, darkMode) = await (
+      _sessionStore.isSignedIn(),
+      _sessionStore.isDarkMode(),
+    ).wait;
+    _isSignedIn = signedIn;
+    _isDarkMode = darkMode;
     _isBootstrapped = true;
     notifyListeners();
   }
@@ -74,10 +85,28 @@ final class AppController extends ChangeNotifier {
 
   Future<void> signOut() async {
     _isSignedIn = false;
+    _hasPremiumLibrary = false;
     _profile = null;
     _selectedTab = AppTab.feed;
     await _sessionStore.clear();
     notifyListeners();
+  }
+
+  void unlockPremiumLibrary() {
+    if (_hasPremiumLibrary) {
+      return;
+    }
+    _hasPremiumLibrary = true;
+    notifyListeners();
+  }
+
+  Future<void> setDarkMode(bool enabled) async {
+    if (_isDarkMode == enabled) {
+      return;
+    }
+    _isDarkMode = enabled;
+    notifyListeners();
+    await _sessionStore.saveDarkMode(enabled);
   }
 
   void selectTab(AppTab tab) {

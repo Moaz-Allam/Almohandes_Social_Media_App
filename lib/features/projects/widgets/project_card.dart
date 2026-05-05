@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/project_item.dart';
 
 class ProjectCard extends StatelessWidget {
@@ -15,9 +16,9 @@ class ProjectCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,10 +58,7 @@ class ProjectCard extends StatelessWidget {
                       project.tagline,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        height: 1.3,
-                      ),
+                      style: TextStyle(color: context.appMuted, height: 1.3),
                     ),
                   ],
                 ),
@@ -93,7 +91,7 @@ class ProjectCard extends StatelessWidget {
             '${project.location} · ${project.commitment} · ${project.budget}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.muted, height: 1.3),
+            style: TextStyle(color: context.appMuted, height: 1.3),
           ),
           const SizedBox(height: 12),
           Row(
@@ -134,7 +132,7 @@ class _ProjectMetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.appSurfaceAlt,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(

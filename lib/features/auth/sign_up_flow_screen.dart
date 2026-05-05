@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../features/home/main_shell.dart';
 import '../../models/account_type.dart';
 import '../../shared/widgets/linkedin_logo.dart';
@@ -256,9 +257,9 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(top: BorderSide(color: AppColors.border)),
+                  decoration: BoxDecoration(
+                    color: context.appSurface,
+                    border: Border(top: BorderSide(color: context.appBorder)),
                   ),
                   child: Row(
                     children: [
@@ -317,10 +318,10 @@ class _UserTypeCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? AppColors.paleBlue : AppColors.white,
+          color: selected ? context.appPaleBlue : context.appSurface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.blue : AppColors.border,
+            color: selected ? AppColors.blue : context.appBorder,
           ),
         ),
         child: Row(
@@ -354,7 +355,7 @@ class _UserTypeCard extends StatelessWidget {
                     type.description,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted),
+                    style: TextStyle(color: context.appMuted),
                   ),
                 ],
               ),
@@ -460,15 +461,15 @@ class _OptionTile extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 74),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppColors.paleBlue : AppColors.white,
+          color: selected ? context.appPaleBlue : context.appSurface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.blue : AppColors.border,
+            color: selected ? AppColors.blue : context.appBorder,
           ),
         ),
         child: Row(
           children: [
-            Icon(icon, color: selected ? AppColors.blue : AppColors.muted),
+            Icon(icon, color: selected ? AppColors.blue : context.appMuted),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -476,7 +477,7 @@ class _OptionTile extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? AppColors.blue : AppColors.ink,
+                  color: selected ? AppColors.blue : context.appText,
                   fontWeight: FontWeight.w900,
                 ),
               ),

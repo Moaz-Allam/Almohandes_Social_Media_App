@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../profile/profile_screen.dart';
 
 enum SearchFilter {
@@ -46,9 +47,9 @@ class _SearchScreenState extends State<SearchScreen> {
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-              decoration: const BoxDecoration(
-                color: AppColors.white,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(bottom: BorderSide(color: context.appBorder)),
               ),
               child: Row(
                 children: [
@@ -66,7 +67,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         hintText: 'ابحث في المهندس',
                         prefixIcon: const Icon(Icons.search),
                         filled: true,
-                        fillColor: AppColors.surface,
+                        fillColor: context.appSurfaceAlt,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 0,
@@ -107,12 +108,12 @@ class _SearchScreenState extends State<SearchScreen> {
                     side: BorderSide(
                       color: _filter == filter
                           ? AppColors.blue
-                          : AppColors.border,
+                          : context.appBorder,
                     ),
                     labelStyle: TextStyle(
                       color: _filter == filter
                           ? AppColors.darkBlue
-                          : AppColors.ink,
+                          : context.appText,
                       fontWeight: FontWeight.w800,
                     ),
                     showCheckmark: false,
@@ -171,7 +172,7 @@ class _SearchResults extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       itemBuilder: (context, index) => ListTile(
         leading: CircleAvatar(
-          backgroundColor: AppColors.paleBlue,
+          backgroundColor: context.appPaleBlue,
           child: Icon(rows[index].icon, color: AppColors.blue),
         ),
         title: Text(
@@ -200,7 +201,7 @@ class _SearchResults extends StatelessWidget {
             : () {},
       ),
       separatorBuilder: (context, index) =>
-          const Divider(height: 1, indent: 72),
+          Divider(height: 1, indent: 72, color: context.appBorder),
       itemCount: rows.length,
     );
   }

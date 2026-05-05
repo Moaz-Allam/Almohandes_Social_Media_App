@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/project_item.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'project_application_screen.dart';
@@ -126,9 +127,9 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         ),
         Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-          decoration: const BoxDecoration(
-            color: AppColors.white,
-            border: Border(bottom: BorderSide(color: AppColors.border)),
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            border: Border(bottom: BorderSide(color: context.appBorder)),
           ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -232,9 +233,9 @@ class _FilterMenu extends StatelessWidget {
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.appSurfaceAlt,
             borderRadius: BorderRadius.circular(19),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.appBorder),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

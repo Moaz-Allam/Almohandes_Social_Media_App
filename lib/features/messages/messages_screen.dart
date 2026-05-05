@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/message_item.dart';
 import '../profile/profile_screen.dart';
 import 'chat_screen.dart';
@@ -95,9 +96,9 @@ class MessagesScreen extends StatelessWidget {
             Container(
               height: 58,
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(bottom: BorderSide(color: context.appBorder)),
               ),
               child: Row(
                 children: [
@@ -132,21 +133,21 @@ class MessagesScreen extends StatelessWidget {
             Container(
               height: 42,
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(bottom: BorderSide(color: context.appBorder)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.search, color: AppColors.muted, size: 20),
-                  SizedBox(width: 8),
+                  Icon(Icons.search, color: context.appMuted, size: 20),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'بحث في الرسائل',
-                      style: TextStyle(color: AppColors.muted),
+                      style: TextStyle(color: context.appMuted),
                     ),
                   ),
-                  Icon(Icons.tune, color: AppColors.muted, size: 20),
+                  Icon(Icons.tune, color: context.appMuted, size: 20),
                 ],
               ),
             ),
@@ -154,7 +155,7 @@ class MessagesScreen extends StatelessWidget {
               child: ListView.separated(
                 itemCount: _contacts.length,
                 separatorBuilder: (context, index) =>
-                    const Divider(height: 1, indent: 78),
+                    Divider(height: 1, indent: 78, color: context.appBorder),
                 itemBuilder: (context, index) => MessageTile(
                   item: _contacts[index],
                   onTap: () => _openChat(context, _contacts[index]),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/message_item.dart';
 import '../../../shared/widgets/app_avatar.dart';
 
@@ -52,7 +53,7 @@ class MessageTile extends StatelessWidget {
               style: const TextStyle(fontSize: 16),
             ),
           ),
-          Text(item.time, style: const TextStyle(color: AppColors.muted)),
+          Text(item.time, style: TextStyle(color: context.appMuted)),
         ],
       ),
       subtitle: Row(
@@ -63,7 +64,7 @@ class MessageTile extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.black,
+                color: context.appText,
                 fontWeight: item.unread ? FontWeight.w900 : FontWeight.w400,
               ),
             ),

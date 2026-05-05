@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/project_item.dart';
 import '../../models/saved_content.dart';
 import '../../state/app_scope.dart';
@@ -67,10 +68,10 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
     final project = widget.project;
 
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.ink,
+        backgroundColor: context.appSurface,
+        foregroundColor: context.appText,
         title: const Text(
           'التقديم على مشروع',
           style: TextStyle(fontWeight: FontWeight.w900),
@@ -84,7 +85,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.appSurfaceAlt,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -102,10 +103,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
                   const SizedBox(height: 6),
                   Text(
                     project.tagline,
-                    style: const TextStyle(
-                      color: AppColors.muted,
-                      height: 1.35,
-                    ),
+                    style: TextStyle(color: context.appMuted, height: 1.35),
                   ),
                 ],
               ),
