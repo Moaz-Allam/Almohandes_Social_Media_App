@@ -438,24 +438,24 @@ List<ProfileContentTabData> _publicProfileContentTabs(String name) {
       ],
     ),
     ProfileContentTabData(
-      label: 'الوظائف',
+      label: 'المشاريع',
       items: [
         ProfileContentItem(
-          icon: Icons.work_outline,
-          title: 'فرصة عمل نشرها $name',
-          subtitle: 'وظيفة · هجين',
-          detail: 'مطلوب عضو فريق لديه اهتمام بالمنتج والتواصل.',
+          icon: Icons.folder_special_outlined,
+          title: 'مشروع تعاوني نشره $name',
+          subtitle: 'مشروع · هجين',
+          detail: 'مطلوب أعضاء فريق لديهم اهتمام بالمنتج والتواصل.',
         ),
         const ProfileContentItem(
-          icon: Icons.work_outline,
-          title: 'مصمم واجهات مستقل',
-          subtitle: 'وظيفة · عن بعد',
+          icon: Icons.folder_special_outlined,
+          title: 'لوحة تحكم عربية للفرق الصغيرة',
+          subtitle: 'مشروع · عن بعد',
           detail: 'مشروع قصير لتصميم لوحة تحكم عربية.',
         ),
         const ProfileContentItem(
-          icon: Icons.work_outline,
-          title: 'متدرب تجربة مستخدم',
-          subtitle: 'تدريب · القاهرة',
+          icon: Icons.folder_special_outlined,
+          title: 'نظام توصية للمتدربين',
+          subtitle: 'مشروع بحثي · القاهرة',
           detail: 'تدريب عملي على البحث واختبار النماذج الأولية.',
         ),
       ],
@@ -467,13 +467,13 @@ ProfileContentItem _savedContentItem(SavedContent item) {
   final icon = switch (item.type) {
     SavedContentType.post => Icons.article_outlined,
     SavedContentType.reel => Icons.smart_display_outlined,
-    SavedContentType.job => Icons.work_outline,
+    SavedContentType.project => Icons.folder_special_outlined,
     SavedContentType.company => Icons.business_outlined,
   };
   final typeLabel = switch (item.type) {
     SavedContentType.post => 'منشور محفوظ',
     SavedContentType.reel => 'ريل محفوظ',
-    SavedContentType.job => 'وظيفة محفوظة',
+    SavedContentType.project => 'مشروع محفوظ',
     SavedContentType.company => 'شركة محفوظة',
   };
 

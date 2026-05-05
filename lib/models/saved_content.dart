@@ -1,4 +1,4 @@
-enum SavedContentType { post, reel, job, company }
+enum SavedContentType { post, reel, project, company }
 
 final class SavedContent {
   const SavedContent({

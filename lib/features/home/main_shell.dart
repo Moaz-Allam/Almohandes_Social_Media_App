@@ -4,10 +4,10 @@ import '../../models/app_tab.dart';
 import '../../state/app_scope.dart';
 import '../composer/composer_screen.dart';
 import '../feed/home_feed_screen.dart';
-import '../jobs/jobs_screen.dart';
 import '../menu/linked_in_menu_drawer.dart';
 import '../messages/messages_screen.dart';
 import '../network/network_screen.dart';
+import '../projects/projects_screen.dart';
 import '../reels/reels_screen.dart';
 import '../settings/settings_screen.dart';
 import 'widgets/linked_bottom_navigation.dart';
@@ -48,10 +48,7 @@ class MainShell extends StatelessWidget {
         onMenu: () => scaffoldKey.currentState?.openDrawer(),
         onMessages: () => _openMessages(context),
       ),
-      AppTab.jobs => JobsScreen(
-        onMenu: () => scaffoldKey.currentState?.openDrawer(),
-        onMessages: () => _openMessages(context),
-      ),
+      AppTab.projects => const ProjectsScreen(),
     };
 
     return Scaffold(

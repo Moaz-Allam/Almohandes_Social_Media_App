@@ -31,11 +31,11 @@ final class AppController extends ChangeNotifier {
       detail: 'محفوظ من ريلز',
     ),
     const SavedContent(
-      id: 'sample:job:flutter',
-      type: SavedContentType.job,
-      title: 'مطور Flutter',
-      subtitle: 'Cairo Mobility',
-      detail: 'وظيفة محفوظة · عن بعد',
+      id: 'sample:project:flutter',
+      type: SavedContentType.project,
+      title: 'تطبيق متابعة فرص العمل',
+      subtitle: 'مشروع محفوظ · Mobile App',
+      detail: 'Flutter · عن بعد · مرحلة MVP',
     ),
   ];
 
@@ -98,6 +98,12 @@ final class AppController extends ChangeNotifier {
 
   void removeSavedContent(String id) {
     _savedItems.removeWhere((item) => item.id == id);
+    notifyListeners();
+  }
+
+  void saveAppliedProject(SavedContent content) {
+    removeSavedContent(content.id);
+    _savedItems.insert(0, content);
     notifyListeners();
   }
 }

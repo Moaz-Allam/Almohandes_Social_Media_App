@@ -106,7 +106,7 @@ class ComposerScreen extends StatelessWidget {
               const SizedBox(height: 24),
               const TextField(
                 minLines: 4,
-                maxLines: 8,
+                maxLines: 12,
                 textDirection: TextDirection.rtl,
                 decoration: InputDecoration(
                   border: InputBorder.none,
@@ -117,53 +117,69 @@ class ComposerScreen extends StatelessWidget {
                   hintStyle: TextStyle(fontSize: 21, color: AppColors.muted),
                 ),
               ),
-              const SizedBox(height: 28),
-              Container(
-                padding: const EdgeInsets.only(top: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: .04),
-                      blurRadius: 12,
-                      offset: const Offset(0, -3),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 54,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: AppColors.muted,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    for (final option in _options)
-                      ListTile(
-                        leading: Icon(option.icon, color: AppColors.muted),
-                        title: Text(
-                          option.label,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        onTap: () => _handleOption(context, option),
-                      ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
+        _ComposerOptionsPanel(
+          options: _options,
+          onSelected: (option) => _handleOption(context, option),
+        ),
       ],
+    );
+  }
+}
+
+class _ComposerOptionsPanel extends StatelessWidget {
+  const _ComposerOptionsPanel({
+    required this.options,
+    required this.onSelected,
+  });
+
+  final List<_ComposerOption> options;
+  final ValueChanged<_ComposerOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(top: 12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        border: Border.all(color: AppColors.border),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .04),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 54,
+            height: 5,
+            decoration: BoxDecoration(
+              color: AppColors.muted,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          const SizedBox(height: 14),
+          for (final option in options)
+            ListTile(
+              leading: Icon(option.icon, color: AppColors.muted),
+              title: Text(
+                option.label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () => onSelected(option),
+            ),
+        ],
+      ),
     );
   }
 }

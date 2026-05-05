@@ -52,10 +52,10 @@ class LinkedBottomNavigation extends StatelessWidget {
                 onTap: () => onChanged(AppTab.reels),
               ),
               _NavItem(
-                icon: Icons.work,
-                label: 'وظائف',
-                selected: selectedTab == AppTab.jobs,
-                onTap: () => onChanged(AppTab.jobs),
+                icon: Icons.folder_special,
+                label: 'مشاريع',
+                selected: selectedTab == AppTab.projects,
+                onTap: () => onChanged(AppTab.projects),
               ),
             ],
           ),
@@ -87,47 +87,58 @@ class _NavItem extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(icon, color: color, size: 26),
-                if (badge != null)
-                  PositionedDirectional(
-                    end: -8,
-                    top: -6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.blue,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                      child: Text(
-                        badge!,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 3,
+              color: selected ? AppColors.blue : Colors.transparent,
+            ),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(icon, color: color, size: 26),
+                      if (badge != null)
+                        PositionedDirectional(
+                          end: -8,
+                          top: -6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.blue,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              badge!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      height: 1.1,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                height: 1.1,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                ],
               ),
             ),
           ],

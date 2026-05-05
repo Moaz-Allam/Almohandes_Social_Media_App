@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
+import '../messages/messages_screen.dart';
+import '../notifications/notifications_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -15,6 +17,25 @@ class LinkedInMenuDrawer extends StatelessWidget {
     final navigator = Navigator.of(context);
     await navigator.maybePop();
     navigator.push(MaterialPageRoute(builder: (_) => const ProfileScreen.me()));
+  }
+
+  Future<void> _openAllNotifications(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await navigator.maybePop();
+    navigator.push(
+      MaterialPageRoute(
+        builder: (routeContext) => Scaffold(
+          body: NotificationsScreen(
+            onMenu: () => Navigator.of(routeContext).maybePop(),
+            onMessages: () {
+              Navigator.of(
+                routeContext,
+              ).push(MaterialPageRoute(builder: (_) => const MessagesScreen()));
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -140,7 +161,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                 ),
               ),
               trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
-              onTap: () {},
+              onTap: () => _openAllNotifications(context),
             ),
             const Divider(height: 1),
             ListTile(

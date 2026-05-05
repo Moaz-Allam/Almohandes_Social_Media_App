@@ -116,6 +116,14 @@ void main() {
 
     expect(find.text('آخر الإشعارات'), findsOneWidget);
     expect(find.text('مجتمع مصممي المنتجات'), findsNothing);
+
+    await tester.tap(find.text('عرض كل الإشعارات'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('ناتاليا شوستاك و 2,486 آخرون تفاعلوا مع منشورك'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('search and chat detail screens are reachable', (tester) async {
@@ -177,7 +185,7 @@ void main() {
     expect(find.textContaining('كل محتوى'), findsOneWidget);
     expect(find.text('المنشورات'), findsWidgets);
     expect(find.text('الريلز'), findsWidgets);
-    expect(find.text('الوظائف'), findsWidgets);
+    expect(find.text('المشاريع'), findsWidgets);
 
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
@@ -260,17 +268,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('مشاركة مشروع'), findsOneWidget);
-    expect(find.text('أساسيات المشروع'), findsOneWidget);
+    expect(find.text('1. أساسيات المشروع'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).at(0), 'منصة فرص');
-    await tester.enterText(find.byType(TextFormField).at(1), 'تطبيق موبايل');
     await tester.enterText(
-      find.byType(TextFormField).at(2),
+      find.byType(TextFormField).at(1),
       'تجربة تساعد الباحثين عن عمل',
     );
     await tester.tap(find.text('التالي').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('الدور وطريقة التنفيذ'), findsOneWidget);
+    expect(find.text('2. نظرة عامة على المشروع'), findsOneWidget);
+  });
+
+  testWidgets('projects can be applied to and appear in saved profile content', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'session.signedIn': true});
+
+    await tester.pumpWidget(const LinkedArabicApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('مشاريع'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('الترتيب: الأحدث'), findsOneWidget);
+    expect(find.text('محرك مطابقة مشاريع بالذكاء الاصطناعي'), findsOneWidget);
+
+    await tester.tap(find.text('تقديم').first);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'جاهز للمساهمة');
+    await tester.enterText(
+      find.byType(TextFormField).at(1),
+      'لدي خبرة مناسبة في بناء تطبيقات Flutter وربط النماذج بالخدمات الخلفية.',
+    );
+    await tester.tap(find.text('رفع ملفات للتقديم'));
+    await tester.pump();
+    await tester.tap(find.text('إرسال التقديم'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تم إرسال طلبك بنجاح'), findsOneWidget);
+
+    await tester.tap(find.text('العودة إلى المشاريع'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('الرئيسية'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('يوظف').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('عرض الملف · الإعدادات'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('المحفوظات'));
+    await tester.tap(find.text('المحفوظات'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('محرك مطابقة مشاريع بالذكاء الاصطناعي'), findsWidgets);
   });
 }
