@@ -6,16 +6,19 @@ abstract final class AppTheme {
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: AppColors.white,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.blue,
         primary: AppColors.blue,
-        surface: Colors.white,
+        secondary: AppColors.darkBlue,
+        surface: AppColors.white,
+        onPrimary: AppColors.white,
+        onSurface: AppColors.ink,
       ),
       fontFamily: 'Arial',
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppColors.white,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 13,

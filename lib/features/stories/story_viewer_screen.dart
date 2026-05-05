@@ -232,7 +232,7 @@ class _StoryImage extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [story.color.withValues(alpha: .95), const Color(0xFF111111)],
+          colors: [story.color.withValues(alpha: .95), AppColors.black],
         ),
       ),
       child: CustomPaint(

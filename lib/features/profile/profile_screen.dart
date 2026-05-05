@@ -18,7 +18,7 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen.me({super.key})
     : name = 'ريم حسن',
       headline = 'مصممة منتجات رقمية',
-      color = const Color(0xFF9151A8),
+      color = AppColors.darkBlue,
       location = 'القاهرة، مصر',
       isMe = true,
       isConnectionRequest = false;
@@ -38,7 +38,7 @@ class ProfileScreen extends StatelessWidget {
           slivers: [
             SliverAppBar(
               pinned: true,
-              backgroundColor: Colors.white,
+              backgroundColor: AppColors.white,
               foregroundColor: AppColors.ink,
               leading: IconButton(
                 onPressed: () => Navigator.of(context).maybePop(),
@@ -116,7 +116,7 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         Divider(height: 28),
                         _ExperienceRow(
-                          iconColor: Color(0xFFF0B84E),
+                          iconColor: AppColors.darkBlue,
                           title: 'متطوع',
                           company: 'أهلا شباب · دوام جزئي',
                           date: 'أغسطس 2025 - الآن · 10 أشهر',
@@ -124,7 +124,7 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         Divider(height: 28),
                         _ExperienceRow(
-                          iconColor: Color(0xFF6DA064),
+                          iconColor: AppColors.muted,
                           title: 'باحث تجربة مستخدم',
                           company: 'صناع الحياة · مستقل',
                           date: 'أبريل 2025 - الآن',
@@ -141,7 +141,7 @@ class ProfileScreen extends StatelessWidget {
                   const _ProfileSection(
                     title: 'التعليم',
                     child: _ExperienceRow(
-                      iconColor: Color(0xFFAFC2CF),
+                      iconColor: AppColors.border,
                       title: 'جامعة القاهرة',
                       company: 'بكالوريوس نظم معلومات',
                       date: '2023 - 2027',

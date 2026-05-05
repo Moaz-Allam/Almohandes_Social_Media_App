@@ -12,37 +12,37 @@ class InvitationsScreen extends StatelessWidget {
     NetworkPerson(
       name: 'سلمى فتحي',
       title: 'طالبة ثانوي في KFS STEM School',
-      color: Color(0xFF7B5AA6),
+      color: AppColors.blue,
       badge: '9 اتصالات مشتركة · قبل ساعة',
     ),
     NetworkPerson(
       name: 'أنس يونس',
       title: 'Obour STEM School 26',
-      color: Color(0xFF5E7893),
+      color: AppColors.darkBlue,
       badge: '49 اتصالا مشتركا · أمس',
     ),
     NetworkPerson(
       name: 'ليلى عادل',
       title: 'مصممة واجهات مبتدئة',
-      color: Color(0xFFD16A6A),
+      color: AppColors.muted,
       badge: '12 اتصالا مشتركا · قبل يومين',
     ),
     NetworkPerson(
       name: 'يوسف زين',
       title: 'مطور Front-end',
-      color: Color(0xFF3E7BA6),
+      color: AppColors.black,
       badge: '7 اتصالات مشتركة · هذا الأسبوع',
     ),
     NetworkPerson(
       name: 'نور خالد',
       title: 'محللة بيانات',
-      color: Color(0xFF6DA064),
+      color: AppColors.blue,
       badge: '3 اتصالات مشتركة · هذا الأسبوع',
     ),
     NetworkPerson(
       name: 'كريم حسن',
       title: 'مدير منتج مساعد',
-      color: Color(0xFFB66F4C),
+      color: AppColors.darkBlue,
       badge: '22 اتصالا مشتركا · منذ أسبوع',
     ),
   ];

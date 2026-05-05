@@ -14,7 +14,7 @@ class NetworkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: AppColors.white,
       shape: RoundedRectangleBorder(
         side: const BorderSide(color: AppColors.border),
         borderRadius: BorderRadius.circular(6),
@@ -29,7 +29,7 @@ class NetworkCard extends StatelessWidget {
               children: [
                 Container(
                   height: 64,
-                  color: const Color(0xFFB8CCCF),
+                  color: AppColors.surface,
                   child: CustomPaint(
                     painter: CardPatternPainter(color: person.color),
                     child: const SizedBox.expand(),

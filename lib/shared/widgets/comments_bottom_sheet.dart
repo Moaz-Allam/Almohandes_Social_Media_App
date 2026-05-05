@@ -26,7 +26,7 @@ class LinkedCommentsSheet extends StatelessWidget {
       time: 'قبل يوم',
       text: 'لفتتني الفكرة جدا، خصوصا ربط التجربة بقياس واضح قبل الإطلاق.',
       likes: '1',
-      color: Color(0xFF2C5C7A),
+      color: AppColors.blue,
     ),
     _Comment(
       name: 'معتز سند',
@@ -35,7 +35,7 @@ class LinkedCommentsSheet extends StatelessWidget {
       text:
           'أتفق معك. القرارات المبنية على بحث المستخدم توفر وقتا كبيرا على فرق المنتج والهندسة، وتقلل إعادة العمل بعد الإطلاق.',
       likes: '4',
-      color: Color(0xFF5D5D5D),
+      color: AppColors.darkBlue,
     ),
     _Comment(
       name: 'مي عبد الرحمن',
@@ -43,7 +43,7 @@ class LinkedCommentsSheet extends StatelessWidget {
       time: 'قبل 7 ساعات',
       text: 'سيكون مفيدا لو شاركتوا قالب الأسئلة المستخدم في المقابلات.',
       likes: '2',
-      color: Color(0xFFD16A6A),
+      color: AppColors.muted,
     ),
   ];
 
@@ -111,7 +111,7 @@ class LinkedCommentsSheet extends StatelessWidget {
                     const AppAvatar(
                       name: 'ريم حسن',
                       radius: 20,
-                      color: Color(0xFF9151A8),
+                      color: AppColors.darkBlue,
                     ),
                     const SizedBox(width: 10),
                     Expanded(

@@ -71,7 +71,7 @@ class ComposerScreen extends StatelessWidget {
                   const AppAvatar(
                     name: 'ريم حسن',
                     radius: 27,
-                    color: Color(0xFF9151A8),
+                    color: AppColors.darkBlue,
                     badge: 'يوظف',
                   ),
                   const SizedBox(width: 12),
@@ -133,8 +133,8 @@ class ComposerScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.only(top: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFF0F0F0)),
+                  color: AppColors.white,
+                  border: Border.all(color: AppColors.border),
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(24),
                   ),

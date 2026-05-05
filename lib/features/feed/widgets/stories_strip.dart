@@ -9,11 +9,11 @@ class StoriesStrip extends StatelessWidget {
   const StoriesStrip({super.key});
 
   static const _stories = [
-    StoryItem(name: 'ريم حسن', color: Color(0xFF9151A8), isNew: true),
-    StoryItem(name: 'أحمد منصور', color: Color(0xFFC9B3A4), isNew: true),
-    StoryItem(name: 'شيرين أمين', color: Color(0xFF5E7893)),
-    StoryItem(name: 'مريانا جونز', color: Color(0xFF617E84), isNew: true),
-    StoryItem(name: 'مازن محمود', color: Color(0xFF8D64BC)),
+    StoryItem(name: 'ريم حسن', color: AppColors.blue, isNew: true),
+    StoryItem(name: 'أحمد منصور', color: AppColors.darkBlue, isNew: true),
+    StoryItem(name: 'شيرين أمين', color: AppColors.muted),
+    StoryItem(name: 'مريانا جونز', color: AppColors.black, isNew: true),
+    StoryItem(name: 'مازن محمود', color: AppColors.blue),
   ];
 
   void _openStory(BuildContext context, int index) {

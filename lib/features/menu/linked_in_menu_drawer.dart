@@ -32,7 +32,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return Drawer(
       width: 304,
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -47,7 +47,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                     const AppAvatar(
                       name: 'ريم حسن',
                       radius: 30,
-                      color: Color(0xFF9151A8),
+                      color: AppColors.darkBlue,
                       badge: 'يوظف',
                     ),
                     const SizedBox(width: 10),
@@ -88,7 +88,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF2C35D),
+                  color: AppColors.blue,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

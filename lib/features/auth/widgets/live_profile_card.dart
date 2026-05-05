@@ -30,7 +30,7 @@ class LiveProfileCard extends StatelessWidget {
           Container(
             height: 78,
             decoration: const BoxDecoration(
-              color: Color(0xFFC7DADF),
+              color: AppColors.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
             ),
           ),
@@ -47,7 +47,7 @@ class LiveProfileCard extends StatelessWidget {
                       AppAvatar(
                         name: name,
                         radius: 38,
-                        color: const Color(0xFF7A5CA8),
+                        color: AppColors.darkBlue,
                       ),
                       if (openToWork)
                         PositionedDirectional(

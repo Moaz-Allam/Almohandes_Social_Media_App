@@ -47,7 +47,7 @@ class _SearchScreenState extends State<SearchScreen> {
             Container(
               padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppColors.white,
                 border: Border(bottom: BorderSide(color: AppColors.border)),
               ),
               child: Row(
@@ -66,7 +66,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         hintText: 'ابحث في لينكدإن',
                         prefixIcon: const Icon(Icons.search),
                         filled: true,
-                        fillColor: const Color(0xFFE8EFF6),
+                        fillColor: AppColors.surface,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 0,

@@ -90,7 +90,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                     child: LinearProgressIndicator(
                       minHeight: 6,
                       value: _form.progress,
-                      backgroundColor: const Color(0xFFE8E8E8),
+                      backgroundColor: AppColors.border,
                       valueColor: const AlwaysStoppedAnimation<Color>(
                         AppColors.blue,
                       ),

@@ -30,7 +30,7 @@ class HomeTopBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           border: Border(bottom: BorderSide(color: AppColors.border)),
         ),
         child: Row(
@@ -40,7 +40,7 @@ class HomeTopBar extends StatelessWidget {
               child: const AppAvatar(
                 name: 'ريم حسن',
                 radius: 20,
-                color: Color(0xFF9151A8),
+                color: AppColors.darkBlue,
                 badge: 'يوظف',
               ),
             ),

@@ -13,7 +13,7 @@ class SearchPill extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8EFF6),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(

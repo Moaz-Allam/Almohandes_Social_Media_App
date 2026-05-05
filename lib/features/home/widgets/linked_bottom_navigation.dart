@@ -17,7 +17,7 @@ class LinkedBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(
@@ -82,7 +82,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Colors.black : const Color(0xFF8B8B8B);
+    final color = selected ? AppColors.black : AppColors.muted;
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -103,7 +103,7 @@ class _NavItem extends StatelessWidget {
                         vertical: 1,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE60023),
+                        color: AppColors.blue,
                         borderRadius: BorderRadius.circular(99),
                       ),
                       child: Text(

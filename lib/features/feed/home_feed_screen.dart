@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'widgets/feed_post_card.dart';
@@ -24,7 +25,7 @@ class HomeFeedScreen extends StatelessWidget {
           'أبحث عن فرصة جديدة في تطوير تطبيقات الموبايل، وسأكون ممتنا لأي ترشيح أو نصيحة أو تواصل مع فرق تبحث عن مطور يهتم بجودة التجربة.',
       reactions: '77',
       comments: '52 تعليق',
-      avatarColor: Color(0xFFC9B3A4),
+      avatarColor: AppColors.darkBlue,
       showMedia: false,
     ),
     FeedPostModel(
@@ -35,7 +36,7 @@ class HomeFeedScreen extends StatelessWidget {
           'انتهينا اليوم من اختبار قابلية استخدام لتجربة الدفع الجديدة. أجمل ما في البحث أنه يغير افتراضاتنا بسرعة.',
       reactions: '214',
       comments: '31 تعليق',
-      avatarColor: Color(0xFF5E7893),
+      avatarColor: AppColors.blue,
       showMedia: true,
     ),
     FeedPostModel(
@@ -46,7 +47,7 @@ class HomeFeedScreen extends StatelessWidget {
           'نفتح باب التدريب الصيفي لفريق المنتج. نبحث عن أشخاص فضوليين يحبون حل المشكلات وكتابة فرضيات واضحة.',
       reactions: '490',
       comments: '84 تعليق',
-      avatarColor: Color(0xFFB7694F),
+      avatarColor: AppColors.muted,
       showMedia: false,
     ),
   ];

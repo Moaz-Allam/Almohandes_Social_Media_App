@@ -17,28 +17,28 @@ class ShareContactScreen extends StatelessWidget {
       preview: 'هل يمكنك إرسال الفاتورة؟',
       time: '10:07 ص',
       unread: true,
-      color: Color(0xFF5D8E64),
+      color: AppColors.blue,
     ),
     MessageItem(
       name: 'جيمي لي',
       preview: 'أنت: تمام، وصلني!',
       time: 'الخميس',
       unread: false,
-      color: Color(0xFF705CB9),
+      color: AppColors.darkBlue,
     ),
     MessageItem(
       name: 'سارة خليل',
       preview: 'أنت: أظن أن هذا متعلق بضمان الجودة',
       time: 'الأربعاء',
       unread: false,
-      color: Color(0xFFD66B7B),
+      color: AppColors.muted,
     ),
     MessageItem(
       name: 'وليد إلياس',
       preview: 'أنت: راجعت التقرير المناسب',
       time: 'الاثنين',
       unread: false,
-      color: Color(0xFF4C8D72),
+      color: AppColors.black,
     ),
   ];
 

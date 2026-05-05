@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
@@ -33,7 +34,7 @@ class _ReelsScreenState extends State<ReelsScreen>
       likes: '18K',
       comments: '650',
       reposts: '97',
-      color: Color(0xFF435A78),
+      color: AppColors.darkBlue,
     ),
     _ReelItem(
       name: 'ريم حسن',
@@ -42,7 +43,7 @@ class _ReelsScreenState extends State<ReelsScreen>
       likes: '8.2K',
       comments: '214',
       reposts: '32',
-      color: Color(0xFF7A54C7),
+      color: AppColors.muted,
     ),
     _ReelItem(
       name: 'أحمد منصور',
@@ -51,7 +52,7 @@ class _ReelsScreenState extends State<ReelsScreen>
       likes: '5.7K',
       comments: '141',
       reposts: '28',
-      color: Color(0xFF0A66C2),
+      color: AppColors.blue,
     ),
   ];
 
@@ -428,8 +429,8 @@ class _ReelBackdropPainter extends CustomPainter {
       end: Alignment.bottomCenter,
       colors: [
         color.withValues(alpha: .95),
-        const Color(0xFF19202A),
-        Colors.black,
+        AppColors.darkBlue,
+        AppColors.black,
       ],
     ).createShader(rect);
     canvas.drawRect(rect, paint);

@@ -39,35 +39,35 @@ class NetworkScreen extends StatelessWidget {
     NetworkPerson(
       name: 'مريانا جونز',
       title: 'مصممة منتجات · uxui_design',
-      color: Color(0xFF617E84),
+      color: AppColors.blue,
       badge: 'متاحة',
     ),
     NetworkPerson(
       name: 'مازن محمود',
       title: 'مطور Front-end أول',
-      color: Color(0xFF8D64BC),
+      color: AppColors.darkBlue,
       badge: 'يوظف',
     ),
     NetworkPerson(
       name: 'جاكسون نوكس',
       title: 'مهندس SRE في ArtLife',
-      color: Color(0xFFB66F4C),
+      color: AppColors.muted,
     ),
     NetworkPerson(
       name: 'أندرو مارتن',
       title: 'أخصائي اكتساب مواهب',
-      color: Color(0xFF5D8E64),
+      color: AppColors.black,
       badge: 'متاح',
     ),
     NetworkPerson(
       name: 'سارة خليل',
       title: 'محللة بيانات',
-      color: Color(0xFFD16A6A),
+      color: AppColors.blue,
     ),
     NetworkPerson(
       name: 'كريم يوسف',
       title: 'مدير مبيعات B2B',
-      color: Color(0xFF3E7BA6),
+      color: AppColors.darkBlue,
       badge: 'يوظف',
     ),
   ];

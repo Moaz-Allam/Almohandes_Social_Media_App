@@ -12,7 +12,7 @@ class NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: item.unread ? AppColors.paleBlue : Colors.white,
+      color: item.unread ? AppColors.paleBlue : AppColors.white,
       padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -60,9 +60,9 @@ class NotificationTile extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 6),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: item.unread ? Colors.white : const Color(0xFFF7F7F7),
+                    color: item.unread ? AppColors.white : AppColors.soft,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFE7E7E7)),
+                    border: Border.all(color: AppColors.border),
                   ),
                   child: Text(
                     item.preview,

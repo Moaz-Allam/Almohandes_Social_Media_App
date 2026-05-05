@@ -21,28 +21,28 @@ class NotificationsScreen extends StatelessWidget {
       preview: 'هذه أخبار رائعة، أتطلع إلى نوفمبر ...',
       time: 'قبل دقيقة',
       unread: true,
-      color: Color(0xFFD7434E),
+      color: AppColors.blue,
     ),
     NotificationItemModel(
       title: 'سامسون كينيدي و 2,486 آخرون تفاعلوا مع منشورك',
       preview: 'في نوفمبر نطلق برنامج تدريب لمصممي UI/UX ...',
       time: 'قبل 10 دقائق',
       unread: true,
-      color: Color(0xFF5D8E64),
+      color: AppColors.darkBlue,
     ),
     NotificationItemModel(
       title: 'أندريا بيكر علقت على منشورك',
       preview: 'هل يمكن مشاركة رابط التسجيل؟',
       time: 'قبل 56 دقيقة',
       unread: false,
-      color: Color(0xFF7AA9CB),
+      color: AppColors.muted,
     ),
     NotificationItemModel(
       title: 'شركة BaytPay نشرت وظيفة تناسب مهاراتك',
       preview: 'Product Designer · عمل هجين · القاهرة',
       time: 'قبل ساعتين',
       unread: false,
-      color: Color(0xFF2C78A8),
+      color: AppColors.black,
     ),
   ];
 
