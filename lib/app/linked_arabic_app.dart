@@ -40,7 +40,7 @@ class _LinkedArabicAppState extends State<LinkedArabicApp> {
       controller: _controller,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'لينكدإن عربي',
+        title: 'المهندس',
         locale: const Locale('ar'),
         builder: (context, child) {
           return Directionality(

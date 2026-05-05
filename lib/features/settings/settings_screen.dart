@@ -10,7 +10,7 @@ class SettingsScreen extends StatelessWidget {
     SettingsItem(
       icon: Icons.account_circle_outlined,
       title: 'تفضيلات الحساب',
-      subtitle: 'خيارات إدارة حسابك وتجربتك على لينكدإن',
+      subtitle: 'خيارات إدارة حسابك وتجربتك على المهندس',
     ),
     SettingsItem(
       icon: Icons.lock_outline,
@@ -20,7 +20,7 @@ class SettingsScreen extends StatelessWidget {
     SettingsItem(
       icon: Icons.visibility_outlined,
       title: 'الظهور',
-      subtitle: 'تحكم في من يرى نشاطك ومعلوماتك على لينكدإن',
+      subtitle: 'تحكم في من يرى نشاطك ومساهماتك على المهندس',
     ),
     SettingsItem(
       icon: Icons.mail_outline,
@@ -30,7 +30,7 @@ class SettingsScreen extends StatelessWidget {
     SettingsItem(
       icon: Icons.shield_outlined,
       title: 'خصوصية البيانات',
-      subtitle: 'تحكم في كيفية استخدام لينكدإن لبياناتك العامة والوظيفية',
+      subtitle: 'تحكم في كيفية استخدام المهندس لبياناتك ومساهماتك',
     ),
   ];
 

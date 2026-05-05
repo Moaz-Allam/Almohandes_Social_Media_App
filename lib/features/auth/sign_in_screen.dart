@@ -65,7 +65,7 @@ class SignInScreen extends StatelessWidget {
                 InkWell(
                   onTap: () => _join(context),
                   child: const Text(
-                    'انضم إلى لينكدإن',
+                    'انضم إلى المهندس',
                     style: TextStyle(
                       color: AppColors.blue,
                       fontWeight: FontWeight.w700,

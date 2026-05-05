@@ -8,8 +8,6 @@ import '../../shared/widgets/primary_button.dart';
 import '../../state/app_scope.dart';
 import '../../state/signup_controller.dart';
 import 'widgets/info_note.dart';
-import 'widgets/live_profile_card.dart';
-import 'widgets/profile_completeness.dart';
 import 'widgets/section_label.dart';
 import 'widgets/selectable_wrap.dart';
 import 'widgets/signup_page.dart';
@@ -63,6 +61,8 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     return AnimatedBuilder(
       animation: _form,
       builder: (context, _) {
+        final isEngineer = _form.accountType == SignupAccountType.engineer;
+
         return Scaffold(
           body: SafeArea(
             child: Column(
@@ -104,16 +104,40 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                     children: [
                       SignupPage(
                         step: _stepLabel(0),
-                        title: 'إنشاء حسابك',
+                        title: 'أساسيات الحساب',
                         subtitle:
-                            'استخدم بريدا أو رقم هاتف لتأمين حسابك المهني.',
+                            'اختر نوع الحساب وابدأ في بناء مشاريع هندسية حقيقية.',
                         children: [
-                          LinkedTextField(
-                            label: 'البريد الإلكتروني',
-                            hint: 'name@example.com',
-                            controller: _form.email,
-                            keyboardType: TextInputType.emailAddress,
+                          _AccountTypeSelector(
+                            value: _form.accountType,
+                            onChanged: _form.setAccountType,
                           ),
+                          const SizedBox(height: 18),
+                          if (isEngineer) ...[
+                            LinkedTextField(
+                              label: 'الاسم الكامل',
+                              controller: _form.fullName,
+                            ),
+                            const SizedBox(height: 14),
+                            LinkedTextField(
+                              label: 'البريد الإلكتروني',
+                              hint: 'name@example.com',
+                              controller: _form.email,
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                          ] else ...[
+                            LinkedTextField(
+                              label: 'اسم الشركة',
+                              controller: _form.companyName,
+                            ),
+                            const SizedBox(height: 14),
+                            LinkedTextField(
+                              label: 'بريد العمل',
+                              hint: 'team@company.com',
+                              controller: _form.workEmail,
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                          ],
                           const SizedBox(height: 14),
                           LinkedTextField(
                             label: 'كلمة المرور',
@@ -122,180 +146,154 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                           ),
                           const SizedBox(height: 12),
                           const InfoNote(
-                            icon: Icons.lock_outline,
+                            icon: Icons.engineering_outlined,
                             text:
-                                'سنستخدم هذه البيانات لتسجيل الدخول وحماية الحساب فقط.',
+                                'المهندس يربط الشركات والمهندسين عبر مشاريع تقنية حقيقية، وليس عبر السير الذاتية وحدها.',
                           ),
                         ],
                       ),
                       SignupPage(
                         step: _stepLabel(1),
-                        title: 'من أنت؟',
-                        subtitle:
-                            'اكتب اسمك كما تريد أن يظهر لزملائك وأصحاب العمل.',
-                        children: [
-                          LinkedTextField(
-                            label: 'الاسم الأول',
-                            controller: _form.firstName,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'اسم العائلة',
-                            controller: _form.lastName,
-                          ),
-                          const SizedBox(height: 18),
-                          LiveProfileCard(
-                            name:
-                                '${_form.firstName.text} ${_form.lastName.text}',
-                            headline: _form.headline.text,
-                            location: _form.location.text,
-                            openToWork: _form.openToWork,
-                          ),
-                        ],
+                        title: isEngineer ? 'ملفك الهندسي' : 'معلومات المنظمة',
+                        subtitle: isEngineer
+                            ? 'عرّف تخصصك ومستوى خبرتك والمهارات التي تريد استخدامها في المشاريع.'
+                            : 'أضف معلومات تساعد المهندسين على فهم شركتك ونوع المشاريع التي تنشئها.',
+                        children: isEngineer
+                            ? [
+                                const SectionLabel('التخصص'),
+                                SelectableWrap(
+                                  values: const [
+                                    'Frontend',
+                                    'Backend',
+                                    'Full Stack',
+                                    'Embedded Systems',
+                                    'AI/ML',
+                                    'Robotics',
+                                    'DevOps',
+                                    'UI/UX',
+                                    'Cybersecurity',
+                                  ],
+                                  selected: {_form.specialization.text},
+                                  onChanged: _form.setSpecialization,
+                                ),
+                                const SizedBox(height: 18),
+                                const SectionLabel('مستوى الخبرة'),
+                                SelectableWrap(
+                                  values: const [
+                                    'Student',
+                                    'Beginner',
+                                    'Intermediate',
+                                    'Advanced',
+                                  ],
+                                  selected: {_form.experienceLevel},
+                                  onChanged: _form.setExperienceLevel,
+                                ),
+                                const SizedBox(height: 18),
+                                const SectionLabel('المهارات'),
+                                SelectableWrap(
+                                  values: const [
+                                    'React',
+                                    'C++',
+                                    'Python',
+                                    'TensorFlow',
+                                    'FPGA',
+                                    'Docker',
+                                    'Flutter',
+                                    'Figma',
+                                  ],
+                                  selected: _form.skills,
+                                  onChanged: _form.toggleSkill,
+                                ),
+                              ]
+                            : [
+                                LinkedTextField(
+                                  label: 'الصناعة',
+                                  hint: 'Software, Robotics, AI...',
+                                  controller: _form.industry,
+                                ),
+                                const SizedBox(height: 18),
+                                const SectionLabel('حجم الشركة'),
+                                SelectableWrap(
+                                  values: const [
+                                    '1-10',
+                                    '11-50',
+                                    '51-200',
+                                    '200+',
+                                  ],
+                                  selected: {_form.companySize},
+                                  onChanged: _form.setCompanySize,
+                                ),
+                                const SizedBox(height: 18),
+                                LinkedTextField(
+                                  label: 'الدولة',
+                                  controller: _form.country,
+                                ),
+                              ],
                       ),
                       SignupPage(
                         step: _stepLabel(2),
-                        title: 'العنوان المهني والموقع',
-                        subtitle:
-                            'هذه المعلومات تساعد الآخرين على فهم خبرتك بسرعة.',
-                        children: [
-                          LinkedTextField(
-                            label: 'العنوان المهني',
-                            controller: _form.headline,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'القطاع',
-                            controller: _form.industry,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'المدينة والدولة',
-                            controller: _form.location,
-                          ),
-                          const SizedBox(height: 14),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('متاحة لفرص عمل جديدة'),
-                            subtitle: const Text(
-                              'أضف شارة تظهر للموظفين وأصحاب العمل',
-                            ),
-                            value: _form.openToWork,
-                            activeThumbColor: AppColors.blue,
-                            onChanged: _form.setOpenToWork,
-                          ),
-                        ],
-                      ),
-                      SignupPage(
-                        step: _stepLabel(3),
-                        title: 'الخبرة الحالية',
-                        subtitle:
-                            'أضف آخر دور عمل حتى تكتمل بطاقة ملفك الشخصي.',
-                        children: [
-                          LinkedTextField(
-                            label: 'المسمى الوظيفي',
-                            controller: _form.role,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'الشركة أو جهة العمل',
-                            controller: _form.company,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'وصف مختصر للخبرة',
-                            controller: _form.experience,
-                            maxLines: 4,
-                          ),
-                        ],
-                      ),
-                      SignupPage(
-                        step: _stepLabel(4),
-                        title: 'التعليم والمهارات',
-                        subtitle:
-                            'اختر المهارات واللغات التي تريد إبرازها في ملفك.',
-                        children: [
-                          LinkedTextField(
-                            label: 'الجامعة أو المعهد',
-                            controller: _form.school,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'الدرجة أو التخصص',
-                            controller: _form.degree,
-                          ),
-                          const SizedBox(height: 18),
-                          const SectionLabel('المهارات'),
-                          SelectableWrap(
-                            values: const [
-                              'تصميم واجهات',
-                              'إدارة منتجات',
-                              'تحليل بيانات',
-                              'Figma',
-                              'Flutter',
-                              'مبيعات B2B',
-                              'بحث المستخدم',
-                              'قيادة فرق',
-                            ],
-                            selected: _form.skills,
-                            onChanged: _form.toggleSkill,
-                          ),
-                          const SizedBox(height: 18),
-                          const SectionLabel('اللغات'),
-                          SelectableWrap(
-                            values: const [
-                              'العربية',
-                              'الإنجليزية',
-                              'الفرنسية',
-                              'الألمانية',
-                            ],
-                            selected: _form.languages,
-                            onChanged: _form.toggleLanguage,
-                          ),
-                        ],
-                      ),
-                      SignupPage(
-                        step: _stepLabel(5),
-                        title: 'النبذة وإعدادات الظهور',
-                        subtitle: 'لمسة أخيرة تجعل ملفك جاهزا للظهور والتواصل.',
-                        children: [
-                          LinkedTextField(
-                            label: 'نبذة عنك',
-                            controller: _form.about,
-                            maxLines: 4,
-                          ),
-                          const SizedBox(height: 14),
-                          LinkedTextField(
-                            label: 'رابط الموقع أو المحفظة',
-                            controller: _form.website,
-                          ),
-                          const SizedBox(height: 10),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('إظهار الملف في نتائج البحث'),
-                            subtitle: const Text(
-                              'يسمح للزملاء والموظفين بالعثور عليك',
-                            ),
-                            value: _form.profilePublic,
-                            activeThumbColor: AppColors.blue,
-                            onChanged: _form.setProfilePublic,
-                          ),
-                          SwitchListTile.adaptive(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('إرسال تنبيهات وظائف مناسبة'),
-                            subtitle: const Text(
-                              'حسب الموقع والقطاع والمهارات المختارة',
-                            ),
-                            value: _form.jobAlerts,
-                            activeThumbColor: AppColors.blue,
-                            onChanged: _form.setJobAlerts,
-                          ),
-                          const SizedBox(height: 10),
-                          ProfileCompleteness(
-                            skills: _form.skills.length,
-                            languages: _form.languages.length,
-                          ),
-                        ],
+                        title: 'تفاصيل اختيارية',
+                        subtitle: isEngineer
+                            ? 'أضف روابط تثبت عملك وتساعد الفرق على تقييم مساهماتك.'
+                            : 'أضف روابط ووصفا قصيرا حتى تظهر شركتك بوضوح للمهندسين.',
+                        children: isEngineer
+                            ? [
+                                LinkedTextField(
+                                  label: 'GitHub',
+                                  controller: _form.github,
+                                ),
+                                const SizedBox(height: 14),
+                                LinkedTextField(
+                                  label: 'LinkedIn',
+                                  controller: _form.linkedIn,
+                                ),
+                                const SizedBox(height: 14),
+                                LinkedTextField(
+                                  label: 'موقع المحفظة',
+                                  controller: _form.portfolio,
+                                ),
+                                const SizedBox(height: 14),
+                                LinkedTextField(
+                                  label: 'نبذة قصيرة',
+                                  controller: _form.bio,
+                                  maxLines: 4,
+                                ),
+                                const SizedBox(height: 12),
+                                _UploadToggle(
+                                  icon: Icons.description_outlined,
+                                  label: 'رفع السيرة الذاتية',
+                                  value: _form.resumeUploaded,
+                                  onPressed: () => _form.setResumeUploaded(
+                                    !_form.resumeUploaded,
+                                  ),
+                                ),
+                              ]
+                            : [
+                                LinkedTextField(
+                                  label: 'موقع الشركة',
+                                  controller: _form.website,
+                                ),
+                                const SizedBox(height: 14),
+                                LinkedTextField(
+                                  label: 'LinkedIn الشركة',
+                                  controller: _form.companyLinkedIn,
+                                ),
+                                const SizedBox(height: 14),
+                                LinkedTextField(
+                                  label: 'وصف قصير',
+                                  controller: _form.shortDescription,
+                                  maxLines: 4,
+                                ),
+                                const SizedBox(height: 12),
+                                _UploadToggle(
+                                  icon: Icons.image_outlined,
+                                  label: 'رفع شعار الشركة',
+                                  value: _form.logoUploaded,
+                                  onPressed: () => _form.setLogoUploaded(
+                                    !_form.logoUploaded,
+                                  ),
+                                ),
+                              ],
                       ),
                     ],
                   ),
@@ -341,6 +339,87 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AccountTypeSelector extends StatelessWidget {
+  const _AccountTypeSelector({required this.value, required this.onChanged});
+
+  final SignupAccountType value;
+  final ValueChanged<SignupAccountType> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final type in SignupAccountType.values) ...[
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => onChanged(type),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                height: 86,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: value == type ? AppColors.paleBlue : AppColors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: value == type ? AppColors.blue : AppColors.border,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      type == SignupAccountType.engineer
+                          ? Icons.engineering
+                          : Icons.business,
+                      color: AppColors.blue,
+                    ),
+                    const Spacer(),
+                    Text(
+                      type.label,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (type != SignupAccountType.values.last) const SizedBox(width: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _UploadToggle extends StatelessWidget {
+  const _UploadToggle({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(value ? Icons.check_circle : icon),
+      label: Text(value ? 'تم: $label' : label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: value ? AppColors.blue : AppColors.muted,
+        minimumSize: const Size.fromHeight(46),
+        side: BorderSide(color: value ? AppColors.blue : AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+      ),
     );
   }
 }

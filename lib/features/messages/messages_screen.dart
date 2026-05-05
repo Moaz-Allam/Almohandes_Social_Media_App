@@ -47,7 +47,7 @@ class MessagesScreen extends StatelessWidget {
     ),
     MessageItem(
       name: 'جينيفر هيلتون',
-      preview: 'هكذا يعمل لينكدإن :)',
+      preview: 'هكذا يعمل التعاون على المهندس :)',
       time: 'الجمعة',
       unread: false,
       color: AppColors.darkBlue,

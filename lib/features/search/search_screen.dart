@@ -5,7 +5,7 @@ import '../profile/profile_screen.dart';
 
 enum SearchFilter {
   people('الأشخاص'),
-  jobs('الوظائف'),
+  projects('المشاريع'),
   posts('المنشورات');
 
   const SearchFilter(this.label);
@@ -63,7 +63,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       autofocus: true,
                       textDirection: TextDirection.rtl,
                       decoration: InputDecoration(
-                        hintText: 'ابحث في لينكدإن',
+                        hintText: 'ابحث في المهندس',
                         prefixIcon: const Icon(Icons.search),
                         filled: true,
                         fillColor: AppColors.surface,
@@ -147,10 +147,10 @@ class _SearchResults extends StatelessWidget {
         _ResultRow(Icons.person, 'أحمد منصور', 'مطور Flutter · Nile Apps'),
         _ResultRow(Icons.person, 'شيرين أمين', 'مصممة UI/UX'),
       ],
-      SearchFilter.jobs => const [
-        _ResultRow(Icons.work, 'مصمم منتجات أول', 'NilePay · عمل هجين'),
-        _ResultRow(Icons.work, 'مطور Flutter', 'Cairo Mobility · عن بعد'),
-        _ResultRow(Icons.work, 'مدير منتج مساعد', 'MENA Commerce'),
+      SearchFilter.projects => const [
+        _ResultRow(Icons.work, 'مشروع مطابقة مهندسين', 'AI/ML · عن بعد'),
+        _ResultRow(Icons.work, 'منصة مراقبة حساسات', 'Embedded · هجين'),
+        _ResultRow(Icons.work, 'حزمة أدوات UX عربية', 'UI/UX · بحث'),
       ],
       SearchFilter.posts => const [
         _ResultRow(

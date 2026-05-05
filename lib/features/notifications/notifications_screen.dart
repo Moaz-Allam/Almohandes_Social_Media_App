@@ -38,8 +38,8 @@ class NotificationsScreen extends StatelessWidget {
       color: AppColors.muted,
     ),
     NotificationItemModel(
-      title: 'شركة BaytPay نشرت وظيفة تناسب مهاراتك',
-      preview: 'Product Designer · عمل هجين · القاهرة',
+      title: 'شركة BaytPay نشرت مشروعا يناسب مهاراتك',
+      preview: 'Product Designer · مشروع هجين · القاهرة',
       time: 'قبل ساعتين',
       unread: false,
       color: AppColors.black,

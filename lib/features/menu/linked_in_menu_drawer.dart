@@ -143,7 +143,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
             ),
             const _SidebarNotification(
               icon: Icons.work_outline,
-              text: 'وظيفة جديدة تناسب مهاراتك',
+              text: 'مشروع جديد يناسب مهاراتك',
               time: 'قبل ساعة',
             ),
             const _SidebarNotification(

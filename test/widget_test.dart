@@ -14,13 +14,13 @@ void main() {
     await tester.pumpWidget(const LinkedArabicApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('ابحث واعثر على وظيفتك التالية'), findsOneWidget);
+    expect(find.text('انضم إلى مشاريع هندسية حقيقية'), findsOneWidget);
     expect(find.text('انضم الآن'), findsOneWidget);
 
     await tester.tap(find.text('انضم الآن'));
     await tester.pumpAndSettle();
 
-    expect(find.text('إنشاء حسابك'), findsOneWidget);
+    expect(find.text('أساسيات الحساب'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 
@@ -136,7 +136,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('الأشخاص'), findsOneWidget);
-    expect(find.text('الوظائف'), findsOneWidget);
+    expect(find.text('المشاريع'), findsOneWidget);
     expect(find.text('المنشورات'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.arrow_back));

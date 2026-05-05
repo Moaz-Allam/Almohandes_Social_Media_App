@@ -10,37 +10,31 @@ class LinkedInLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.ltr,
+      textDirection: TextDirection.rtl,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Linked',
-            style: TextStyle(
-              color: AppColors.blue,
-              fontSize: 20 * scale,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
           Container(
-            margin: EdgeInsetsDirectional.only(start: 1.5 * scale),
-            padding: EdgeInsets.symmetric(
-              horizontal: 2.5 * scale,
-              vertical: 1 * scale,
-            ),
+            width: 28 * scale,
+            height: 28 * scale,
             decoration: BoxDecoration(
               color: AppColors.blue,
-              borderRadius: BorderRadius.circular(1.5 * scale),
+              borderRadius: BorderRadius.circular(7 * scale),
             ),
-            child: Text(
-              'in',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15 * scale,
-                fontWeight: FontWeight.w800,
-                height: 1,
-              ),
+            child: Icon(
+              Icons.engineering,
+              color: Colors.white,
+              size: 18 * scale,
+            ),
+          ),
+          SizedBox(width: 7 * scale),
+          Text(
+            'المهندس',
+            style: TextStyle(
+              color: AppColors.blue,
+              fontSize: 22 * scale,
+              fontWeight: FontWeight.w900,
+              height: 1,
             ),
           ),
         ],

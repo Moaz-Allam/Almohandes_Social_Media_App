@@ -84,7 +84,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       title: 'حلول برمجية للمؤسسات',
       color: AppColors.darkBlue,
       badge: 'توظف',
-      contextLine: 'هجين · 12 وظيفة',
+      contextLine: 'هجين · 12 مشروع',
       actionLabel: 'متابعة',
       isCompany: true,
     ),
@@ -98,7 +98,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
     ),
     NetworkPerson(
       name: 'فينتك مصر',
-      title: 'منصة وظائف مالية تقنية',
+      title: 'منصة مشاريع مالية تقنية',
       color: AppColors.black,
       badge: 'جديد',
       contextLine: 'عن بعد · فرص تدريب',

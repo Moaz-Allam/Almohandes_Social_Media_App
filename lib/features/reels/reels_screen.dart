@@ -29,8 +29,8 @@ class _ReelsScreenState extends State<ReelsScreen>
   static const _reels = [
     _ReelItem(
       name: 'ناتالي منصور',
-      headline: 'صوت رائد في لينكدإن · محتوى مهني',
-      caption: 'أفضل لحظة اليوم كانت مشاركة تجربة بناء مجتمع مهني حقيقي.',
+      headline: 'قائدة مشروع · منصة المهندس',
+      caption: 'أفضل لحظة اليوم كانت مشاركة تجربة بناء فريق هندسي حقيقي.',
       likes: '18K',
       comments: '650',
       reposts: '97',
