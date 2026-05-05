@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/account_type.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../state/app_scope.dart';
 import 'project_form_screen.dart';
 import 'widgets/composer_top_bar.dart';
 
@@ -10,7 +12,7 @@ class ComposerScreen extends StatelessWidget {
 
   final VoidCallback onClose;
 
-  static const _options = [
+  static const _allOptions = [
     _ComposerOption(Icons.image_outlined, 'إضافة صورة', _ComposerAction.photo),
     _ComposerOption(
       Icons.smart_display_outlined,
@@ -24,7 +26,20 @@ class ComposerScreen extends StatelessWidget {
     ),
   ];
 
-  void _handleOption(BuildContext context, _ComposerOption option) {
+  List<_ComposerOption> _optionsFor(AccountType accountType) {
+    return [
+      for (final option in _allOptions)
+        if (option.action != _ComposerAction.project ||
+            accountType.canPostProjects)
+          option,
+    ];
+  }
+
+  void _handleOption(
+    BuildContext context,
+    _ComposerOption option,
+    AccountType accountType,
+  ) {
     switch (option.action) {
       case _ComposerAction.photo:
         ScaffoldMessenger.of(
@@ -37,6 +52,14 @@ class ComposerScreen extends StatelessWidget {
         ).showSnackBar(const SnackBar(content: Text('تم اختيار إضافة ريل')));
         return;
       case _ComposerAction.project:
+        if (!accountType.canPostProjects) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('مشاركة المشاريع متاحة للمهندسين والشركات فقط'),
+            ),
+          );
+          return;
+        }
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const ProjectFormScreen()));
@@ -46,6 +69,8 @@ class ComposerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
+
     return Column(
       children: [
         ComposerTopBar(title: 'مشاركة منشور', onClose: onClose),
@@ -121,8 +146,8 @@ class ComposerScreen extends StatelessWidget {
           ),
         ),
         _ComposerOptionsPanel(
-          options: _options,
-          onSelected: (option) => _handleOption(context, option),
+          options: _optionsFor(accountType),
+          onSelected: (option) => _handleOption(context, option, accountType),
         ),
       ],
     );

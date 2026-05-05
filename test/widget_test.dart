@@ -4,8 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tradeflow/app/linked_arabic_app.dart';
 import 'package:tradeflow/core/constants/app_colors.dart';
+import 'package:tradeflow/models/account_type.dart';
 
 void main() {
+  test('account type permissions match network and project rules', () {
+    expect(AccountType.engineer.canPostProjects, isTrue);
+    expect(AccountType.company.canPostProjects, isTrue);
+    expect(AccountType.craftsman.canPostProjects, isFalse);
+    expect(AccountType.worker.canPostProjects, isFalse);
+    expect(AccountType.equipment.canPostProjects, isFalse);
+    expect(accountTypeFromIndustry('شركة'), AccountType.company);
+  });
+
   testWidgets('Arabic onboarding opens the multi-step sign up flow', (
     tester,
   ) async {
@@ -16,12 +26,31 @@ void main() {
 
     expect(find.text('انضم إلى مشاريع هندسية حقيقية'), findsOneWidget);
     expect(find.text('انضم الآن'), findsOneWidget);
+    expect(find.text('المتابعة بواسطة Apple'), findsNothing);
 
     await tester.tap(find.text('انضم الآن'));
     await tester.pumpAndSettle();
 
     expect(find.text('أساسيات الحساب'), findsOneWidget);
+    expect(find.text('رقم الهاتف'), findsOneWidget);
+    expect(find.text('07'), findsOneWidget);
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).at(1), 'reem@example.com');
+    await tester.enterText(find.byType(TextField).at(2), '07712345678');
+    await tester.enterText(find.byType(TextField).at(3), 'secret123');
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -420));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تأكيد كلمة المرور'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'secret123');
+    await tester.ensureVisible(find.text('متابعة'));
+    await tester.pump();
+    await tester.tap(find.text('متابعة'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('تأكيد رقم الهاتف'), findsOneWidget);
+    expect(find.text('رمز التحقق OTP'), findsOneWidget);
   });
 
   testWidgets('saved login session opens the signed-in shell', (tester) async {

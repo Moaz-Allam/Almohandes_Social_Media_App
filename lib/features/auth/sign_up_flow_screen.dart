@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../features/home/main_shell.dart';
+import '../../models/account_type.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../state/app_scope.dart';
 import '../../state/signup_controller.dart';
-import 'widgets/info_note.dart';
 import 'widgets/section_label.dart';
-import 'widgets/selectable_wrap.dart';
 import 'widgets/signup_page.dart';
 
 class SignUpFlowScreen extends StatefulWidget {
@@ -53,6 +52,47 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     _form.previousStep();
   }
 
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _handlePrimary() {
+    if (_form.step == 0) {
+      if (_form.displayName.text.trim().isEmpty ||
+          _form.email.text.trim().isEmpty) {
+        _showMessage('أكمل الاسم والبريد الإلكتروني أولا');
+        return;
+      }
+      if (!_form.hasValidIraqiPhone) {
+        _showMessage('رقم الهاتف يجب أن يكون رقم عراقي مثل 07xxxxxxxxx');
+        return;
+      }
+      if (!_form.hasMatchingPasswords) {
+        _showMessage('تأكد من كلمة المرور وتأكيدها');
+        return;
+      }
+      _form.nextStep();
+      return;
+    }
+
+    if (_form.step == 1) {
+      if (!_form.hasValidOtp) {
+        _showMessage('رمز التحقق التجريبي هو 123456');
+        return;
+      }
+      _form.nextStep();
+      return;
+    }
+
+    if (_form.isLastStep) {
+      _complete();
+      return;
+    }
+    _form.nextStep();
+  }
+
   String _stepLabel(int step) =>
       'الخطوة ${step + 1} من ${SignupController.totalSteps}';
 
@@ -61,8 +101,6 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     return AnimatedBuilder(
       animation: _form,
       builder: (context, _) {
-        final isEngineer = _form.accountType == SignupAccountType.engineer;
-
         return Scaffold(
           body: SafeArea(
             child: Column(
@@ -106,194 +144,112 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                         step: _stepLabel(0),
                         title: 'أساسيات الحساب',
                         subtitle:
-                            'اختر نوع الحساب وابدأ في بناء مشاريع هندسية حقيقية.',
+                            'أدخل بياناتك الأساسية. رقم الهاتف يجب أن يكون عراقيا لتأكيد الحساب.',
                         children: [
-                          _AccountTypeSelector(
-                            value: _form.accountType,
-                            onChanged: _form.setAccountType,
+                          LinkedTextField(
+                            label: 'الاسم أو اسم الجهة',
+                            controller: _form.displayName,
                           ),
-                          const SizedBox(height: 18),
-                          if (isEngineer) ...[
-                            LinkedTextField(
-                              label: 'الاسم الكامل',
-                              controller: _form.fullName,
-                            ),
-                            const SizedBox(height: 14),
-                            LinkedTextField(
-                              label: 'البريد الإلكتروني',
-                              hint: 'name@example.com',
-                              controller: _form.email,
-                              keyboardType: TextInputType.emailAddress,
-                            ),
-                          ] else ...[
-                            LinkedTextField(
-                              label: 'اسم الشركة',
-                              controller: _form.companyName,
-                            ),
-                            const SizedBox(height: 14),
-                            LinkedTextField(
-                              label: 'بريد العمل',
-                              hint: 'team@company.com',
-                              controller: _form.workEmail,
-                              keyboardType: TextInputType.emailAddress,
-                            ),
-                          ],
+                          const SizedBox(height: 14),
+                          LinkedTextField(
+                            label: 'البريد الإلكتروني',
+                            hint: 'name@example.com',
+                            controller: _form.email,
+                            keyboardType: TextInputType.emailAddress,
+                          ),
+                          const SizedBox(height: 14),
+                          LinkedTextField(
+                            label: 'رقم الهاتف',
+                            hint: '07',
+                            controller: _form.phone,
+                            keyboardType: TextInputType.phone,
+                          ),
                           const SizedBox(height: 14),
                           LinkedTextField(
                             label: 'كلمة المرور',
                             controller: _form.password,
                             obscureText: true,
                           ),
-                          const SizedBox(height: 12),
-                          const InfoNote(
-                            icon: Icons.engineering_outlined,
-                            text:
-                                'المهندس يربط الشركات والمهندسين عبر مشاريع تقنية حقيقية، وليس عبر السير الذاتية وحدها.',
+                          const SizedBox(height: 14),
+                          LinkedTextField(
+                            label: 'تأكيد كلمة المرور',
+                            controller: _form.confirmPassword,
+                            obscureText: true,
                           ),
                         ],
                       ),
                       SignupPage(
                         step: _stepLabel(1),
-                        title: isEngineer ? 'ملفك الهندسي' : 'معلومات المنظمة',
-                        subtitle: isEngineer
-                            ? 'عرّف تخصصك ومستوى خبرتك والمهارات التي تريد استخدامها في المشاريع.'
-                            : 'أضف معلومات تساعد المهندسين على فهم شركتك ونوع المشاريع التي تنشئها.',
-                        children: isEngineer
-                            ? [
-                                const SectionLabel('التخصص'),
-                                SelectableWrap(
-                                  values: const [
-                                    'Frontend',
-                                    'Backend',
-                                    'Full Stack',
-                                    'Embedded Systems',
-                                    'AI/ML',
-                                    'Robotics',
-                                    'DevOps',
-                                    'UI/UX',
-                                    'Cybersecurity',
-                                  ],
-                                  selected: {_form.specialization.text},
-                                  onChanged: _form.setSpecialization,
-                                ),
-                                const SizedBox(height: 18),
-                                const SectionLabel('مستوى الخبرة'),
-                                SelectableWrap(
-                                  values: const [
-                                    'Student',
-                                    'Beginner',
-                                    'Intermediate',
-                                    'Advanced',
-                                  ],
-                                  selected: {_form.experienceLevel},
-                                  onChanged: _form.setExperienceLevel,
-                                ),
-                                const SizedBox(height: 18),
-                                const SectionLabel('المهارات'),
-                                SelectableWrap(
-                                  values: const [
-                                    'React',
-                                    'C++',
-                                    'Python',
-                                    'TensorFlow',
-                                    'FPGA',
-                                    'Docker',
-                                    'Flutter',
-                                    'Figma',
-                                  ],
-                                  selected: _form.skills,
-                                  onChanged: _form.toggleSkill,
-                                ),
-                              ]
-                            : [
-                                LinkedTextField(
-                                  label: 'الصناعة',
-                                  hint: 'Software, Robotics, AI...',
-                                  controller: _form.industry,
-                                ),
-                                const SizedBox(height: 18),
-                                const SectionLabel('حجم الشركة'),
-                                SelectableWrap(
-                                  values: const [
-                                    '1-10',
-                                    '11-50',
-                                    '51-200',
-                                    '200+',
-                                  ],
-                                  selected: {_form.companySize},
-                                  onChanged: _form.setCompanySize,
-                                ),
-                                const SizedBox(height: 18),
-                                LinkedTextField(
-                                  label: 'الدولة',
-                                  controller: _form.country,
-                                ),
-                              ],
+                        title: 'تأكيد رقم الهاتف',
+                        subtitle:
+                            'أدخل رمز التحقق المرسل إلى ${_form.phone.text.isEmpty ? 'رقمك العراقي' : _form.phone.text}. الرمز التجريبي هو 123456.',
+                        children: [
+                          LinkedTextField(
+                            label: 'رمز التحقق OTP',
+                            hint: '123456',
+                            controller: _form.otp,
+                            keyboardType: TextInputType.number,
+                          ),
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                            onPressed: () => _showMessage(
+                              'تم إرسال رمز تحقق جديد إلى رقمك العراقي',
+                            ),
+                            icon: const Icon(Icons.sms_outlined),
+                            label: const Text('إعادة إرسال الرمز'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.blue,
+                              minimumSize: const Size.fromHeight(46),
+                              side: const BorderSide(color: AppColors.blue),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(23),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       SignupPage(
                         step: _stepLabel(2),
-                        title: 'تفاصيل اختيارية',
-                        subtitle: isEngineer
-                            ? 'أضف روابط تثبت عملك وتساعد الفرق على تقييم مساهماتك.'
-                            : 'أضف روابط ووصفا قصيرا حتى تظهر شركتك بوضوح للمهندسين.',
-                        children: isEngineer
-                            ? [
-                                LinkedTextField(
-                                  label: 'GitHub',
-                                  controller: _form.github,
-                                ),
-                                const SizedBox(height: 14),
-                                LinkedTextField(
-                                  label: 'LinkedIn',
-                                  controller: _form.linkedIn,
-                                ),
-                                const SizedBox(height: 14),
-                                LinkedTextField(
-                                  label: 'موقع المحفظة',
-                                  controller: _form.portfolio,
-                                ),
-                                const SizedBox(height: 14),
-                                LinkedTextField(
-                                  label: 'نبذة قصيرة',
-                                  controller: _form.bio,
-                                  maxLines: 4,
-                                ),
-                                const SizedBox(height: 12),
-                                _UploadToggle(
-                                  icon: Icons.description_outlined,
-                                  label: 'رفع السيرة الذاتية',
-                                  value: _form.resumeUploaded,
-                                  onPressed: () => _form.setResumeUploaded(
-                                    !_form.resumeUploaded,
-                                  ),
-                                ),
-                              ]
-                            : [
-                                LinkedTextField(
-                                  label: 'موقع الشركة',
-                                  controller: _form.website,
-                                ),
-                                const SizedBox(height: 14),
-                                LinkedTextField(
-                                  label: 'LinkedIn الشركة',
-                                  controller: _form.companyLinkedIn,
-                                ),
-                                const SizedBox(height: 14),
-                                LinkedTextField(
-                                  label: 'وصف قصير',
-                                  controller: _form.shortDescription,
-                                  maxLines: 4,
-                                ),
-                                const SizedBox(height: 12),
-                                _UploadToggle(
-                                  icon: Icons.image_outlined,
-                                  label: 'رفع شعار الشركة',
-                                  value: _form.logoUploaded,
-                                  onPressed: () => _form.setLogoUploaded(
-                                    !_form.logoUploaded,
-                                  ),
-                                ),
-                              ],
+                        title: 'ما نوع حسابك؟',
+                        subtitle:
+                            'اختر نوع المستخدم المناسب. يمكنك اختيار نوع واحد فقط.',
+                        children: [
+                          for (final type in AccountType.values) ...[
+                            _UserTypeCard(
+                              type: type,
+                              selected: _form.userType == type,
+                              onTap: () => _form.setUserType(type),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                        ],
+                      ),
+                      SignupPage(
+                        step: _stepLabel(3),
+                        title: _form.userType.specializationTitle,
+                        subtitle: _form.userType.specializationSubtitle,
+                        children: [
+                          _OptionGrid(
+                            values: _form.specializationOptions,
+                            selected: _form.specialization,
+                            onChanged: _form.setSpecialization,
+                          ),
+                        ],
+                      ),
+                      SignupPage(
+                        step: _stepLabel(4),
+                        title: 'محافظتك؟',
+                        subtitle: 'اختر محافظتك داخل العراق.',
+                        children: [
+                          const SectionLabel('المحافظة'),
+                          const SizedBox(height: 10),
+                          _OptionGrid(
+                            values: iraqiGovernorates,
+                            selected: _form.governorate,
+                            onChanged: _form.setGovernorate,
+                            icon: Icons.location_on_outlined,
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -326,9 +282,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                       Expanded(
                         child: PrimaryButton(
                           label: _form.isLastStep ? 'إنهاء' : 'متابعة',
-                          onPressed: _form.isLastStep
-                              ? _complete
-                              : _form.nextStep,
+                          onPressed: _handlePrimary,
                         ),
                       ),
                     ],
@@ -343,82 +297,194 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
   }
 }
 
-class _AccountTypeSelector extends StatelessWidget {
-  const _AccountTypeSelector({required this.value, required this.onChanged});
+class _UserTypeCard extends StatelessWidget {
+  const _UserTypeCard({
+    required this.type,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final SignupAccountType value;
-  final ValueChanged<SignupAccountType> onChanged;
+  final AccountType type;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final type in SignupAccountType.values) ...[
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => onChanged(type),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                height: 86,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: value == type ? AppColors.paleBlue : AppColors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: value == type ? AppColors.blue : AppColors.border,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      type == SignupAccountType.engineer
-                          ? Icons.engineering
-                          : Icons.business,
-                      color: AppColors.blue,
-                    ),
-                    const Spacer(),
-                    Text(
-                      type.label,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ],
-                ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.paleBlue : AppColors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.blue : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.blue : AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                type.icon,
+                color: selected ? AppColors.white : AppColors.blue,
               ),
             ),
-          ),
-          if (type != SignupAccountType.values.last) const SizedBox(width: 10),
-        ],
-      ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    type.label,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    type.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              selected ? Icons.check_circle : Icons.chevron_right,
+              color: selected ? AppColors.blue : AppColors.muted,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _UploadToggle extends StatelessWidget {
-  const _UploadToggle({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onPressed,
+class _OptionGrid extends StatelessWidget {
+  const _OptionGrid({
+    required this.values,
+    required this.selected,
+    required this.onChanged,
+    this.icon,
   });
 
-  final IconData icon;
-  final String label;
-  final bool value;
-  final VoidCallback onPressed;
+  final List<String> values;
+  final String selected;
+  final ValueChanged<String> onChanged;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(value ? Icons.check_circle : icon),
-      label: Text(value ? 'تم: $label' : label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: value ? AppColors.blue : AppColors.muted,
-        minimumSize: const Size.fromHeight(46),
-        side: BorderSide(color: value ? AppColors.blue : AppColors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(23)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth > 380;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final value in values)
+              SizedBox(
+                width: twoColumns
+                    ? (constraints.maxWidth - 10) / 2
+                    : constraints.maxWidth,
+                child: _OptionTile(
+                  label: value,
+                  icon: icon ?? _iconFor(value),
+                  selected: selected == value,
+                  onTap: () => onChanged(value),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  IconData _iconFor(String value) {
+    if (value.contains('كهرب') || value.contains('طاقة')) {
+      return Icons.bolt_outlined;
+    }
+    if (value.contains('شركة') || value.contains('مقاول')) {
+      return Icons.business_outlined;
+    }
+    if (value.contains('شفل') ||
+        value.contains('كرين') ||
+        value.contains('شاحنة') ||
+        value.contains('بلدوزر') ||
+        value.contains('دحالة') ||
+        value.contains('شوكية')) {
+      return Icons.local_shipping_outlined;
+    }
+    if (value.contains('حاسوب') || value.contains('كاميرات')) {
+      return Icons.computer_outlined;
+    }
+    if (value.contains('نجار') ||
+        value.contains('حداد') ||
+        value.contains('سباك')) {
+      return Icons.handyman_outlined;
+    }
+    return Icons.engineering_outlined;
+  }
+}
+
+class _OptionTile extends StatelessWidget {
+  const _OptionTile({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        constraints: const BoxConstraints(minHeight: 74),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.paleBlue : AppColors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected ? AppColors.blue : AppColors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: selected ? AppColors.blue : AppColors.muted),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.blue : AppColors.ink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle, color: AppColors.blue, size: 20),
+          ],
+        ),
       ),
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/account_type.dart';
+import '../../state/app_scope.dart';
 import 'widgets/composer_top_bar.dart';
 
 class ProjectFormScreen extends StatefulWidget {
@@ -74,6 +76,33 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
+    if (!accountType.canPostProjects) {
+      return Scaffold(
+        backgroundColor: AppColors.white,
+        body: Column(
+          children: [
+            ComposerTopBar(
+              title: 'مشاركة مشروع',
+              onClose: () => Navigator.of(context).maybePop(),
+            ),
+            const Expanded(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'مشاركة المشاريع متاحة للمهندسين والشركات فقط',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.white,
       body: Column(

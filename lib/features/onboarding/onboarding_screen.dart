@@ -83,12 +83,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const SizedBox(height: 28),
               PrimaryButton(label: 'انضم الآن', onPressed: _openJoin),
               const SizedBox(height: 8),
-              SocialButton(
-                label: 'المتابعة بواسطة Apple',
-                icon: Icons.apple,
-                onPressed: _openSignIn,
-              ),
-              const SizedBox(height: 8),
               SocialButton.google(
                 label: 'المتابعة بواسطة Google',
                 onPressed: _openSignIn,

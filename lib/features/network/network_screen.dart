@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/account_type.dart';
 import '../../models/network_person.dart';
+import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import '../profile/profile_screen.dart';
 import 'invitations_screen.dart';
 import 'widgets/network_card.dart';
 
-enum _NetworkCategory { makers, companies }
+enum _NetworkCategory { engineers, companies }
 
 class NetworkScreen extends StatefulWidget {
   const NetworkScreen({
@@ -24,48 +26,48 @@ class NetworkScreen extends StatefulWidget {
 }
 
 class _NetworkScreenState extends State<NetworkScreen> {
-  _NetworkCategory _category = _NetworkCategory.makers;
+  _NetworkCategory _category = _NetworkCategory.engineers;
 
-  static const _makers = [
+  static const _engineers = [
     NetworkPerson(
       name: 'مريانا جونز',
-      title: 'مصممة منتجات · uxui_design',
+      title: 'مهندسة مدنية · تصميم وإشراف',
       color: AppColors.blue,
       badge: 'متاحة',
-      contextLine: 'جامعة القاهرة',
+      contextLine: 'بغداد · خبرة 4 سنوات',
     ),
     NetworkPerson(
       name: 'مازن محمود',
-      title: 'مطور Front-end أول',
+      title: 'مهندس كهرباء مواقع',
       color: AppColors.darkBlue,
-      badge: 'يوظف',
-      contextLine: 'مجتمع Flutter مصر',
+      badge: 'مشاريع',
+      contextLine: 'البصرة · أنظمة قدرة',
     ),
     NetworkPerson(
       name: 'جاكسون نوكس',
-      title: 'مهندس SRE في ArtLife',
+      title: 'مهندس ميكانيك تشغيل',
       color: AppColors.muted,
-      contextLine: 'خبرة 6 سنوات',
+      contextLine: 'أربيل · خبرة 6 سنوات',
     ),
     NetworkPerson(
       name: 'أندرو مارتن',
-      title: 'أخصائي اكتساب مواهب',
+      title: 'مهندس حاسوب وأنظمة',
       color: AppColors.black,
       badge: 'متاح',
-      contextLine: 'توظيف تقني',
+      contextLine: 'السليمانية · حلول رقمية',
     ),
     NetworkPerson(
       name: 'سارة خليل',
-      title: 'محللة بيانات',
+      title: 'مهندسة مساحة',
       color: AppColors.blue,
-      contextLine: 'تحليلات المنتجات',
+      contextLine: 'النجف · أعمال ميدانية',
     ),
     NetworkPerson(
       name: 'كريم يوسف',
-      title: 'مدير مبيعات B2B',
+      title: 'مهندس معماري',
       color: AppColors.darkBlue,
-      badge: 'يوظف',
-      contextLine: 'نمو الأعمال',
+      badge: 'تصميم',
+      contextLine: 'كربلاء · نمذجة BIM',
     ),
   ];
 
@@ -107,9 +109,33 @@ class _NetworkScreenState extends State<NetworkScreen> {
     ),
   ];
 
-  List<NetworkPerson> get _visibleProfiles {
-    return switch (_category) {
-      _NetworkCategory.makers => _makers,
+  List<_NetworkCategory> _categoriesFor(AccountType accountType) {
+    return switch (accountType) {
+      AccountType.engineer => const [
+        _NetworkCategory.engineers,
+        _NetworkCategory.companies,
+      ],
+      AccountType.company => const [_NetworkCategory.engineers],
+      AccountType.craftsman ||
+      AccountType.worker ||
+      AccountType.equipment => const [],
+    };
+  }
+
+  _NetworkCategory? _effectiveCategory(AccountType accountType) {
+    final categories = _categoriesFor(accountType);
+    if (categories.isEmpty) {
+      return null;
+    }
+    if (categories.contains(_category)) {
+      return _category;
+    }
+    return categories.first;
+  }
+
+  List<NetworkPerson> _visibleProfiles(_NetworkCategory category) {
+    return switch (category) {
+      _NetworkCategory.engineers => _engineers,
       _NetworkCategory.companies => _companies,
     };
   }
@@ -134,7 +160,12 @@ class _NetworkScreenState extends State<NetworkScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleProfiles = _visibleProfiles;
+    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
+    final categories = _categoriesFor(accountType);
+    final selectedCategory = _effectiveCategory(accountType);
+    final visibleProfiles = selectedCategory == null
+        ? const <NetworkPerson>[]
+        : _visibleProfiles(selectedCategory);
 
     return Column(
       children: [
@@ -143,39 +174,83 @@ class _NetworkScreenState extends State<NetworkScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              _SimpleNavRow(
-                title: 'الدعوات',
-                subtitle: 'لديك 5 دعوات معلقة',
-                onTap: () => _openInvitations(context),
-              ),
-              const Divider(height: 9, thickness: 8, color: AppColors.soft),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: _NetworkCategoryTabs(
-                  selected: _category,
-                  onChanged: (value) => setState(() => _category = value),
+              if (selectedCategory == null) ...[
+                const _NetworkAccessEmptyState(),
+              ] else ...[
+                _SimpleNavRow(
+                  title: 'الدعوات',
+                  subtitle: 'لديك 5 دعوات معلقة',
+                  onTap: () => _openInvitations(context),
                 ),
-              ),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                itemCount: visibleProfiles.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: .62,
+                const Divider(height: 9, thickness: 8, color: AppColors.soft),
+                if (categories.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: _NetworkCategoryTabs(
+                      selected: selectedCategory,
+                      onChanged: (value) => setState(() => _category = value),
+                    ),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Text(
+                      'مهندسون',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                  itemCount: visibleProfiles.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: .62,
+                  ),
+                  itemBuilder: (context, index) => NetworkCard(
+                    person: visibleProfiles[index],
+                    onTap: () => _openProfile(context, visibleProfiles[index]),
+                  ),
                 ),
-                itemBuilder: (context, index) => NetworkCard(
-                  person: visibleProfiles[index],
-                  onTap: () => _openProfile(context, visibleProfiles[index]),
-                ),
-              ),
+              ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _NetworkAccessEmptyState extends StatelessWidget {
+  const _NetworkAccessEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(24, 90, 24, 24),
+      child: Column(
+        children: [
+          Icon(Icons.lock_outline, color: AppColors.muted, size: 44),
+          SizedBox(height: 14),
+          Text(
+            'الشبكة متاحة للمهندسين والشركات فقط',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'هذا النوع من الحساب لا يمكنه مشاهدة حسابات أخرى من صفحة شبكتي.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, height: 1.45),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -197,9 +272,9 @@ class _NetworkCategoryTabs extends StatelessWidget {
       child: Row(
         children: [
           _NetworkCategoryTab(
-            label: 'حرفي',
-            selected: selected == _NetworkCategory.makers,
-            onTap: () => onChanged(_NetworkCategory.makers),
+            label: 'مهندسون',
+            selected: selected == _NetworkCategory.engineers,
+            onTap: () => onChanged(_NetworkCategory.engineers),
           ),
           _NetworkCategoryTab(
             label: 'شركات',

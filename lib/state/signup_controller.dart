@@ -1,56 +1,36 @@
-import 'package:flutter/widgets.dart';
-
+import '../models/account_type.dart';
 import '../models/profile_form.dart';
-
-enum SignupAccountType { engineer, company }
-
-extension SignupAccountTypeLabel on SignupAccountType {
-  String get label {
-    return switch (this) {
-      SignupAccountType.engineer => 'مهندس',
-      SignupAccountType.company => 'شركة',
-    };
-  }
-}
+import 'package:flutter/material.dart';
 
 final class SignupController extends ChangeNotifier {
   SignupController() {
-    for (final controller in [fullName, companyName, specialization, country]) {
+    for (final controller in [
+      displayName,
+      email,
+      phone,
+      password,
+      confirmPassword,
+      otp,
+    ]) {
       controller.addListener(notifyListeners);
     }
   }
 
-  static const totalSteps = 3;
+  static const totalSteps = 5;
 
   final pageController = PageController();
 
-  SignupAccountType _accountType = SignupAccountType.engineer;
   int _step = 0;
+  AccountType _userType = AccountType.engineer;
+  String _specialization = 'مدني';
+  String _governorate = 'بغداد';
 
-  final fullName = TextEditingController(text: 'ريم حسن');
+  final displayName = TextEditingController(text: 'ريم حسن');
   final email = TextEditingController();
+  final phone = TextEditingController();
   final password = TextEditingController();
-  final specialization = TextEditingController(text: 'Frontend');
-  String experienceLevel = 'Student';
-  final github = TextEditingController();
-  final linkedIn = TextEditingController();
-  final portfolio = TextEditingController();
-  final bio = TextEditingController();
-  bool resumeUploaded = false;
-
-  final companyName = TextEditingController(text: 'Nile Labs');
-  final workEmail = TextEditingController();
-  final industry = TextEditingController(text: 'Software');
-  String companySize = '1-10';
-  final country = TextEditingController(text: 'Egypt');
-  final website = TextEditingController();
-  final companyLinkedIn = TextEditingController();
-  bool logoUploaded = false;
-  final shortDescription = TextEditingController();
-
-  final Set<String> _skills = {'React', 'Python', 'Docker'};
-
-  SignupAccountType get accountType => _accountType;
+  final confirmPassword = TextEditingController();
+  final otp = TextEditingController();
 
   int get step => _step;
 
@@ -58,49 +38,51 @@ final class SignupController extends ChangeNotifier {
 
   bool get isLastStep => _step == totalSteps - 1;
 
-  String get currentStepLabel => 'الخطوة ${_step + 1} من $totalSteps';
+  AccountType get userType => _userType;
 
-  Set<String> get skills => Set.unmodifiable(_skills);
+  String get specialization => _specialization;
 
-  void setAccountType(SignupAccountType value) {
-    if (_accountType == value) {
+  String get governorate => _governorate;
+
+  List<String> get specializationOptions {
+    return switch (_userType) {
+      AccountType.engineer => engineerSpecializations,
+      AccountType.company => companyActivities,
+      AccountType.craftsman => craftsmanSpecializations,
+      AccountType.worker => workerSpecializations,
+      AccountType.equipment => equipmentTypes,
+    };
+  }
+
+  bool get hasValidIraqiPhone => isValidIraqiPhone(phone.text);
+
+  bool get hasValidOtp => otp.text.trim() == '123456';
+
+  bool get hasMatchingPasswords {
+    return password.text.isNotEmpty && password.text == confirmPassword.text;
+  }
+
+  static bool isValidIraqiPhone(String value) {
+    final normalized = value.trim().replaceAll(' ', '').replaceAll('-', '');
+    return RegExp(r'^(?:\+964|00964|0)7[3-9]\d{8}$').hasMatch(normalized);
+  }
+
+  void setUserType(AccountType value) {
+    if (_userType == value) {
       return;
     }
-    _accountType = value;
+    _userType = value;
+    _specialization = specializationOptions.first;
     notifyListeners();
   }
 
   void setSpecialization(String value) {
-    specialization.text = value;
+    _specialization = value;
     notifyListeners();
   }
 
-  void setExperienceLevel(String value) {
-    experienceLevel = value;
-    notifyListeners();
-  }
-
-  void setCompanySize(String value) {
-    companySize = value;
-    notifyListeners();
-  }
-
-  void setResumeUploaded(bool value) {
-    resumeUploaded = value;
-    notifyListeners();
-  }
-
-  void setLogoUploaded(bool value) {
-    logoUploaded = value;
-    notifyListeners();
-  }
-
-  void toggleSkill(String value) {
-    if (_skills.contains(value)) {
-      _skills.remove(value);
-    } else {
-      _skills.add(value);
-    }
+  void setGovernorate(String value) {
+    _governorate = value;
     notifyListeners();
   }
 
@@ -121,26 +103,7 @@ final class SignupController extends ChangeNotifier {
   }
 
   ProfileForm toProfile() {
-    if (_accountType == SignupAccountType.company) {
-      return ProfileForm(
-        email: workEmail.text,
-        firstName: companyName.text,
-        lastName: '',
-        headline: 'شركة تنشئ مشاريع هندسية',
-        location: country.text,
-        industry: industry.text,
-        company: companyName.text,
-        role: 'Company',
-        about: shortDescription.text,
-        skills: const {},
-        languages: const {},
-        openToWork: false,
-        profilePublic: true,
-        jobAlerts: false,
-      );
-    }
-
-    final parts = fullName.text.trim().split(RegExp(r'\s+'));
+    final parts = displayName.text.trim().split(RegExp(r'\s+'));
     final first = parts.isEmpty ? '' : parts.first;
     final last = parts.length <= 1 ? '' : parts.skip(1).join(' ');
 
@@ -148,15 +111,15 @@ final class SignupController extends ChangeNotifier {
       email: email.text,
       firstName: first,
       lastName: last,
-      headline: '${specialization.text} · $experienceLevel',
-      location: 'منصة المهندس',
-      industry: 'Engineering',
-      company: '',
-      role: specialization.text,
-      about: bio.text,
-      skills: Set.unmodifiable(_skills),
+      headline: '${_userType.label} · $_specialization',
+      location: _governorate,
+      industry: _userType.label,
+      company: _userType == AccountType.company ? displayName.text : '',
+      role: _specialization,
+      about: _userType.description,
+      skills: {_specialization},
       languages: const {},
-      openToWork: true,
+      openToWork: _userType != AccountType.company,
       profilePublic: true,
       jobAlerts: false,
     );
@@ -174,21 +137,93 @@ final class SignupController extends ChangeNotifier {
   @override
   void dispose() {
     pageController.dispose();
-    fullName.dispose();
+    displayName.dispose();
     email.dispose();
+    phone.dispose();
     password.dispose();
-    specialization.dispose();
-    github.dispose();
-    linkedIn.dispose();
-    portfolio.dispose();
-    bio.dispose();
-    companyName.dispose();
-    workEmail.dispose();
-    industry.dispose();
-    country.dispose();
-    website.dispose();
-    companyLinkedIn.dispose();
-    shortDescription.dispose();
+    confirmPassword.dispose();
+    otp.dispose();
     super.dispose();
   }
 }
+
+const engineerSpecializations = [
+  'مدني',
+  'معماري',
+  'كهرباء',
+  'ميكانيك',
+  'مساحة',
+  'حاسوب',
+  'بيئي',
+  'كيمياء',
+  'نفط',
+  'أخرى',
+];
+
+const companyActivities = ['مقاول', 'شركة بناء', 'أخرى'];
+
+const craftsmanSpecializations = [
+  'مبيضجي',
+  'لباخ',
+  'مبلط',
+  'صباغ',
+  'ميكانيكي',
+  'فني تكييف وتبريد',
+  'فني ألمنيوم',
+  'فني طاقة شمسية',
+  'فني تركيب كاميرات',
+  'بناء طابوق',
+  'كهربائي',
+  'سباك',
+  'نجار',
+  'حداد',
+  'أخرى',
+];
+
+const workerSpecializations = [
+  'عامل بناء',
+  'عامل تشييد',
+  'عامل حفر',
+  'عامل صب',
+  'عامل تحميل',
+  'عامل تسليح',
+  'عامل طابوق',
+  'عامل تنظيف موقع',
+  'أخرى',
+];
+
+const equipmentTypes = [
+  'شفل (حفارة)',
+  'كرين (رافعة)',
+  'دحالة (رول)',
+  'بلدوزر',
+  'شوكية',
+  'تريلة',
+  'خلاطة كونكريت',
+  'شاحنة نقل',
+  'صهريج',
+  'مولدة كهرباء',
+  'ضاغط هواء',
+  'أخرى',
+];
+
+const iraqiGovernorates = [
+  'بغداد',
+  'البصرة',
+  'نينوى',
+  'أربيل',
+  'السليمانية',
+  'دهوك',
+  'كركوك',
+  'ديالى',
+  'الأنبار',
+  'بابل',
+  'كربلاء',
+  'النجف',
+  'واسط',
+  'صلاح الدين',
+  'ذي قار',
+  'ميسان',
+  'المثنى',
+  'القادسية',
+];

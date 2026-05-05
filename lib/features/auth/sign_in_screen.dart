@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../features/home/main_shell.dart';
-import '../../shared/widgets/divider_with_text.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -96,15 +95,7 @@ class SignInScreen extends StatelessWidget {
               label: 'تسجيل الدخول',
               onPressed: () => _enterApp(context),
             ),
-            const SizedBox(height: 26),
-            const DividerWithText(text: 'أو'),
-            const SizedBox(height: 26),
-            SocialButton(
-              label: 'تسجيل الدخول بواسطة Apple',
-              icon: Icons.apple,
-              onPressed: () => _enterApp(context),
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 18),
             SocialButton.google(
               label: 'تسجيل الدخول بواسطة Google',
               onPressed: () => _enterApp(context),
