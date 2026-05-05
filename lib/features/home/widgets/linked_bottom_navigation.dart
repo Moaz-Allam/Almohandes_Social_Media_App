@@ -52,7 +52,7 @@ class LinkedBottomNavigation extends StatelessWidget {
                 onTap: () => onChanged(AppTab.reels),
               ),
               _NavItem(
-                icon: Icons.folder_special,
+                icon: Icons.work,
                 label: 'مشاريع',
                 selected: selectedTab == AppTab.projects,
                 onTap: () => onChanged(AppTab.projects),

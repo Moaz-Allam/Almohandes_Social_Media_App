@@ -48,7 +48,10 @@ class MainShell extends StatelessWidget {
         onMenu: () => scaffoldKey.currentState?.openDrawer(),
         onMessages: () => _openMessages(context),
       ),
-      AppTab.projects => const ProjectsScreen(),
+      AppTab.projects => ProjectsScreen(
+        onMenu: () => scaffoldKey.currentState?.openDrawer(),
+        onMessages: () => _openMessages(context),
+      ),
     };
 
     return Scaffold(

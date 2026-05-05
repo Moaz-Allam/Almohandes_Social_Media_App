@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/project_item.dart';
+import '../home/widgets/home_top_bar.dart';
 import 'project_application_screen.dart';
 import 'widgets/project_card.dart';
 
 class ProjectsScreen extends StatefulWidget {
-  const ProjectsScreen({super.key});
+  const ProjectsScreen({
+    super.key,
+    required this.onMenu,
+    required this.onMessages,
+  });
+
+  final VoidCallback onMenu;
+  final VoidCallback onMessages;
 
   @override
   State<ProjectsScreen> createState() => _ProjectsScreenState();
@@ -111,77 +119,62 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
     return Column(
       children: [
-        SafeArea(
-          bottom: false,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            decoration: const BoxDecoration(
-              color: AppColors.white,
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+        HomeTopBar(
+          onMenu: widget.onMenu,
+          onMessages: widget.onMessages,
+          hint: 'ابحث عن مشروع',
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          decoration: const BoxDecoration(
+            color: AppColors.white,
+            border: Border(bottom: BorderSide(color: AppColors.border)),
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                const Text(
-                  'المشاريع',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                _FilterMenu(
+                  label: 'الترتيب',
+                  value: _sortBy,
+                  values: const ['الأحدث', 'الأعلى ميزانية'],
+                  onSelected: (value) => setState(() => _sortBy = value),
                 ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _FilterMenu(
-                        label: 'الترتيب',
-                        value: _sortBy,
-                        values: const ['الأحدث', 'الأعلى ميزانية'],
-                        onSelected: (value) => setState(() => _sortBy = value),
-                      ),
-                      _FilterMenu(
-                        label: 'الفئة',
-                        value: _category,
-                        values: const [
-                          'كل الفئات',
-                          'Web App',
-                          'Mobile App',
-                          'Embedded Systems',
-                          'AI/ML',
-                          'Robotics',
-                          'Cybersecurity',
-                          'UI/UX',
-                          'Cloud/DevOps',
-                        ],
-                        onSelected: (value) =>
-                            setState(() => _category = value),
-                      ),
-                      _FilterMenu(
-                        label: 'نوع المشروع',
-                        value: _type,
-                        values: const [
-                          'كل الأنواع',
-                          'Freelance',
-                          'Internship',
-                          'Part-time',
-                          'Full-time',
-                          'Research',
-                          'Startup Collaboration',
-                        ],
-                        onSelected: (value) => setState(() => _type = value),
-                      ),
-                      _FilterMenu(
-                        label: 'نمط العمل',
-                        value: _workMode,
-                        values: const [
-                          'كل الأنماط',
-                          'Remote',
-                          'Hybrid',
-                          'On-site',
-                        ],
-                        onSelected: (value) =>
-                            setState(() => _workMode = value),
-                      ),
-                    ],
-                  ),
+                _FilterMenu(
+                  label: 'الفئة',
+                  value: _category,
+                  values: const [
+                    'كل الفئات',
+                    'Web App',
+                    'Mobile App',
+                    'Embedded Systems',
+                    'AI/ML',
+                    'Robotics',
+                    'Cybersecurity',
+                    'UI/UX',
+                    'Cloud/DevOps',
+                  ],
+                  onSelected: (value) => setState(() => _category = value),
+                ),
+                _FilterMenu(
+                  label: 'نوع المشروع',
+                  value: _type,
+                  values: const [
+                    'كل الأنواع',
+                    'Freelance',
+                    'Internship',
+                    'Part-time',
+                    'Full-time',
+                    'Research',
+                    'Startup Collaboration',
+                  ],
+                  onSelected: (value) => setState(() => _type = value),
+                ),
+                _FilterMenu(
+                  label: 'نمط العمل',
+                  value: _workMode,
+                  values: const ['كل الأنماط', 'Remote', 'Hybrid', 'On-site'],
+                  onSelected: (value) => setState(() => _workMode = value),
                 ),
               ],
             ),
