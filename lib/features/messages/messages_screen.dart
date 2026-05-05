@@ -1,0 +1,170 @@
+import 'package:flutter/material.dart';
+
+import '../../core/constants/app_colors.dart';
+import '../../models/message_item.dart';
+import '../profile/profile_screen.dart';
+import 'chat_screen.dart';
+import 'widgets/message_tile.dart';
+
+class MessagesScreen extends StatelessWidget {
+  const MessagesScreen({super.key});
+
+  static const _contacts = [
+    MessageItem(
+      name: 'أندرو مارتن',
+      preview: 'هل يمكنك إرسال الفاتورة؟',
+      time: '10:07 ص',
+      unread: true,
+      color: Color(0xFF5D8E64),
+    ),
+    MessageItem(
+      name: 'جيمي لي',
+      preview: 'أنت: تمام، وصلني!',
+      time: 'الخميس',
+      unread: false,
+      color: Color(0xFF705CB9),
+    ),
+    MessageItem(
+      name: 'سارة خليل',
+      preview: 'أنت: أظن أن هذا متعلق بضمان الجودة',
+      time: 'الأربعاء',
+      unread: false,
+      color: Color(0xFFD66B7B),
+    ),
+    MessageItem(
+      name: 'وليد إلياس',
+      preview: 'أنت: راجعت التقرير المناسب',
+      time: 'الاثنين',
+      unread: false,
+      color: Color(0xFF4C8D72),
+    ),
+    MessageItem(
+      name: 'مريم آدمز',
+      preview: 'InMail · أهلا، الاجتماع مجدول...',
+      time: 'الأحد',
+      unread: false,
+      color: Color(0xFF97B481),
+    ),
+    MessageItem(
+      name: 'جينيفر هيلتون',
+      preview: 'هكذا يعمل لينكدإن :)',
+      time: 'الجمعة',
+      unread: false,
+      color: Color(0xFFB65942),
+    ),
+    MessageItem(
+      name: 'نيل أبو جاه',
+      preview: 'أنت: تمام، وصلني!',
+      time: 'الخميس',
+      unread: false,
+      color: Color(0xFF8C6DCE),
+    ),
+    MessageItem(
+      name: 'جيمس هندرسون',
+      preview: '👍',
+      time: '9 نوفمبر',
+      unread: false,
+      color: Color(0xFFB68C64),
+    ),
+  ];
+
+  void _openChat(BuildContext context, MessageItem contact) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ChatScreen(contact: contact)));
+  }
+
+  void _openProfile(BuildContext context, MessageItem contact) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          name: contact.name,
+          headline: contact.preview.replaceFirst('أنت: ', ''),
+          color: contact.color,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              height: 58,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'رجوع',
+                  ),
+                  const SizedBox(width: 2),
+                  const Expanded(
+                    child: Text(
+                      'الرسائل',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {},
+                    icon: const Icon(Icons.more_vert),
+                    tooltip: 'المزيد',
+                  ),
+                  IconButton(
+                    onPressed: () {},
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'رسالة جديدة',
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.search, color: AppColors.muted, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'بحث في الرسائل',
+                      style: TextStyle(color: AppColors.muted),
+                    ),
+                  ),
+                  Icon(Icons.tune, color: AppColors.muted, size: 20),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.separated(
+                itemCount: _contacts.length,
+                separatorBuilder: (context, index) =>
+                    const Divider(height: 1, indent: 78),
+                itemBuilder: (context, index) => MessageTile(
+                  item: _contacts[index],
+                  onTap: () => _openChat(context, _contacts[index]),
+                  onProfileTap: () => _openProfile(context, _contacts[index]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

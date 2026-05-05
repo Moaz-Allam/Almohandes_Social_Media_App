@@ -1,0 +1,66 @@
+import 'package:flutter/material.dart';
+
+import '../../../core/constants/app_colors.dart';
+import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/search_pill.dart';
+import '../../search/search_screen.dart';
+
+class HomeTopBar extends StatelessWidget {
+  const HomeTopBar({
+    super.key,
+    required this.onMenu,
+    required this.onMessages,
+    this.hint = 'بحث',
+  });
+
+  final VoidCallback onMenu;
+  final VoidCallback onMessages;
+  final String hint;
+
+  void _openSearch(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: AppColors.border)),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: onMenu,
+              child: const AppAvatar(
+                name: 'ريم حسن',
+                radius: 20,
+                color: Color(0xFF9151A8),
+                badge: 'يوظف',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: InkWell(
+                onTap: () => _openSearch(context),
+                borderRadius: BorderRadius.circular(4),
+                child: SearchPill(hint: hint),
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton(
+              onPressed: onMessages,
+              icon: const Icon(Icons.chat_bubble, color: AppColors.muted),
+              tooltip: 'الرسائل',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

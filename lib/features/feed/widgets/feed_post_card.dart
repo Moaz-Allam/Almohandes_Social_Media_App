@@ -1,0 +1,354 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../../core/constants/app_colors.dart';
+import '../../../models/feed_post_model.dart';
+import '../../../shared/painters/post_media_painter.dart';
+import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/comments_bottom_sheet.dart';
+import '../../../shared/widgets/like_burst.dart';
+import '../../messages/share_contact_screen.dart';
+import '../../profile/profile_screen.dart';
+
+class FeedPostCard extends StatefulWidget {
+  const FeedPostCard({super.key, required this.post});
+
+  final FeedPostModel post;
+
+  @override
+  State<FeedPostCard> createState() => _FeedPostCardState();
+}
+
+class _FeedPostCardState extends State<FeedPostCard> {
+  late int _reactionCount;
+  bool _isLiked = false;
+  bool _showLike = false;
+  Timer? _likeBurstTimer;
+
+  FeedPostModel get post => widget.post;
+
+  @override
+  void initState() {
+    super.initState();
+    _reactionCount = _parseReactionCount(post.reactions);
+  }
+
+  int _parseReactionCount(String value) {
+    final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(digitsOnly) ?? 0;
+  }
+
+  @override
+  void dispose() {
+    _likeBurstTimer?.cancel();
+    super.dispose();
+  }
+
+  void _toggleLike() {
+    _likeBurstTimer?.cancel();
+    setState(() {
+      _isLiked = !_isLiked;
+      _reactionCount += _isLiked ? 1 : -1;
+      _showLike = _isLiked;
+    });
+
+    if (!_isLiked) {
+      return;
+    }
+
+    _likeBurstTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) {
+        setState(() => _showLike = false);
+      }
+    });
+  }
+
+  void _openProfile(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(
+          name: post.name,
+          headline: post.headline,
+          color: post.avatarColor,
+        ),
+      ),
+    );
+  }
+
+  void _showComments(BuildContext context) {
+    showLinkedCommentsSheet(context);
+  }
+
+  void _openSendFlow(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => ShareContactScreen(post: post)));
+  }
+
+  Future<void> _confirmRepost(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('تأكيد إعادة النشر'),
+        content: const Text('هل تريد إعادة نشر هذا المنشور على صفحتك؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تمت إعادة النشر')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              top: BorderSide(color: AppColors.border),
+              bottom: BorderSide(color: AppColors.border),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _openProfile(context),
+                      child: AppAvatar(
+                        name: post.name,
+                        radius: 28,
+                        color: post.avatarColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _openProfile(context),
+                        child: _PostHeader(post: post),
+                      ),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: AppColors.muted),
+                      tooltip: 'خيارات المنشور',
+                      onSelected: (_) {},
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'save', child: Text('حفظ')),
+                        PopupMenuItem(value: 'report', child: Text('إبلاغ')),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                child: Text(
+                  post.body,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    height: 1.36,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              if (post.showMedia)
+                const AspectRatio(
+                  aspectRatio: 1.55,
+                  child: CustomPaint(painter: PostMediaPainter()),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                child: Row(
+                  children: [
+                    const _ReactionIcon(),
+                    const SizedBox(width: 6),
+                    Text(
+                      '$_reactionCount',
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                    const Spacer(),
+                    Text(
+                      post.comments,
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    PostAction(
+                      key: ValueKey('post-like-action-${post.name}'),
+                      icon: _isLiked
+                          ? Icons.thumb_up_alt
+                          : Icons.thumb_up_alt_outlined,
+                      label: 'إعجاب',
+                      color: _isLiked ? AppColors.blue : AppColors.muted,
+                      onPressed: _toggleLike,
+                    ),
+                    PostAction(
+                      icon: Icons.mode_comment_outlined,
+                      label: 'تعليق',
+                      onPressed: () => _showComments(context),
+                    ),
+                    PostAction(
+                      icon: Icons.repeat,
+                      label: 'إعادة نشر',
+                      onPressed: () => _confirmRepost(context),
+                    ),
+                    PostAction(
+                      icon: Icons.send_outlined,
+                      label: 'إرسال',
+                      onPressed: () => _openSendFlow(context),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        LikeBurst(visible: _showLike, color: AppColors.blue),
+      ],
+    );
+  }
+}
+
+class _PostHeader extends StatelessWidget {
+  const _PostHeader({required this.post});
+
+  final FeedPostModel post;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(color: AppColors.ink, fontSize: 16),
+            children: [
+              TextSpan(
+                text: post.name,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          post.headline,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.muted, fontSize: 14),
+        ),
+        Row(
+          children: [
+            Text(
+              post.time,
+              style: const TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
+            const SizedBox(width: 5),
+            const Icon(Icons.public, color: AppColors.muted, size: 14),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ReactionIcon extends StatelessWidget {
+  const _ReactionIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _ReactionCircle(
+      color: AppColors.blue,
+      icon: Icons.thumb_up,
+      size: 18,
+    );
+  }
+}
+
+class _ReactionCircle extends StatelessWidget {
+  const _ReactionCircle({
+    required this.color,
+    required this.icon,
+    required this.size,
+  });
+
+  final Color color;
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1),
+      ),
+      child: Icon(icon, color: Colors.white, size: size * .58),
+    );
+  }
+}
+
+class PostAction extends StatelessWidget {
+  const PostAction({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.color = AppColors.muted,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 21, color: color),
+        label: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        ),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          minimumSize: const Size(0, 38),
+        ),
+      ),
+    );
+  }
+}
