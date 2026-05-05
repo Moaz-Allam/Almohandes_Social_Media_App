@@ -100,7 +100,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                       name: 'ريم حسن',
                       radius: 30,
                       color: AppColors.darkBlue,
-                      badge: 'يوظف',
+                      badge: 'مهندسة',
                     ),
                     const SizedBox(width: 10),
                     const Expanded(

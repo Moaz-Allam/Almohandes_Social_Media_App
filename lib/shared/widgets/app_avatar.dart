@@ -41,7 +41,7 @@ class AppAvatar extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
-                color: badge == 'يوظف' ? AppColors.blue : AppColors.darkBlue,
+                color: badge == 'متاح' ? AppColors.blue : AppColors.darkBlue,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(color: Colors.white, width: 2),
               ),

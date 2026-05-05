@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_colors.dart';
 
@@ -14,6 +15,8 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      textTheme: GoogleFonts.cairoTextTheme(),
+      primaryTextTheme: GoogleFonts.cairoTextTheme(),
       scaffoldBackgroundColor: AppColors.white,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.blue,
@@ -23,7 +26,7 @@ abstract final class AppTheme {
         onPrimary: AppColors.white,
         onSurface: AppColors.ink,
       ),
-      fontFamily: 'Arial',
+      fontFamily: GoogleFonts.cairo().fontFamily,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.white,
@@ -51,6 +54,10 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme),
+      primaryTextTheme: GoogleFonts.cairoTextTheme(
+        ThemeData.dark().primaryTextTheme,
+      ),
       scaffoldBackgroundColor: _darkBackground,
       colorScheme: ColorScheme.fromSeed(
         brightness: Brightness.dark,
@@ -63,7 +70,7 @@ abstract final class AppTheme {
       ),
       cardColor: _darkSurface,
       dividerColor: _darkBorder,
-      fontFamily: 'Arial',
+      fontFamily: GoogleFonts.cairo().fontFamily,
       appBarTheme: const AppBarTheme(
         backgroundColor: _darkSurface,
         foregroundColor: _darkText,

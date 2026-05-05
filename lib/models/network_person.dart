@@ -6,7 +6,7 @@ final class NetworkPerson {
     required this.title,
     required this.color,
     this.badge,
-    this.contextLine = 'جامعة القاهرة',
+    this.contextLine = 'بغداد · العراق',
     this.actionLabel = 'تواصل',
     this.isCompany = false,
   });

@@ -11,37 +11,37 @@ class InvitationsScreen extends StatelessWidget {
   static const _requests = [
     NetworkPerson(
       name: 'سلمى فتحي',
-      title: 'طالبة ثانوي في KFS STEM School',
+      title: 'مهندسة مدنية · تنفيذ مواقع',
       color: AppColors.blue,
       badge: '9 اتصالات مشتركة · قبل ساعة',
     ),
     NetworkPerson(
       name: 'أنس يونس',
-      title: 'Obour STEM School 26',
+      title: 'مهندس كهرباء مواقع',
       color: AppColors.darkBlue,
       badge: '49 اتصالا مشتركا · أمس',
     ),
     NetworkPerson(
       name: 'ليلى عادل',
-      title: 'مصممة واجهات مبتدئة',
+      title: 'مهندسة معمارية',
       color: AppColors.muted,
       badge: '12 اتصالا مشتركا · قبل يومين',
     ),
     NetworkPerson(
       name: 'يوسف زين',
-      title: 'مطور Front-end',
+      title: 'فني تكييف وتبريد',
       color: AppColors.black,
       badge: '7 اتصالات مشتركة · هذا الأسبوع',
     ),
     NetworkPerson(
       name: 'نور خالد',
-      title: 'محللة بيانات',
+      title: 'مهندسة مساحة',
       color: AppColors.blue,
       badge: '3 اتصالات مشتركة · هذا الأسبوع',
     ),
     NetworkPerson(
       name: 'كريم حسن',
-      title: 'مدير منتج مساعد',
+      title: 'مشرف سلامة موقع',
       color: AppColors.darkBlue,
       badge: '22 اتصالا مشتركا · منذ أسبوع',
     ),

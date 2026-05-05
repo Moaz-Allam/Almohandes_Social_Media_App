@@ -37,12 +37,13 @@ class HomeTopBar extends StatelessWidget {
         child: Row(
           children: [
             GestureDetector(
+              key: const ValueKey('home-menu-avatar'),
               onTap: onMenu,
               child: const AppAvatar(
                 name: 'ريم حسن',
                 radius: 20,
                 color: AppColors.darkBlue,
-                badge: 'يوظف',
+                badge: 'مهندسة',
               ),
             ),
             const SizedBox(width: 10),

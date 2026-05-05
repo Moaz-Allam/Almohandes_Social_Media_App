@@ -86,7 +86,7 @@ class ComposerScreen extends StatelessWidget {
                     name: 'ريم حسن',
                     radius: 27,
                     color: AppColors.darkBlue,
-                    badge: 'يوظف',
+                    badge: 'مهندسة',
                   ),
                   const SizedBox(width: 12),
                   Column(

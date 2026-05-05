@@ -25,7 +25,7 @@ class NotificationsScreen extends StatelessWidget {
     ),
     NotificationItemModel(
       title: 'سامسون كينيدي و 2,486 آخرون تفاعلوا مع منشورك',
-      preview: 'في نوفمبر نطلق برنامج تدريب لمصممي UI/UX ...',
+      preview: 'في نوفمبر نطلق تدريب سلامة وإدارة مواقع ...',
       time: 'قبل 10 دقائق',
       unread: true,
       color: AppColors.darkBlue,
@@ -38,8 +38,8 @@ class NotificationsScreen extends StatelessWidget {
       color: AppColors.muted,
     ),
     NotificationItemModel(
-      title: 'شركة BaytPay نشرت مشروعا يناسب مهاراتك',
-      preview: 'Product Designer · مشروع هجين · القاهرة',
+      title: 'شركة الرافدين للبناء نشرت مشروعا يناسب مهاراتك',
+      preview: 'مهندس موقع · مشروع هجين · بغداد',
       time: 'قبل ساعتين',
       unread: false,
       color: AppColors.black,

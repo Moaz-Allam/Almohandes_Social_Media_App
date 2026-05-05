@@ -120,7 +120,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
               },
               decoration: const InputDecoration(
                 labelText: 'عنوان الرسالة',
-                hintText: 'مثال: مهتم بدور Flutter في المشروع',
+                hintText: 'مثال: مهتم بدور مهندس موقع في المشروع',
               ),
             ),
             const SizedBox(height: 14),

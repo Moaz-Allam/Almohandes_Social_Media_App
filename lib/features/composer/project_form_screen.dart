@@ -166,7 +166,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     _ProjectTextField(
                       controller: _draft.location,
                       label: 'الموقع إن وجد',
-                      hint: 'القاهرة، عن بعد، هجين...',
+                      hint: 'بغداد، البصرة، موقعي، هجين...',
                     ),
                   ],
                 ),
@@ -241,7 +241,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     _ProjectTextField(
                       controller: _draft.requiredSkills,
                       label: 'المهارات المطلوبة',
-                      hint: 'Flutter, APIs, Embedded C...',
+                      hint: 'إشراف مدني، قراءة مخططات، سلامة موقع...',
                       minLines: 3,
                       isRequired: true,
                     ),
@@ -253,8 +253,8 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     ),
                     _ProjectTextField(
                       controller: _draft.techStack,
-                      label: 'Tech Stack',
-                      hint: 'React, Node.js, Firebase, Docker...',
+                      label: 'الأدوات والمعدات',
+                      hint: 'BIM، أوتوكاد، معدات صب، أجهزة مساحة...',
                       isRequired: true,
                     ),
                     _DropdownField(
@@ -272,7 +272,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     _ProjectTextField(
                       controller: _draft.certifications,
                       label: 'الشهادات - اختياري',
-                      hint: 'AWS, Google UX, Cisco...',
+                      hint: 'سلامة مهنية، نقابة المهندسين، تشغيل آليات...',
                     ),
                   ],
                 ),
@@ -290,7 +290,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     _ProjectTextField(
                       controller: _draft.roles,
                       label: 'الأدوار المحددة',
-                      hint: 'Frontend, Embedded, ML, FPGA...',
+                      hint: 'مهندس موقع، كهربائي، سباك، مشغل آلية...',
                       minLines: 3,
                       isRequired: true,
                     ),
@@ -303,7 +303,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     _ProjectTextField(
                       controller: _draft.currentTeamSize,
                       label: 'حجم الفريق الحالي',
-                      hint: 'مثال: مؤسس + مصمم + مطور',
+                      hint: 'مثال: مهندس موقع + كهربائي + مشغل آلية',
                     ),
                     _ToolsSelector(
                       selected: _draft.collaborationTools,
@@ -342,7 +342,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                     _ProjectTextField(
                       controller: _draft.milestones,
                       label: 'المراحل الرئيسية',
-                      hint: 'MVP، اختبار، إطلاق...',
+                      hint: 'تجهيز الموقع، صب الأساس، الاستلام...',
                       minLines: 4,
                     ),
                     _DropdownField(
@@ -558,7 +558,7 @@ class _AssetsSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ChipSelector(
       title: 'الأصول الموجودة',
-      options: const ['GitHub', 'Figma', 'Documentation', 'Website'],
+      options: const ['مخططات', 'جداول كميات', 'صور الموقع', 'تصاريح'],
       selected: selected,
       onToggle: onToggle,
     );
@@ -575,7 +575,7 @@ class _ToolsSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return _ChipSelector(
       title: 'أدوات التعاون',
-      options: const ['Slack', 'Jira', 'GitHub', 'Notion'],
+      options: const ['واتساب', 'تقرير يومي', 'ملفات مشتركة', 'اجتماع أسبوعي'],
       selected: selected,
       onToggle: onToggle,
     );
@@ -657,7 +657,7 @@ class _ProjectPreview extends StatelessWidget {
           _PreviewLine('نمط العمل', draft.workMode),
           _PreviewLine('المرحلة', draft.stage),
           _PreviewLine('المهارات المطلوبة', draft.requiredSkills.text),
-          _PreviewLine('Tech Stack', draft.techStack.text),
+          _PreviewLine('الأدوات والمعدات', draft.techStack.text),
           _PreviewLine('الأدوار', draft.roles.text),
           _PreviewLine('الالتزام', draft.weeklyCommitment),
           _PreviewLine(
@@ -779,36 +779,36 @@ const _projectSteps = [
 ];
 
 const _projectCategories = [
-  'Web App',
-  'Mobile App',
-  'Embedded Systems',
-  'AI/ML',
-  'Robotics',
-  'Cybersecurity',
-  'UI/UX',
-  'Cloud/DevOps',
-  'Other',
+  'مدني',
+  'معماري',
+  'كهرباء',
+  'ميكانيك',
+  'مساحة',
+  'تشطيبات',
+  'آليات',
+  'سلامة',
+  'أخرى',
 ];
 
 const _projectTypes = [
-  'Freelance',
-  'Internship',
-  'Part-time',
-  'Full-time',
-  'Research',
-  'Startup Collaboration',
+  'تعاون مشروع',
+  'دوام جزئي',
+  'دوام كامل',
+  'تدريب ميداني',
+  'بحث وتطوير',
+  'تعاون مقاولين',
 ];
 
-const _workModes = ['Remote', 'Hybrid', 'On-site'];
-const _stages = ['Idea', 'MVP', 'Scaling', 'Production'];
-const _seniorityLevels = ['Junior', 'Mid', 'Senior', 'Lead'];
-const _commitments = ['<10h', '10-20h', 'Full-time'];
+const _workModes = ['عن بعد', 'هجين', 'موقعي'];
+const _stages = ['فكرة', 'تخطيط', 'تجهيز', 'تنفيذ', 'تسليم'];
+const _seniorityLevels = ['مبتدئ', 'متوسط', 'خبير', 'قائد فريق'];
+const _commitments = ['<10 ساعات', '10-20 ساعة', 'دوام كامل'];
 const _urgencyLevels = ['مرن', 'قريب', 'عاجل'];
-const _paidStatuses = ['Paid', 'Unpaid'];
+const _paidStatuses = ['مدفوع', 'غير مدفوع'];
 const _paymentModels = [
-  'Hourly',
-  'Fixed',
-  'Equity',
-  'Revenue share',
-  'Stipend',
+  'بالساعة',
+  'مبلغ ثابت',
+  'دفعات مراحل',
+  'نسبة من الإيراد',
+  'مكافأة تدريب',
 ];

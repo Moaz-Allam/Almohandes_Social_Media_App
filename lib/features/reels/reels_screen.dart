@@ -30,7 +30,7 @@ class _ReelsScreenState extends State<ReelsScreen>
     _ReelItem(
       name: 'ناتالي منصور',
       headline: 'قائدة مشروع · منصة المهندس',
-      caption: 'أفضل لحظة اليوم كانت مشاركة تجربة بناء فريق هندسي حقيقي.',
+      caption: 'أفضل لحظة اليوم كانت تنسيق فريق موقع كامل قبل بدء الصب.',
       likes: '18K',
       comments: '650',
       reposts: '97',
@@ -38,8 +38,8 @@ class _ReelsScreenState extends State<ReelsScreen>
     ),
     _ReelItem(
       name: 'ريم حسن',
-      headline: 'مصممة منتجات رقمية',
-      caption: 'لقطة سريعة من ورشة تصميم رحلة التسجيل الجديدة.',
+      headline: 'مهندسة مدنية · إدارة مواقع',
+      caption: 'لقطة سريعة من جولة متابعة التشطيبات وتسليم الملاحظات.',
       likes: '8.2K',
       comments: '214',
       reposts: '32',
@@ -47,8 +47,8 @@ class _ReelsScreenState extends State<ReelsScreen>
     ),
     _ReelItem(
       name: 'أحمد منصور',
-      headline: 'مطور Flutter',
-      caption: 'كيف حولنا نموذج أولي إلى تجربة موبايل أكثر سلاسة.',
+      headline: 'مهندس كهرباء مواقع',
+      caption: 'كيف رتبنا لوحات التوزيع مع فريق السلامة قبل الفحص النهائي.',
       likes: '5.7K',
       comments: '141',
       reposts: '28',

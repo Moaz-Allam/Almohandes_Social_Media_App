@@ -21,23 +21,23 @@ final class AppController extends ChangeNotifier {
     const SavedContent(
       id: 'sample:post:onboarding',
       type: SavedContentType.post,
-      title: 'منشور عن تحسين تجربة التسجيل',
+      title: 'منشور عن تنظيم أعمال الموقع',
       subtitle: 'ريم حسن',
       detail: 'محفوظ من الصفحة الرئيسية',
     ),
     const SavedContent(
       id: 'sample:reel:workshop',
       type: SavedContentType.reel,
-      title: 'ريل ورشة تصميم منتج',
+      title: 'ريل جولة متابعة موقع',
       subtitle: 'ناتالي منصور',
       detail: 'محفوظ من ريلز',
     ),
     const SavedContent(
       id: 'sample:project:flutter',
       type: SavedContentType.project,
-      title: 'تطبيق متابعة فرص العمل',
-      subtitle: 'مشروع محفوظ · Mobile App',
-      detail: 'Flutter · عن بعد · مرحلة MVP',
+      title: 'تنفيذ هيكل مدرسة في بغداد',
+      subtitle: 'مشروع محفوظ · مدني',
+      detail: 'إشراف مدني · موقعي · مرحلة تنفيذ',
     ),
   ];
 

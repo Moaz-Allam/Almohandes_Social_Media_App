@@ -144,27 +144,27 @@ class _SearchResults extends StatelessWidget {
   Widget build(BuildContext context) {
     final rows = switch (filter) {
       SearchFilter.people => const [
-        _ResultRow(Icons.person, 'ريم حسن', 'مصممة منتجات · القاهرة'),
-        _ResultRow(Icons.person, 'أحمد منصور', 'مطور Flutter · Nile Apps'),
-        _ResultRow(Icons.person, 'شيرين أمين', 'مصممة UI/UX'),
+        _ResultRow(Icons.person, 'ريم حسن', 'مهندسة مدنية · بغداد'),
+        _ResultRow(Icons.person, 'أحمد منصور', 'مهندس موقع · الرافدين للبناء'),
+        _ResultRow(Icons.person, 'شيرين أمين', 'مهندسة معمارية'),
       ],
       SearchFilter.projects => const [
-        _ResultRow(Icons.work, 'مشروع مطابقة مهندسين', 'AI/ML · عن بعد'),
-        _ResultRow(Icons.work, 'منصة مراقبة حساسات', 'Embedded · هجين'),
-        _ResultRow(Icons.work, 'حزمة أدوات UX عربية', 'UI/UX · بحث'),
+        _ResultRow(Icons.work, 'تنفيذ هيكل مدرسة', 'مدني · بغداد'),
+        _ResultRow(Icons.work, 'تجهيز كهرباء مجمع', 'كهرباء · البصرة'),
+        _ResultRow(Icons.work, 'تجهيز معدات طرق', 'آليات · أربيل'),
       ],
       SearchFilter.posts => const [
         _ResultRow(
           Icons.article,
-          'فرص تدريب UI/UX في نوفمبر',
-          'منشور من Nile Labs',
+          'فريق تنفيذ جديد في بغداد',
+          'منشور من شركة الرافدين للبناء',
         ),
         _ResultRow(
           Icons.article,
-          'كيف تكتب نبذة مهنية قوية؟',
+          'قائمة فحص قبل صب الخرسانة',
           'منشور شائع في شبكتك',
         ),
-        _ResultRow(Icons.article, 'العمل عن بعد وتجارب الفرق', 'مناقشة نشطة'),
+        _ResultRow(Icons.article, 'تنسيق الكهربائي والميكانيكي', 'مناقشة نشطة'),
       ],
     };
 

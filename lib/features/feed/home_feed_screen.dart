@@ -19,10 +19,10 @@ class HomeFeedScreen extends StatelessWidget {
   static const _posts = [
     FeedPostModel(
       name: 'أحمد منصور',
-      headline: 'مطور Flutter في Nile Apps',
+      headline: 'مهندس مدني · إشراف مواقع',
       time: 'قبل 16 ساعة',
       body:
-          'أبحث عن فرصة جديدة في تطوير تطبيقات الموبايل، وسأكون ممتنا لأي ترشيح أو نصيحة أو تواصل مع فرق تبحث عن مطور يهتم بجودة التجربة.',
+          'نبحث عن مهندس موقع لمشروع سكني في بغداد. المطلوب خبرة في متابعة التنفيذ اليومي ورفع تقارير تقدم واضحة للفريق.',
       reactions: '77',
       comments: '52 تعليق',
       avatarColor: AppColors.darkBlue,
@@ -30,10 +30,10 @@ class HomeFeedScreen extends StatelessWidget {
     ),
     FeedPostModel(
       name: 'شيرين أمين',
-      headline: 'مصممة UI/UX',
+      headline: 'مهندسة معمارية',
       time: 'قبل 17 ساعة',
       body:
-          'انتهينا اليوم من اختبار قابلية استخدام لتجربة الدفع الجديدة. أجمل ما في البحث أنه يغير افتراضاتنا بسرعة.',
+          'انتهينا اليوم من مراجعة مخططات الواجهات لمجمع تجاري. التنسيق المبكر بين المعماري والمدني اختصر علينا الكثير من التعديلات.',
       reactions: '214',
       comments: '31 تعليق',
       avatarColor: AppColors.blue,
@@ -41,10 +41,10 @@ class HomeFeedScreen extends StatelessWidget {
     ),
     FeedPostModel(
       name: 'محمود عبد الله',
-      headline: 'مدير منتج في FinHub',
+      headline: 'مدير مشروع · شركة الرافدين للبناء',
       time: 'قبل يوم',
       body:
-          'نفتح باب التدريب الصيفي لفريق المنتج. نبحث عن أشخاص فضوليين يحبون حل المشكلات وكتابة فرضيات واضحة.',
+          'فتحنا باب الانضمام لفريق تنفيذ مدرسة جديدة في البصرة. نحتاج فني كهرباء وسباك ومشرف سلامة ضمن فريق واحد.',
       reactions: '490',
       comments: '84 تعليق',
       avatarColor: AppColors.muted,
