@@ -4,13 +4,14 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../models/network_person.dart';
+import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import '../profile/profile_screen.dart';
 import 'invitations_screen.dart';
 import 'widgets/network_card.dart';
 
-enum _NetworkCategory { engineers, companies }
+enum _NetworkCategory { people, companies }
 
 class NetworkScreen extends StatefulWidget {
   const NetworkScreen({
@@ -27,96 +28,15 @@ class NetworkScreen extends StatefulWidget {
 }
 
 class _NetworkScreenState extends State<NetworkScreen> {
-  _NetworkCategory _category = _NetworkCategory.engineers;
-
-  static const _engineers = [
-    NetworkPerson(
-      name: 'مريانا جونز',
-      title: 'مهندسة مدنية · تصميم وإشراف',
-      color: AppColors.blue,
-      badge: 'متاحة',
-      contextLine: 'بغداد · خبرة 4 سنوات',
-    ),
-    NetworkPerson(
-      name: 'مازن محمود',
-      title: 'مهندس كهرباء مواقع',
-      color: AppColors.darkBlue,
-      badge: 'مشاريع',
-      contextLine: 'البصرة · أنظمة قدرة',
-    ),
-    NetworkPerson(
-      name: 'جاكسون نوكس',
-      title: 'مهندس ميكانيك تشغيل',
-      color: AppColors.muted,
-      contextLine: 'أربيل · خبرة 6 سنوات',
-    ),
-    NetworkPerson(
-      name: 'أندرو مارتن',
-      title: 'مهندس حاسوب وأنظمة',
-      color: AppColors.black,
-      badge: 'متاح',
-      contextLine: 'السليمانية · حلول رقمية',
-    ),
-    NetworkPerson(
-      name: 'سارة خليل',
-      title: 'مهندسة مساحة',
-      color: AppColors.blue,
-      contextLine: 'النجف · أعمال ميدانية',
-    ),
-    NetworkPerson(
-      name: 'كريم يوسف',
-      title: 'مهندس معماري',
-      color: AppColors.darkBlue,
-      badge: 'تصميم',
-      contextLine: 'كربلاء · نمذجة BIM',
-    ),
-  ];
-
-  static const _companies = [
-    NetworkPerson(
-      name: 'شركة الرافدين للبناء',
-      title: 'مقاولات وتنفيذ مشاريع سكنية',
-      color: AppColors.blue,
-      badge: 'شركة',
-      contextLine: 'بغداد · 18 مشروع نشط',
-      actionLabel: 'متابعة',
-      isCompany: true,
-    ),
-    NetworkPerson(
-      name: 'شركة دجلة للمقاولات',
-      title: 'أعمال خرسانة وتشطيبات',
-      color: AppColors.darkBlue,
-      badge: 'مشاريع',
-      contextLine: 'البصرة · فرق تنفيذ',
-      actionLabel: 'متابعة',
-      isCompany: true,
-    ),
-    NetworkPerson(
-      name: 'مكتب بغداد الهندسي',
-      title: 'تصميم وإشراف هندسي',
-      color: AppColors.muted,
-      contextLine: 'بغداد · مخططات وإشراف',
-      actionLabel: 'متابعة',
-      isCompany: true,
-    ),
-    NetworkPerson(
-      name: 'معدات العراق',
-      title: 'تأجير آليات ومعدات ثقيلة',
-      color: AppColors.black,
-      badge: 'جديد',
-      contextLine: 'أربيل · شفل وكرينات',
-      actionLabel: 'متابعة',
-      isCompany: true,
-    ),
-  ];
+  _NetworkCategory _category = _NetworkCategory.people;
 
   List<_NetworkCategory> _categoriesFor(AccountType accountType) {
     return switch (accountType) {
       AccountType.engineer => const [
-        _NetworkCategory.engineers,
+        _NetworkCategory.people,
         _NetworkCategory.companies,
       ],
-      AccountType.company => const [_NetworkCategory.engineers],
+      AccountType.company => const [_NetworkCategory.people],
       AccountType.craftsman ||
       AccountType.worker ||
       AccountType.equipment => const [],
@@ -134,11 +54,17 @@ class _NetworkScreenState extends State<NetworkScreen> {
     return categories.first;
   }
 
-  List<NetworkPerson> _visibleProfiles(_NetworkCategory category) {
-    return switch (category) {
-      _NetworkCategory.engineers => _engineers,
-      _NetworkCategory.companies => _companies,
-    };
+  Future<List<NetworkPerson>> _fetchProfiles(
+    BuildContext context, {
+    required AccountType accountType,
+    required _NetworkCategory category,
+    bool forceRefresh = false,
+  }) {
+    return AppScope.read(context).repositories.profiles.fetchNetworkProfiles(
+      viewerType: accountType,
+      companies: category == _NetworkCategory.companies,
+      forceRefresh: forceRefresh,
+    );
   }
 
   void _openInvitations(BuildContext context) {
@@ -151,6 +77,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProfileScreen(
+          profileId: person.id,
           name: person.name,
           headline: person.title,
           color: person.color,
@@ -159,69 +86,140 @@ class _NetworkScreenState extends State<NetworkScreen> {
     );
   }
 
+  Future<void> _handleNetworkAction(
+    BuildContext context,
+    NetworkPerson person,
+  ) async {
+    if (person.isCompany) {
+      await AppScope.read(
+        context,
+      ).repositories.profiles.followProfile(person.id);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تمت المتابعة')));
+      return;
+    }
+    await AppScope.read(
+      context,
+    ).repositories.profiles.requestConnection(person.id);
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم إرسال طلب التواصل')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
     final categories = _categoriesFor(accountType);
     final selectedCategory = _effectiveCategory(accountType);
-    final visibleProfiles = selectedCategory == null
-        ? const <NetworkPerson>[]
-        : _visibleProfiles(selectedCategory);
 
     return Column(
       children: [
         HomeTopBar(onMenu: widget.onMenu, onMessages: widget.onMessages),
         Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              if (selectedCategory == null) ...[
-                const _NetworkAccessEmptyState(),
-              ] else ...[
-                _SimpleNavRow(
-                  title: 'الدعوات',
-                  subtitle: 'لديك 5 دعوات معلقة',
-                  onTap: () => _openInvitations(context),
-                ),
-                Divider(height: 9, thickness: 8, color: context.appSoft),
-                if (categories.length > 1)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    child: _NetworkCategoryTabs(
-                      selected: selectedCategory,
-                      onChanged: (value) => setState(() => _category = value),
-                    ),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    child: Text(
-                      'مهندسون',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
+          child: selectedCategory == null
+              ? const _NetworkAccessEmptyState()
+              : FutureBuilder<List<NetworkPerson>>(
+                  future: _fetchProfiles(
+                    context,
+                    accountType: accountType,
+                    category: selectedCategory,
+                  ),
+                  builder: (context, snapshot) {
+                    final isLoading =
+                        snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData;
+                    final profiles = snapshot.data ?? const <NetworkPerson>[];
+
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        await _fetchProfiles(
+                          context,
+                          accountType: accountType,
+                          category: selectedCategory,
+                          forceRefresh: true,
+                        );
+                        if (mounted) {
+                          setState(() {});
+                        }
+                      },
+                      child: ListView(
+                        padding: EdgeInsets.zero,
+                        children: [
+                          _SimpleNavRow(
+                            title: 'الدعوات',
+                            subtitle: 'طلبات التواصل الواردة',
+                            onTap: () => _openInvitations(context),
+                          ),
+                          Divider(
+                            height: 9,
+                            thickness: 8,
+                            color: context.appSoft,
+                          ),
+                          if (categories.length > 1)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                12,
+                                16,
+                                12,
+                              ),
+                              child: _NetworkCategoryTabs(
+                                selected: selectedCategory,
+                                onChanged: (value) {
+                                  setState(() => _category = value);
+                                },
+                              ),
+                            )
+                          else
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                              child: Text(
+                                'مهندسون',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          if (isLoading)
+                            const _NetworkSkeletonGrid()
+                          else if (profiles.isEmpty)
+                            _NetworkEmptyProfiles(category: selectedCategory)
+                          else
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                              itemCount: profiles.length,
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    mainAxisSpacing: 10,
+                                    crossAxisSpacing: 10,
+                                    childAspectRatio: .62,
+                                  ),
+                              itemBuilder: (context, index) => NetworkCard(
+                                person: profiles[index],
+                                onTap: () =>
+                                    _openProfile(context, profiles[index]),
+                                onAction: () => _handleNetworkAction(
+                                  context,
+                                  profiles[index],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                  ),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                  itemCount: visibleProfiles.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: .62,
-                  ),
-                  itemBuilder: (context, index) => NetworkCard(
-                    person: visibleProfiles[index],
-                    onTap: () => _openProfile(context, visibleProfiles[index]),
-                  ),
+                    );
+                  },
                 ),
-              ],
-            ],
-          ),
         ),
       ],
     );
@@ -256,6 +254,62 @@ class _NetworkAccessEmptyState extends StatelessWidget {
   }
 }
 
+class _NetworkEmptyProfiles extends StatelessWidget {
+  const _NetworkEmptyProfiles({required this.category});
+
+  final _NetworkCategory category;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = category == _NetworkCategory.companies ? 'شركات' : 'حسابات';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 70, 24, 24),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.person_search_outlined,
+            color: AppColors.muted,
+            size: 42,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'لا توجد $label متاحة الآن',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'ستظهر النتائج هنا بعد إضافة ملفات المستخدمين في Supabase.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NetworkSkeletonGrid extends StatelessWidget {
+  const _NetworkSkeletonGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      itemCount: 4,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: .62,
+      ),
+      itemBuilder: (context, index) => const NetworkCardSkeleton(),
+    );
+  }
+}
+
 class _NetworkCategoryTabs extends StatelessWidget {
   const _NetworkCategoryTabs({required this.selected, required this.onChanged});
 
@@ -274,8 +328,8 @@ class _NetworkCategoryTabs extends StatelessWidget {
         children: [
           _NetworkCategoryTab(
             label: 'مهندسون',
-            selected: selected == _NetworkCategory.engineers,
-            onTap: () => onChanged(_NetworkCategory.engineers),
+            selected: selected == _NetworkCategory.people,
+            onTap: () => onChanged(_NetworkCategory.people),
           ),
           _NetworkCategoryTab(
             label: 'شركات',

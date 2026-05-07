@@ -8,10 +8,18 @@ import '../../state/app_scope.dart';
 import 'project_form_screen.dart';
 import 'widgets/composer_top_bar.dart';
 
-class ComposerScreen extends StatelessWidget {
+class ComposerScreen extends StatefulWidget {
   const ComposerScreen({super.key, required this.onClose});
 
   final VoidCallback onClose;
+
+  @override
+  State<ComposerScreen> createState() => _ComposerScreenState();
+}
+
+class _ComposerScreenState extends State<ComposerScreen> {
+  final _contentController = TextEditingController();
+  bool _isPublishing = false;
 
   static const _allOptions = [
     _ComposerOption(Icons.image_outlined, 'إضافة صورة', _ComposerAction.photo),
@@ -27,6 +35,12 @@ class ComposerScreen extends StatelessWidget {
     ),
   ];
 
+  @override
+  void dispose() {
+    _contentController.dispose();
+    super.dispose();
+  }
+
   List<_ComposerOption> _optionsFor(AccountType accountType) {
     return [
       for (final option in _allOptions)
@@ -36,6 +50,23 @@ class ComposerScreen extends StatelessWidget {
     ];
   }
 
+  Future<void> _publishPost() async {
+    final content = _contentController.text.trim();
+    if (content.isEmpty || _isPublishing) {
+      return;
+    }
+    setState(() => _isPublishing = true);
+    await AppScope.read(context).repositories.feed.createPost(content: content);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isPublishing = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تم نشر المنشور')));
+    widget.onClose();
+  }
+
   void _handleOption(
     BuildContext context,
     _ComposerOption option,
@@ -43,14 +74,14 @@ class ComposerScreen extends StatelessWidget {
   ) {
     switch (option.action) {
       case _ComposerAction.photo:
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم اختيار إضافة صورة')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('اختر صورة ثم اكتب وصفا للنشر')),
+        );
         return;
       case _ComposerAction.reel:
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم اختيار إضافة ريل')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('اختر فيديو ريل ثم اكتب وصفا للنشر')),
+        );
         return;
       case _ComposerAction.project:
         if (!accountType.canPostProjects) {
@@ -70,11 +101,23 @@ class ComposerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
+    final app = AppScope.watch(context);
+    final profile = app.profile;
+    final accountType = accountTypeFromProfile(profile);
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+    final role = profile?.role.isNotEmpty == true ? profile!.role : null;
 
     return Column(
       children: [
-        ComposerTopBar(title: 'مشاركة منشور', onClose: onClose),
+        ComposerTopBar(
+          title: 'مشاركة منشور',
+          onClose: widget.onClose,
+          onAction: _publishPost,
+          actionEnabled:
+              _contentController.text.trim().isNotEmpty && !_isPublishing,
+        ),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
@@ -82,19 +125,19 @@ class ComposerScreen extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const AppAvatar(
-                    name: 'ريم حسن',
+                  AppAvatar(
+                    name: name,
                     radius: 27,
                     color: AppColors.darkBlue,
-                    badge: 'مهندسة',
+                    badge: role,
                   ),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'ريم حسن',
-                        style: TextStyle(
+                      Text(
+                        name,
+                        style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w900,
                         ),
@@ -130,17 +173,23 @@ class ComposerScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 24),
-              const TextField(
+              TextField(
+                controller: _contentController,
                 minLines: 4,
                 maxLines: 12,
                 textDirection: TextDirection.rtl,
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   filled: false,
                   hintText: 'بماذا تريد أن تتحدث؟',
-                  hintStyle: TextStyle(fontSize: 21, color: AppColors.muted),
+                  hintStyle: TextStyle(
+                    fontSize: 21,
+                    color: context.appMuted.withValues(alpha: .58),
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ],

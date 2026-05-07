@@ -1,15 +1,21 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/repositories/app_repositories.dart';
 import '../data/session/session_store.dart';
+import '../models/account_type.dart';
 import '../models/app_tab.dart';
 import '../models/profile_form.dart';
 import '../models/saved_content.dart';
 
 final class AppController extends ChangeNotifier {
-  AppController({required SessionStore sessionStore})
-    : _sessionStore = sessionStore;
+  AppController({
+    required SessionStore sessionStore,
+    required this.repositories,
+  }) : _sessionStore = sessionStore,
+       super();
 
   final SessionStore _sessionStore;
+  final AppRepositories repositories;
 
   bool _isBootstrapped = false;
   bool _isSignedIn = false;
@@ -17,29 +23,7 @@ final class AppController extends ChangeNotifier {
   bool _hasPremiumLibrary = false;
   AppTab _selectedTab = AppTab.feed;
   ProfileForm? _profile;
-  final List<SavedContent> _savedItems = [
-    const SavedContent(
-      id: 'sample:post:onboarding',
-      type: SavedContentType.post,
-      title: 'منشور عن تنظيم أعمال الموقع',
-      subtitle: 'ريم حسن',
-      detail: 'محفوظ من الصفحة الرئيسية',
-    ),
-    const SavedContent(
-      id: 'sample:reel:workshop',
-      type: SavedContentType.reel,
-      title: 'ريل جولة متابعة موقع',
-      subtitle: 'ناتالي منصور',
-      detail: 'محفوظ من ريلز',
-    ),
-    const SavedContent(
-      id: 'sample:project:flutter',
-      type: SavedContentType.project,
-      title: 'تنفيذ هيكل مدرسة في بغداد',
-      subtitle: 'مشروع محفوظ · مدني',
-      detail: 'إشراف مدني · موقعي · مرحلة تنفيذ',
-    ),
-  ];
+  final List<SavedContent> _savedItems = [];
 
   bool get isBootstrapped => _isBootstrapped;
 
@@ -66,6 +50,16 @@ final class AppController extends ChangeNotifier {
     ).wait;
     _isSignedIn = signedIn;
     _isDarkMode = darkMode;
+    if (signedIn) {
+      final (remoteProfile, remoteSavedItems, hasPremium) = await (
+        repositories.profiles.currentProfile(),
+        repositories.savedContent.fetch(),
+        repositories.subscriptions.hasActiveSubscription(),
+      ).wait;
+      _profile = remoteProfile ?? _profile;
+      _hasPremiumLibrary = hasPremium || (remoteProfile?.isPremium ?? false);
+      _mergeSavedItems(remoteSavedItems);
+    }
     _isBootstrapped = true;
     notifyListeners();
   }
@@ -76,28 +70,59 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> completeSignUp(ProfileForm profile) async {
-    _profile = profile;
+  Future<void> signInWithPassword({
+    required String login,
+    required String password,
+  }) async {
+    await repositories.auth.signInWithPassword(
+      login: login,
+      password: password,
+    );
+    _isSignedIn = true;
+    notifyListeners();
+  }
+
+  Future<void> completeSignUp(
+    ProfileForm profile, {
+    AccountType accountType = AccountType.engineer,
+    String specialization = 'مدني',
+    String phone = '',
+    String password = '',
+  }) async {
+    await repositories.auth.completeSignUp(
+      profile: profile,
+      accountType: accountType,
+      specialization: specialization,
+      phone: phone,
+      password: password,
+    );
+    final remoteProfile = await repositories.profiles.currentProfile(
+      forceRefresh: true,
+    );
+    _profile = remoteProfile ?? profile;
     _isSignedIn = true;
     await _sessionStore.saveSignedIn();
     notifyListeners();
   }
 
   Future<void> signOut() async {
+    await repositories.auth.signOut();
     _isSignedIn = false;
     _hasPremiumLibrary = false;
     _profile = null;
     _selectedTab = AppTab.feed;
+    _savedItems.clear();
     await _sessionStore.clear();
     notifyListeners();
   }
 
-  void unlockPremiumLibrary() {
+  Future<void> unlockPremiumLibrary() async {
     if (_hasPremiumLibrary) {
       return;
     }
     _hasPremiumLibrary = true;
     notifyListeners();
+    await repositories.subscriptions.activateCurrentUser();
   }
 
   Future<void> setDarkMode(bool enabled) async {
@@ -117,22 +142,34 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void saveContent(SavedContent content) {
+  Future<void> saveContent(SavedContent content) async {
     if (isSaved(content.id)) {
       return;
     }
     _savedItems.insert(0, content);
     notifyListeners();
+    await repositories.savedContent.save(content);
   }
 
-  void removeSavedContent(String id) {
+  Future<void> removeSavedContent(String id) async {
     _savedItems.removeWhere((item) => item.id == id);
     notifyListeners();
+    await repositories.savedContent.remove(id);
   }
 
-  void saveAppliedProject(SavedContent content) {
-    removeSavedContent(content.id);
+  Future<void> saveAppliedProject(SavedContent content) async {
+    await removeSavedContent(content.id);
     _savedItems.insert(0, content);
     notifyListeners();
+    await repositories.savedContent.save(content);
+  }
+
+  void _mergeSavedItems(List<SavedContent> remoteItems) {
+    if (remoteItems.isEmpty) {
+      return;
+    }
+    final remoteIds = remoteItems.map((item) => item.id).toSet();
+    _savedItems.removeWhere((item) => remoteIds.contains(item.id));
+    _savedItems.insertAll(0, remoteItems);
   }
 }

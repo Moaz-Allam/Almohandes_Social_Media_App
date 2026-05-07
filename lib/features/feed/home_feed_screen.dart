@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
+import '../../shared/widgets/skeleton.dart';
+import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'widgets/feed_post_card.dart';
 import 'widgets/stories_strip.dart';
 
-class HomeFeedScreen extends StatelessWidget {
+class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({
     super.key,
     required this.onMenu,
@@ -16,56 +18,117 @@ class HomeFeedScreen extends StatelessWidget {
   final VoidCallback onMenu;
   final VoidCallback onMessages;
 
-  static const _posts = [
-    FeedPostModel(
-      name: 'أحمد منصور',
-      headline: 'مهندس مدني · إشراف مواقع',
-      time: 'قبل 16 ساعة',
-      body:
-          'نبحث عن مهندس موقع لمشروع سكني في بغداد. المطلوب خبرة في متابعة التنفيذ اليومي ورفع تقارير تقدم واضحة للفريق.',
-      reactions: '77',
-      comments: '52 تعليق',
-      avatarColor: AppColors.darkBlue,
-      showMedia: false,
-    ),
-    FeedPostModel(
-      name: 'شيرين أمين',
-      headline: 'مهندسة معمارية',
-      time: 'قبل 17 ساعة',
-      body:
-          'انتهينا اليوم من مراجعة مخططات الواجهات لمجمع تجاري. التنسيق المبكر بين المعماري والمدني اختصر علينا الكثير من التعديلات.',
-      reactions: '214',
-      comments: '31 تعليق',
-      avatarColor: AppColors.blue,
-      showMedia: true,
-    ),
-    FeedPostModel(
-      name: 'محمود عبد الله',
-      headline: 'مدير مشروع · شركة الرافدين للبناء',
-      time: 'قبل يوم',
-      body:
-          'فتحنا باب الانضمام لفريق تنفيذ مدرسة جديدة في البصرة. نحتاج فني كهرباء وسباك ومشرف سلامة ضمن فريق واحد.',
-      reactions: '490',
-      comments: '84 تعليق',
-      avatarColor: AppColors.muted,
-      showMedia: false,
-    ),
-  ];
+  @override
+  State<HomeFeedScreen> createState() => _HomeFeedScreenState();
+}
+
+class _HomeFeedScreenState extends State<HomeFeedScreen> {
+  late Future<List<FeedPostModel>> _postsFuture;
+  bool _didStartLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _postsFuture = Future.value(const <FeedPostModel>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didStartLoading) {
+      return;
+    }
+    _didStartLoading = true;
+    _postsFuture = AppScope.read(context).repositories.feed.fetchHomeFeed();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _postsFuture = AppScope.read(
+        context,
+      ).repositories.feed.fetchHomeFeed(forceRefresh: true);
+    });
+    await _postsFuture;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        HomeTopBar(onMenu: onMenu, onMessages: onMessages),
+        HomeTopBar(onMenu: widget.onMenu, onMessages: widget.onMessages),
         Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              const StoriesStrip(),
-              for (final post in _posts) FeedPostCard(post: post),
-            ],
+          child: FutureBuilder<List<FeedPostModel>>(
+            future: _postsFuture,
+            builder: (context, snapshot) {
+              final isInitialLoading =
+                  snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData;
+              if (isInitialLoading) {
+                return const _HomeFeedSkeleton();
+              }
+              final posts = snapshot.data ?? const <FeedPostModel>[];
+              return RefreshIndicator(
+                onRefresh: _refresh,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  children: [
+                    const StoriesStrip(),
+                    if (posts.isEmpty)
+                      const _FeedEmptyState()
+                    else
+                      for (final post in posts) FeedPostCard(post: post),
+                  ],
+                ),
+              );
+            },
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _FeedEmptyState extends StatelessWidget {
+  const _FeedEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(24, 70, 24, 24),
+      child: Column(
+        children: [
+          Icon(Icons.article_outlined, color: AppColors.muted, size: 46),
+          SizedBox(height: 12),
+          Text(
+            'لا توجد منشورات بعد',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          SizedBox(height: 6),
+          Text(
+            'ستظهر منشورات المستخدمين هنا بعد إضافتها في Supabase.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeFeedSkeleton extends StatelessWidget {
+  const _HomeFeedSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: const [
+        StoriesStrip(),
+        FeedPostSkeleton(),
+        FeedPostSkeleton(),
+        FeedPostSkeleton(),
       ],
     );
   }

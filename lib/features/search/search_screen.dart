@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../models/account_type.dart';
+import '../../models/feed_post_model.dart';
+import '../../models/network_person.dart';
+import '../../models/project_item.dart';
+import '../../state/app_scope.dart';
+import '../feed/post_detail_screen.dart';
 import '../profile/profile_screen.dart';
+import '../projects/project_application_screen.dart';
 
 enum SearchFilter {
   people('الأشخاص'),
@@ -142,75 +149,242 @@ class _SearchResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = switch (filter) {
-      SearchFilter.people => const [
-        _ResultRow(Icons.person, 'ريم حسن', 'مهندسة مدنية · بغداد'),
-        _ResultRow(Icons.person, 'أحمد منصور', 'مهندس موقع · الرافدين للبناء'),
-        _ResultRow(Icons.person, 'شيرين أمين', 'مهندسة معمارية'),
-      ],
-      SearchFilter.projects => const [
-        _ResultRow(Icons.work, 'تنفيذ هيكل مدرسة', 'مدني · بغداد'),
-        _ResultRow(Icons.work, 'تجهيز كهرباء مجمع', 'كهرباء · البصرة'),
-        _ResultRow(Icons.work, 'تجهيز معدات طرق', 'آليات · أربيل'),
-      ],
-      SearchFilter.posts => const [
-        _ResultRow(
-          Icons.article,
-          'فريق تنفيذ جديد في بغداد',
-          'منشور من شركة الرافدين للبناء',
-        ),
-        _ResultRow(
-          Icons.article,
-          'قائمة فحص قبل صب الخرسانة',
-          'منشور شائع في شبكتك',
-        ),
-        _ResultRow(Icons.article, 'تنسيق الكهربائي والميكانيكي', 'مناقشة نشطة'),
-      ],
+    return switch (filter) {
+      SearchFilter.people => _PeopleResults(query: query),
+      SearchFilter.projects => _ProjectResults(query: query),
+      SearchFilter.posts => _PostResults(query: query),
     };
-
-    return ListView.separated(
-      padding: const EdgeInsets.only(top: 4),
-      itemBuilder: (context, index) => ListTile(
-        leading: CircleAvatar(
-          backgroundColor: context.appPaleBlue,
-          child: Icon(rows[index].icon, color: AppColors.blue),
-        ),
-        title: Text(
-          rows[index].title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text(
-          query.trim().isEmpty
-              ? rows[index].subtitle
-              : 'نتيجة مطابقة لـ "$query"',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        onTap: filter == SearchFilter.people
-            ? () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ProfileScreen(
-                    name: rows[index].title,
-                    headline: rows[index].subtitle,
-                    color: AppColors.blue,
-                  ),
-                ),
-              )
-            : () {},
-      ),
-      separatorBuilder: (context, index) =>
-          Divider(height: 1, indent: 72, color: context.appBorder),
-      itemCount: rows.length,
-    );
   }
 }
 
-final class _ResultRow {
-  const _ResultRow(this.icon, this.title, this.subtitle);
+class _PeopleResults extends StatelessWidget {
+  const _PeopleResults({required this.query});
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
+    return FutureBuilder<List<NetworkPerson>>(
+      future: AppScope.read(context).repositories.profiles.fetchNetworkProfiles(
+        viewerType: accountType,
+        companies: false,
+      ),
+      builder: (context, snapshot) {
+        final rows = _filterPeople(
+          snapshot.data ?? const <NetworkPerson>[],
+          query,
+        );
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (rows.isEmpty) {
+          return const _EmptySearchResult(label: 'أشخاص');
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.only(top: 4),
+          itemBuilder: (context, index) {
+            final row = rows[index];
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: context.appPaleBlue,
+                child: const Icon(Icons.person, color: AppColors.blue),
+              ),
+              title: Text(
+                row.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(
+                row.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProfileScreen(
+                    profileId: row.id,
+                    name: row.name,
+                    headline: row.title,
+                    color: row.color,
+                  ),
+                ),
+              ),
+            );
+          },
+          separatorBuilder: (context, index) =>
+              Divider(height: 1, indent: 72, color: context.appBorder),
+          itemCount: rows.length,
+        );
+      },
+    );
+  }
+
+  List<NetworkPerson> _filterPeople(List<NetworkPerson> rows, String query) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return rows;
+    }
+    return [
+      for (final row in rows)
+        if (row.name.contains(normalized) || row.title.contains(normalized))
+          row,
+    ];
+  }
+}
+
+class _ProjectResults extends StatelessWidget {
+  const _ProjectResults({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<ProjectItem>>(
+      future: AppScope.read(context).repositories.projects.fetchProjects(),
+      builder: (context, snapshot) {
+        final rows = _filterProjects(
+          snapshot.data ?? const <ProjectItem>[],
+          query,
+        );
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (rows.isEmpty) {
+          return const _EmptySearchResult(label: 'مشاريع');
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.only(top: 4),
+          itemBuilder: (context, index) {
+            final row = rows[index];
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: context.appPaleBlue,
+                child: const Icon(Icons.work, color: AppColors.blue),
+              ),
+              title: Text(
+                row.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(
+                row.tagline,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProjectApplicationScreen(project: row),
+                ),
+              ),
+            );
+          },
+          separatorBuilder: (context, index) =>
+              Divider(height: 1, indent: 72, color: context.appBorder),
+          itemCount: rows.length,
+        );
+      },
+    );
+  }
+
+  List<ProjectItem> _filterProjects(List<ProjectItem> rows, String query) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return rows;
+    }
+    return [
+      for (final row in rows)
+        if (row.title.contains(normalized) || row.tagline.contains(normalized))
+          row,
+    ];
+  }
+}
+
+class _PostResults extends StatelessWidget {
+  const _PostResults({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<FeedPostModel>>(
+      future: AppScope.read(context).repositories.feed.fetchHomeFeed(),
+      builder: (context, snapshot) {
+        final rows = _filterPosts(
+          snapshot.data ?? const <FeedPostModel>[],
+          query,
+        );
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (rows.isEmpty) {
+          return const _EmptySearchResult(label: 'منشورات');
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.only(top: 4),
+          itemBuilder: (context, index) {
+            final row = rows[index];
+            return ListTile(
+              leading: CircleAvatar(
+                backgroundColor: context.appPaleBlue,
+                child: const Icon(Icons.article, color: AppColors.blue),
+              ),
+              title: Text(
+                row.body,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(
+                row.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => PostDetailScreen(post: row)),
+              ),
+            );
+          },
+          separatorBuilder: (context, index) =>
+              Divider(height: 1, indent: 72, color: context.appBorder),
+          itemCount: rows.length,
+        );
+      },
+    );
+  }
+
+  List<FeedPostModel> _filterPosts(List<FeedPostModel> rows, String query) {
+    final normalized = query.trim();
+    if (normalized.isEmpty) {
+      return rows;
+    }
+    return [
+      for (final row in rows)
+        if (row.body.contains(normalized) || row.name.contains(normalized)) row,
+    ];
+  }
+}
+
+class _EmptySearchResult extends StatelessWidget {
+  const _EmptySearchResult({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'لا توجد $label بعد',
+        style: const TextStyle(
+          color: AppColors.muted,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
 }

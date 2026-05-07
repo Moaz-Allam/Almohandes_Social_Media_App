@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/notification_item_model.dart';
+import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'widgets/notification_tile.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({
     super.key,
     required this.onMenu,
@@ -15,67 +16,116 @@ class NotificationsScreen extends StatelessWidget {
   final VoidCallback onMenu;
   final VoidCallback onMessages;
 
-  static const _items = [
-    NotificationItemModel(
-      title: 'ناتاليا شوستاك و 2,486 آخرون تفاعلوا مع منشورك',
-      preview: 'هذه أخبار رائعة، أتطلع إلى نوفمبر ...',
-      time: 'قبل دقيقة',
-      unread: true,
-      color: AppColors.blue,
-    ),
-    NotificationItemModel(
-      title: 'سامسون كينيدي و 2,486 آخرون تفاعلوا مع منشورك',
-      preview: 'في نوفمبر نطلق تدريب سلامة وإدارة مواقع ...',
-      time: 'قبل 10 دقائق',
-      unread: true,
-      color: AppColors.darkBlue,
-    ),
-    NotificationItemModel(
-      title: 'أندريا بيكر علقت على منشورك',
-      preview: 'هل يمكن مشاركة رابط التسجيل؟',
-      time: 'قبل 56 دقيقة',
-      unread: false,
-      color: AppColors.muted,
-    ),
-    NotificationItemModel(
-      title: 'شركة الرافدين للبناء نشرت مشروعا يناسب مهاراتك',
-      preview: 'مهندس موقع · مشروع هجين · بغداد',
-      time: 'قبل ساعتين',
-      unread: false,
-      color: AppColors.black,
-    ),
-  ];
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  late Future<List<NotificationItemModel>> _itemsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _itemsFuture = Future.value(const <NotificationItemModel>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _itemsFuture = AppScope.read(
+      context,
+    ).repositories.notifications.fetchNotifications();
+  }
+
+  Future<void> _refresh({bool forceRefresh = true}) async {
+    setState(() {
+      _itemsFuture = AppScope.read(context).repositories.notifications
+          .fetchNotifications(forceRefresh: forceRefresh);
+    });
+    await _itemsFuture;
+  }
+
+  Future<void> _markRead(NotificationItemModel item) async {
+    await AppScope.read(context).repositories.notifications.markRead(item.id);
+    if (mounted) {
+      await _refresh();
+    }
+  }
+
+  Future<void> _delete(NotificationItemModel item) async {
+    await AppScope.read(context).repositories.notifications.delete(item.id);
+    if (mounted) {
+      await _refresh();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        HomeTopBar(onMenu: onMenu, onMessages: onMessages),
+        HomeTopBar(onMenu: widget.onMenu, onMessages: widget.onMessages),
         Expanded(
-          child: ListView.builder(
-            padding: EdgeInsets.zero,
-            itemCount: _items.length + 1,
-            itemBuilder: (context, index) {
-              if (index == _items.length) {
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(72, 12, 72, 24),
-                  child: FilledButton(
-                    onPressed: () {},
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.blue,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                    child: const Text('عرض الإشعارات التي فاتتك'),
-                  ),
-                );
+          child: FutureBuilder<List<NotificationItemModel>>(
+            future: _itemsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
               }
-              return NotificationTile(item: _items[index]);
+              final items = snapshot.data ?? const <NotificationItemModel>[];
+              if (items.isEmpty) {
+                return const _NotificationsEmptyState();
+              }
+              return RefreshIndicator(
+                onRefresh: _refresh,
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return NotificationTile(
+                      item: item,
+                      onMarkRead: () => _markRead(item),
+                      onDelete: () => _delete(item),
+                    );
+                  },
+                ),
+              );
             },
           ),
         ),
       ],
+    );
+  }
+}
+
+class _NotificationsEmptyState extends StatelessWidget {
+  const _NotificationsEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.notifications_none, color: AppColors.muted, size: 46),
+            SizedBox(height: 12),
+            Text(
+              'لا توجد إشعارات بعد',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'ستظهر إشعاراتك هنا عند وصولها من Supabase.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted, height: 1.45),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

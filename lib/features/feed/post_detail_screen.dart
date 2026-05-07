@@ -49,13 +49,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   void _toggleLike() {
     _likeBurstTimer?.cancel();
+    final shouldLike = !_isLiked;
     setState(() {
-      _isLiked = !_isLiked;
-      _reactionCount += _isLiked ? 1 : -1;
-      _showLike = _isLiked;
+      _isLiked = shouldLike;
+      _reactionCount += shouldLike ? 1 : -1;
+      _showLike = shouldLike;
     });
+    AppScope.read(
+      context,
+    ).repositories.feed.toggleLike(postId: post.id, shouldLike: shouldLike);
 
-    if (_isLiked) {
+    if (shouldLike) {
       _likeBurstTimer = Timer(const Duration(milliseconds: 650), () {
         if (mounted) {
           setState(() => _showLike = false);
@@ -75,7 +79,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       case 'save':
         AppScope.read(context).saveContent(
           SavedContent(
-            id: 'post-detail:${post.name}:${post.time}',
+            id: post.id.isEmpty ? 'post:${post.name}:${post.time}' : post.id,
             type: SavedContentType.post,
             title: post.body,
             subtitle: post.name,
@@ -87,6 +91,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ).showSnackBar(const SnackBar(content: Text('تم الحفظ في المحفوظات')));
         return;
       case 'report':
+        AppScope.read(
+          context,
+        ).repositories.feed.reportPost(postId: post.id, reason: 'user_report');
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('تم إرسال البلاغ')));
@@ -315,56 +322,33 @@ class _PostDetailCard extends StatelessWidget {
 class _InlineCommentsSection extends StatelessWidget {
   const _InlineCommentsSection();
 
-  static const _comments = [
-    _InlineComment(
-      name: 'فاطمة شاهين',
-      role: 'مهندسة مدنية',
-      time: 'قبل يوم',
-      text: 'ممتاز، التقرير اليومي سيجعل متابعة الموقع أوضح لكل الفريق.',
-      likes: '1',
-      color: AppColors.blue,
-    ),
-    _InlineComment(
-      name: 'معتز سند',
-      role: 'مدير مشروع',
-      time: 'قبل 15 ساعة',
-      text: 'الأفضل أيضا إضافة صور قبل وبعد لكل مرحلة حتى يكون التسليم موثقا.',
-      likes: '4',
-      color: AppColors.darkBlue,
-    ),
-    _InlineComment(
-      name: 'مي عبد الرحمن',
-      role: 'مهندسة مساحة',
-      time: 'قبل 7 ساعات',
-      text: 'هل يمكن مشاركة نموذج قائمة الفحص المستخدم في الموقع؟',
-      likes: '2',
-      color: AppColors.muted,
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final profile = AppScope.watch(context).profile;
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+
     return Container(
       color: context.appSurface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
-            child: Row(
-              children: [
-                const Text(
-                  'التعليقات',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_drop_down),
-                const Spacer(),
-                Text('الأكثر صلة', style: TextStyle(color: context.appMuted)),
-              ],
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 18, 16, 8),
+            child: Text(
+              'التعليقات',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
           ),
-          for (final comment in _comments) _InlineCommentTile(comment: comment),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 26, 24, 26),
+            child: Text(
+              'لا توجد تعليقات بعد',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted, height: 1.35),
+            ),
+          ),
           Container(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
             decoration: BoxDecoration(
@@ -373,11 +357,7 @@ class _InlineCommentsSection extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const AppAvatar(
-                  name: 'ريم حسن',
-                  radius: 20,
-                  color: AppColors.darkBlue,
-                ),
+                AppAvatar(name: name, radius: 20, color: AppColors.darkBlue),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
@@ -400,78 +380,6 @@ class _InlineCommentsSection extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InlineCommentTile extends StatelessWidget {
-  const _InlineCommentTile({required this.comment});
-
-  final _InlineComment comment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppAvatar(name: comment.name, radius: 23, color: comment.color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        comment.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      comment.time,
-                      style: TextStyle(color: context.appMuted),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.more_vert, color: AppColors.muted),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
-                ),
-                Text(
-                  comment.role,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.appMuted),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  comment.text,
-                  style: const TextStyle(fontSize: 15.5, height: 1.35),
-                ),
-                const SizedBox(height: 9),
-                Row(
-                  children: [
-                    const Icon(Icons.thumb_up_alt_outlined, size: 19),
-                    const SizedBox(width: 4),
-                    Text(comment.likes),
-                    const SizedBox(width: 18),
-                    const Icon(Icons.mode_comment_outlined, size: 19),
-                  ],
                 ),
               ],
             ),
@@ -532,22 +440,4 @@ class _ReactionCircle extends StatelessWidget {
       child: const Icon(Icons.thumb_up, color: Colors.white, size: 10),
     );
   }
-}
-
-class _InlineComment {
-  const _InlineComment({
-    required this.name,
-    required this.role,
-    required this.time,
-    required this.text,
-    required this.likes,
-    required this.color,
-  });
-
-  final String name;
-  final String role;
-  final String time;
-  final String text;
-  final String likes;
-  final Color color;
 }

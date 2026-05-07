@@ -4,14 +4,71 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/message_item.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../state/app_scope.dart';
 
-class ChatScreen extends StatelessWidget {
+class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.contact});
 
   final MessageItem contact;
 
   @override
+  State<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  late Future<List<ChatMessage>> _messagesFuture;
+  final _messageController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesFuture = Future.value(const <ChatMessage>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _messagesFuture = AppScope.read(
+      context,
+    ).repositories.messages.fetchMessages(widget.contact.conversationId);
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _messageController.clear();
+    await AppScope.read(context).repositories.messages.sendMessage(
+      conversationId: widget.contact.conversationId,
+      content: text,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _messagesFuture = AppScope.read(context).repositories.messages
+          .fetchMessages(widget.contact.conversationId, forceRefresh: true);
+    });
+  }
+
+  Future<void> _refreshMessages() async {
+    setState(() {
+      _messagesFuture = AppScope.read(context).repositories.messages
+          .fetchMessages(widget.contact.conversationId, forceRefresh: true);
+    });
+    await _messagesFuture;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final contact = widget.contact;
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -37,58 +94,48 @@ class ChatScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          contact.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const Text(
-                          'نشط الآن',
-                          style: TextStyle(
-                            color: AppColors.green,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      contact.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: _refreshMessages,
                     icon: const Icon(Icons.more_vert),
-                    tooltip: 'المزيد',
+                    tooltip: 'تحديث',
                   ),
                 ],
               ),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-                children: [
-                  _MessageBubble(
-                    text: contact.preview.replaceFirst('أنت: ', ''),
-                    incoming: true,
-                  ),
-                  const _MessageBubble(
-                    text: 'أكيد، أراجع التفاصيل الآن وأرسل لك النسخة النهائية.',
-                    incoming: false,
-                  ),
-                  const _MessageBubble(
-                    text: 'ممتاز، شكرا لك. أحتاجها قبل نهاية اليوم.',
-                    incoming: true,
-                  ),
-                  const _MessageBubble(
-                    text: 'تمام، ستكون جاهزة خلال ساعة.',
-                    incoming: false,
-                  ),
-                ],
+              child: FutureBuilder<List<ChatMessage>>(
+                future: _messagesFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final messages = snapshot.data ?? const <ChatMessage>[];
+                  if (messages.isEmpty) {
+                    return const _EmptyChatState();
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      return _MessageBubble(
+                        text: message.text,
+                        incoming: message.incoming,
+                      );
+                    },
+                  );
+                },
               ),
             ),
             Container(
@@ -100,7 +147,13 @@ class ChatScreen extends StatelessWidget {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('إرفاق الملفات غير مفعّل بعد'),
+                        ),
+                      );
+                    },
                     icon: const Icon(
                       Icons.add_circle_outline,
                       color: AppColors.blue,
@@ -109,6 +162,7 @@ class ChatScreen extends StatelessWidget {
                   ),
                   Expanded(
                     child: TextField(
+                      controller: _messageController,
                       minLines: 1,
                       maxLines: 3,
                       textDirection: TextDirection.rtl,
@@ -132,7 +186,7 @@ class ChatScreen extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: _sendMessage,
                     icon: const Icon(Icons.send, color: AppColors.blue),
                     tooltip: 'إرسال',
                   ),
@@ -141,6 +195,20 @@ class ChatScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EmptyChatState extends StatelessWidget {
+  const _EmptyChatState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'لا توجد رسائل بعد',
+        style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w800),
       ),
     );
   }

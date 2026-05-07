@@ -1,5 +1,12 @@
 final class ProfileForm {
   const ProfileForm({
+    this.id,
+    this.avatarUrl,
+    this.followersCount = 0,
+    this.followingCount = 0,
+    this.postsCount = 0,
+    this.projectsCount = 0,
+    this.isPremium = false,
     required this.email,
     required this.firstName,
     required this.lastName,
@@ -16,6 +23,13 @@ final class ProfileForm {
     required this.jobAlerts,
   });
 
+  final String? id;
+  final String? avatarUrl;
+  final int followersCount;
+  final int followingCount;
+  final int postsCount;
+  final int projectsCount;
+  final bool isPremium;
   final String email;
   final String firstName;
   final String lastName;

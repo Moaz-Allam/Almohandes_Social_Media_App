@@ -7,10 +7,16 @@ import '../../../shared/painters/card_pattern_painter.dart';
 import '../../../shared/widgets/app_avatar.dart';
 
 class NetworkCard extends StatelessWidget {
-  const NetworkCard({super.key, required this.person, required this.onTap});
+  const NetworkCard({
+    super.key,
+    required this.person,
+    required this.onTap,
+    required this.onAction,
+  });
 
   final NetworkPerson person;
   final VoidCallback onTap;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +124,7 @@ class NetworkCard extends StatelessWidget {
                 width: double.infinity,
                 height: 34,
                 child: OutlinedButton(
-                  onPressed: () {},
+                  onPressed: onAction,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.blue,
                     side: const BorderSide(color: AppColors.blue),

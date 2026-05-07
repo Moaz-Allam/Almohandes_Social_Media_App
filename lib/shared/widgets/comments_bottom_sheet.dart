@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../state/app_scope.dart';
 import 'app_avatar.dart';
 
 Future<void> showLinkedCommentsSheet(BuildContext context) {
@@ -20,37 +21,14 @@ Future<void> showLinkedCommentsSheet(BuildContext context) {
 class LinkedCommentsSheet extends StatelessWidget {
   const LinkedCommentsSheet({super.key});
 
-  static const _comments = [
-    _Comment(
-      name: 'فاطمة شاهين',
-      role: 'مهندسة مدنية',
-      time: 'قبل يوم',
-      text: 'ممتاز، وجود تقرير يومي واضح سيقلل الخلافات بين الموقع والإدارة.',
-      likes: '1',
-      color: AppColors.blue,
-    ),
-    _Comment(
-      name: 'معتز سند',
-      role: 'مدير مشروع',
-      time: 'قبل 15 ساعة',
-      text:
-          'أتفق معك. توثيق الأعمال قبل الصب وبعده يوفر وقتا كبيرا عند الاستلام ويقلل إعادة العمل.',
-      likes: '4',
-      color: AppColors.darkBlue,
-    ),
-    _Comment(
-      name: 'مي عبد الرحمن',
-      role: 'مهندسة مساحة',
-      time: 'قبل 7 ساعات',
-      text: 'سيكون مفيدا لو شاركتم قالب قائمة الفحص المستخدم في الموقع.',
-      likes: '2',
-      color: AppColors.muted,
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final profile = AppScope.watch(context).profile;
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: .78,
@@ -75,14 +53,12 @@ class LinkedCommentsSheet extends StatelessWidget {
                 child: Row(
                   children: [
                     const Text(
-                      'الأكثر صلة',
+                      'التعليقات',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_drop_down, size: 22),
                     const Spacer(),
                     IconButton(
                       onPressed: () => Navigator.of(context).maybePop(),
@@ -93,12 +69,31 @@ class LinkedCommentsSheet extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: ListView.builder(
+                child: ListView(
                   controller: scrollController,
-                  itemCount: _comments.length,
-                  itemBuilder: (context, index) {
-                    return _CommentTile(comment: _comments[index]);
-                  },
+                  padding: const EdgeInsets.fromLTRB(24, 54, 24, 24),
+                  children: const [
+                    Icon(
+                      Icons.mode_comment_outlined,
+                      color: AppColors.muted,
+                      size: 44,
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'لا توجد تعليقات بعد',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'ستظهر التعليقات هنا بعد إضافتها من Supabase.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.muted, height: 1.45),
+                    ),
+                  ],
                 ),
               ),
               Container(
@@ -109,8 +104,8 @@ class LinkedCommentsSheet extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const AppAvatar(
-                      name: 'ريم حسن',
+                    AppAvatar(
+                      name: name,
                       radius: 20,
                       color: AppColors.darkBlue,
                     ),
@@ -146,94 +141,4 @@ class LinkedCommentsSheet extends StatelessWidget {
       },
     );
   }
-}
-
-class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment});
-
-  final _Comment comment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppAvatar(name: comment.name, radius: 24, color: comment.color),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        comment.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      comment.time,
-                      style: TextStyle(color: context.appMuted),
-                    ),
-                    IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.more_vert, color: AppColors.muted),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
-                ),
-                Text(
-                  comment.role,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: context.appMuted),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  comment.text,
-                  style: const TextStyle(fontSize: 15.5, height: 1.35),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.thumb_up_alt_outlined, size: 20),
-                    const SizedBox(width: 4),
-                    Text(comment.likes),
-                    const SizedBox(width: 18),
-                    const Icon(Icons.mode_comment_outlined, size: 20),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Comment {
-  const _Comment({
-    required this.name,
-    required this.role,
-    required this.time,
-    required this.text,
-    required this.likes,
-    required this.color,
-  });
-
-  final String name;
-  final String role;
-  final String time;
-  final String text;
-  final String likes;
-  final Color color;
 }

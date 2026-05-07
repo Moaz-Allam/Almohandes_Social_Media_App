@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../features/home/main_shell.dart';
 import '../../models/account_type.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
@@ -10,6 +9,7 @@ import '../../shared/widgets/primary_button.dart';
 import '../../state/app_scope.dart';
 import '../../state/signup_controller.dart';
 import 'widgets/section_label.dart';
+import 'sign_up_success_screen.dart';
 import 'widgets/signup_page.dart';
 
 class SignUpFlowScreen extends StatefulWidget {
@@ -35,13 +35,18 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
   }
 
   Future<void> _complete() async {
-    await AppScope.read(context).completeSignUp(_form.toProfile());
+    await AppScope.read(context).completeSignUp(
+      _form.toProfile(),
+      accountType: _form.userType,
+      specialization: _form.specialization,
+      phone: _form.phone.text,
+      password: _form.password.text,
+    );
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainShell()),
-      (_) => false,
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const SignUpSuccessScreen()),
     );
   }
 
@@ -59,7 +64,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _handlePrimary() {
+  Future<void> _handlePrimary() async {
     if (_form.step == 0) {
       if (_form.displayName.text.trim().isEmpty ||
           _form.email.text.trim().isEmpty) {
@@ -74,12 +79,17 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
         _showMessage('تأكد من كلمة المرور وتأكيدها');
         return;
       }
+      await AppScope.read(
+        context,
+      ).repositories.auth.sendOtp(phone: _form.phone.text);
       _form.nextStep();
       return;
     }
 
     if (_form.step == 1) {
-      if (!_form.hasValidOtp) {
+      final isValidOtp = await AppScope.read(context).repositories.auth
+          .verifyOtp(phone: _form.phone.text, code: _form.otp.text);
+      if (!isValidOtp) {
         _showMessage('رمز التحقق التجريبي هو 123456');
         return;
       }
@@ -193,9 +203,13 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                           ),
                           const SizedBox(height: 14),
                           OutlinedButton.icon(
-                            onPressed: () => _showMessage(
-                              'تم إرسال رمز تحقق جديد إلى رقمك العراقي',
-                            ),
+                            onPressed: () async {
+                              await AppScope.read(context).repositories.auth
+                                  .sendOtp(phone: _form.phone.text);
+                              _showMessage(
+                                'تم إرسال رمز تحقق جديد إلى رقمك العراقي',
+                              );
+                            },
                             icon: const Icon(Icons.sms_outlined),
                             label: const Text('إعادة إرسال الرمز'),
                             style: OutlinedButton.styleFrom(

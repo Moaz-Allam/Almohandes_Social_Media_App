@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
+import '../../models/project_draft.dart';
 import '../../state/app_scope.dart';
 import 'widgets/composer_top_bar.dart';
 
@@ -22,6 +23,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   final _draft = _ProjectDraft();
   int _step = 0;
   int _attachments = 0;
+  bool _isSubmitting = false;
 
   bool get _isLastStep => _step == _projectSteps.length - 1;
 
@@ -41,13 +43,13 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     );
   }
 
-  void _next() {
+  Future<void> _next() async {
     final isValid = _formKeys[_step].currentState?.validate() ?? false;
-    if (!isValid) {
+    if (!isValid || _isSubmitting) {
       return;
     }
     if (_isLastStep) {
-      _submit();
+      await _submit();
       return;
     }
     _goToStep(_step + 1);
@@ -68,11 +70,28 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     ).showSnackBar(const SnackBar(content: Text('تمت إضافة مرفق للمشروع')));
   }
 
-  void _submit() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تمت مشاركة المشروع')));
-    Navigator.of(context).maybePop();
+  Future<void> _submit() async {
+    setState(() => _isSubmitting = true);
+    try {
+      await AppScope.read(
+        context,
+      ).repositories.projects.createProject(_draft.toData(_attachments));
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تمت مشاركة المشروع')));
+      Navigator.of(context).maybePop();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر نشر المشروع الآن: $error')));
+      setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -111,8 +130,13 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
           ComposerTopBar(
             title: 'مشاركة مشروع',
             onClose: () => Navigator.of(context).maybePop(),
-            actionLabel: _isLastStep ? 'نشر' : 'التالي',
+            actionLabel: _isSubmitting
+                ? 'جار النشر...'
+                : _isLastStep
+                ? 'نشر'
+                : 'التالي',
             onAction: _next,
+            actionEnabled: !_isSubmitting,
           ),
           LinearProgressIndicator(
             value: (_step + 1) / _projectSteps.length,
@@ -409,7 +433,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: _previous,
+                      onPressed: _isSubmitting ? null : _previous,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.blue,
                         minimumSize: const Size.fromHeight(46),
@@ -424,7 +448,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _next,
+                      onPressed: _isSubmitting ? null : _next,
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.blue,
                         minimumSize: const Size.fromHeight(46),
@@ -432,7 +456,13 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                           borderRadius: BorderRadius.circular(24),
                         ),
                       ),
-                      child: Text(_isLastStep ? 'نشر المشروع' : 'التالي'),
+                      child: Text(
+                        _isSubmitting
+                            ? 'جار النشر...'
+                            : _isLastStep
+                            ? 'نشر المشروع'
+                            : 'التالي',
+                      ),
                     ),
                   ),
                 ],
@@ -741,6 +771,45 @@ final class _ProjectDraft {
   String paymentModel = _paymentModels.first;
   final currency = TextEditingController();
   final bonus = TextEditingController();
+
+  ProjectDraftData toData(int attachmentsCount) {
+    return ProjectDraftData(
+      title: title.text,
+      tagline: tagline.text,
+      category: category,
+      projectType: projectType,
+      workMode: workMode,
+      location: location.text,
+      fullDescription: fullDescription.text,
+      problem: problem.text,
+      goals: goals.text,
+      audience: audience.text,
+      stage: stage,
+      assets: Set.unmodifiable(assets),
+      requiredSkills: requiredSkills.text,
+      preferredSkills: preferredSkills.text,
+      techStack: techStack.text,
+      seniority: seniority,
+      years: years.text,
+      certifications: certifications.text,
+      engineersNeeded: engineersNeeded.text,
+      roles: roles.text,
+      responsibilities: responsibilities.text,
+      currentTeamSize: currentTeamSize.text,
+      collaborationTools: Set.unmodifiable(collaborationTools),
+      startDate: startDate.text,
+      duration: duration.text,
+      weeklyCommitment: weeklyCommitment,
+      milestones: milestones.text,
+      urgency: urgency,
+      paidStatus: paidStatus,
+      budgetRange: budgetRange.text,
+      paymentModel: paymentModel,
+      currency: currency.text,
+      bonus: bonus.text,
+      attachmentsCount: attachmentsCount,
+    );
+  }
 
   void dispose() {
     title.dispose();

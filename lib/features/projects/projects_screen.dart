@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../models/project_item.dart';
+import '../../shared/widgets/skeleton.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'project_application_screen.dart';
 import 'widgets/project_card.dart';
+import '../../models/project_item.dart';
+import '../../state/app_scope.dart';
 
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({
@@ -26,73 +28,29 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   String _category = 'كل الفئات';
   String _type = 'كل الأنواع';
   String _workMode = 'كل الأنماط';
+  late Future<List<ProjectItem>> _projectsFuture;
+  bool _didStartLoading = false;
 
-  static const _projects = [
-    ProjectItem(
-      id: 'ai-career-match',
-      title: 'تنفيذ هيكل مدرسة في بغداد',
-      tagline: 'تكوين فريق هندسي وحرفي لتنفيذ الهيكل الخرساني خلال 10 أسابيع.',
-      category: 'مدني',
-      type: 'تعاون مشروع',
-      workMode: 'موقعي',
-      location: 'بغداد',
-      stage: 'تنفيذ',
-      skills: ['إشراف مدني', 'حدادة', 'نجارة قوالب'],
-      commitment: '20 ساعة أسبوعيا',
-      budget: 'مدفوع · 4-6 مليون د.ع',
-      postedBy: 'شركة الرافدين للبناء',
-      color: AppColors.blue,
-    ),
-    ProjectItem(
-      id: 'embedded-sensor-cloud',
-      title: 'تجهيز كهرباء لمجمع تجاري',
-      tagline:
-          'تنفيذ تمديدات كهربائية ولوحات توزيع مع فريق سلامة ومراجعة مخططات.',
-      category: 'كهرباء',
-      type: 'دوام جزئي',
-      workMode: 'هجين',
-      location: 'البصرة',
-      stage: 'تجهيز',
-      skills: ['كهرباء مواقع', 'قراءة مخططات', 'سلامة'],
-      commitment: '10-20 ساعة',
-      budget: 'مدفوع · ثابت',
-      postedBy: 'شركة دجلة للمقاولات',
-      color: AppColors.darkBlue,
-    ),
-    ProjectItem(
-      id: 'ux-research-kit',
-      title: 'تصميم واجهات سكنية حديثة',
-      tagline: 'تعاون بين معماري ومهندس إنشائي لإخراج نموذج قابل للتنفيذ.',
-      category: 'معماري',
-      type: 'بحث وتطوير',
-      workMode: 'عن بعد',
-      location: 'عن بعد',
-      stage: 'فكرة',
-      skills: ['تصميم معماري', 'BIM', 'تنسيق إنشائي'],
-      commitment: '<10 ساعات',
-      budget: 'غير مدفوع · بناء ملف أعمال',
-      postedBy: 'مكتب بغداد الهندسي',
-      color: AppColors.muted,
-    ),
-    ProjectItem(
-      id: 'secure-devops-lab',
-      title: 'تجهيز معدات لموقع طرق',
-      tagline: 'توفير شفل وكرين ومشغلين مع جدول تشغيل واضح لمشروع طرق.',
-      category: 'آليات',
-      type: 'تعاون مقاولين',
-      workMode: 'موقعي',
-      location: 'أربيل',
-      stage: 'توسعة',
-      skills: ['تشغيل آليات', 'سلامة معدات', 'تنسيق موقع'],
-      commitment: 'دوام كامل',
-      budget: 'مدفوع · حسب الساعة',
-      postedBy: 'معدات العراق',
-      color: AppColors.black,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _projectsFuture = Future.value(const <ProjectItem>[]);
+  }
 
-  List<ProjectItem> get _visibleProjects {
-    final filtered = _projects.where((project) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didStartLoading) {
+      return;
+    }
+    _didStartLoading = true;
+    _projectsFuture = AppScope.read(
+      context,
+    ).repositories.projects.fetchProjects();
+  }
+
+  List<ProjectItem> _visibleProjects(List<ProjectItem> projects) {
+    final filtered = projects.where((project) {
       final categoryMatches =
           _category == 'كل الفئات' || project.category == _category;
       final typeMatches = _type == 'كل الأنواع' || project.type == _type;
@@ -117,8 +75,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final projects = _visibleProjects;
-
     return Column(
       children: [
         HomeTopBar(
@@ -181,14 +137,34 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           ),
         ),
         Expanded(
-          child: projects.isEmpty
-              ? const Center(
+          child: FutureBuilder<List<ProjectItem>>(
+            future: _projectsFuture,
+            builder: (context, snapshot) {
+              final projects = _visibleProjects(
+                snapshot.data ?? const <ProjectItem>[],
+              );
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const _ProjectsSkeletonList();
+              }
+              if (projects.isEmpty) {
+                return const Center(
                   child: Text(
                     'لا توجد مشاريع بهذه الفلاتر.',
                     style: TextStyle(color: AppColors.muted),
                   ),
-                )
-              : ListView.builder(
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {
+                    _projectsFuture = AppScope.read(
+                      context,
+                    ).repositories.projects.fetchProjects(forceRefresh: true);
+                  });
+                  await _projectsFuture;
+                },
+                child: ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                   itemCount: projects.length,
                   itemBuilder: (context, index) {
@@ -199,6 +175,9 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     );
                   },
                 ),
+              );
+            },
+          ),
         ),
       ],
     );
@@ -249,6 +228,22 @@ class _FilterMenu extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProjectsSkeletonList extends StatelessWidget {
+  const _ProjectsSkeletonList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      children: const [
+        ProjectCardSkeleton(),
+        ProjectCardSkeleton(),
+        ProjectCardSkeleton(),
+      ],
     );
   }
 }

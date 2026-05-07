@@ -55,6 +55,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
       _reactionCount += _isLiked ? 1 : -1;
       _showLike = _isLiked;
     });
+    AppScope.read(
+      context,
+    ).repositories.feed.toggleLike(postId: post.id, shouldLike: _isLiked);
 
     if (!_isLiked) {
       return;
@@ -71,6 +74,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProfileScreen(
+          profileId: post.profileId,
           name: post.name,
           headline: post.headline,
           color: post.avatarColor,
@@ -94,7 +98,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
       case 'save':
         AppScope.read(context).saveContent(
           SavedContent(
-            id: 'post:${post.name}:${post.time}',
+            id: post.id.isEmpty ? 'post:${post.name}:${post.time}' : post.id,
             type: SavedContentType.post,
             title: post.body,
             subtitle: post.name,
@@ -106,6 +110,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
         ).showSnackBar(const SnackBar(content: Text('تم الحفظ في المحفوظات')));
         return;
       case 'report':
+        AppScope.read(
+          context,
+        ).repositories.feed.reportPost(postId: post.id, reason: 'user_report');
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('تم إرسال البلاغ')));

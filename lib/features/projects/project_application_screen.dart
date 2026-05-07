@@ -22,6 +22,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
   final _subject = TextEditingController();
   final _description = TextEditingController();
   int _attachments = 0;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -37,15 +38,32 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
     ).showSnackBar(const SnackBar(content: Text('تمت إضافة ملف للتقديم')));
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) {
+    if (!isValid || _isSubmitting) {
       return;
     }
 
+    setState(() => _isSubmitting = true);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     final project = widget.project;
-    AppScope.read(context).saveAppliedProject(
+    final appController = AppScope.read(context);
+    try {
+      await appController.repositories.projects.applyToProject(
+        project: project,
+        subject: _subject.text,
+        message: _description.text,
+        attachmentsCount: _attachments,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تم حفظ الطلب محليا وتعذر إرساله الآن: $error')),
+      );
+    }
+    await appController.saveAppliedProject(
       SavedContent(
         id: 'applied-project:${project.id}',
         type: SavedContentType.project,
@@ -56,6 +74,9 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
       ),
     );
 
+    if (!mounted) {
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => ProjectApplicationSuccessScreen(project: project),
@@ -168,7 +189,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
                   borderRadius: BorderRadius.circular(24),
                 ),
               ),
-              child: const Text('إرسال التقديم'),
+              child: Text(_isSubmitting ? 'جار الإرسال...' : 'إرسال التقديم'),
             ),
           ],
         ),

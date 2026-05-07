@@ -10,11 +10,53 @@ import '../../shared/widgets/social_button.dart';
 import '../../state/app_scope.dart';
 import 'sign_up_flow_screen.dart';
 
-class SignInScreen extends StatelessWidget {
+class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 
+  @override
+  State<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  final _login = TextEditingController();
+  final _password = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _login.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
   Future<void> _enterApp(BuildContext context) async {
-    await AppScope.read(context).signIn();
+    if (_isSubmitting) {
+      return;
+    }
+    if (_login.text.trim().isEmpty || _password.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('أدخل البريد أو الهاتف وكلمة المرور')),
+      );
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    try {
+      await AppScope.read(
+        context,
+      ).signInWithPassword(login: _login.text, password: _password.text);
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر تسجيل الدخول: $error')));
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
     if (!context.mounted) {
       return;
     }
@@ -22,6 +64,57 @@ class SignInScreen extends StatelessWidget {
       MaterialPageRoute(builder: (_) => const MainShell()),
       (_) => false,
     );
+  }
+
+  Future<void> _signInWithGoogle(BuildContext context) async {
+    if (_isSubmitting) {
+      return;
+    }
+    setState(() => _isSubmitting = true);
+    final app = AppScope.read(context);
+    try {
+      await app.repositories.auth.signInWithGoogle();
+      await app.signIn();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذر تسجيل الدخول بواسطة Google: $error')),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+    if (!context.mounted) {
+      return;
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const MainShell()),
+      (_) => false,
+    );
+  }
+
+  Future<void> _resetPassword(BuildContext context) async {
+    try {
+      await AppScope.read(
+        context,
+      ).repositories.auth.sendPasswordReset(email: _login.text);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إرسال رابط استعادة كلمة المرور')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر إرسال الرابط: $error')));
+    }
   }
 
   void _join(BuildContext context) {
@@ -75,13 +168,20 @@ class SignInScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 28),
-            const LinkedTextField(label: 'البريد الإلكتروني أو الهاتف'),
+            LinkedTextField(
+              label: 'البريد الإلكتروني أو الهاتف',
+              controller: _login,
+            ),
             const SizedBox(height: 12),
-            const LinkedTextField(label: 'كلمة المرور', obscureText: true),
+            LinkedTextField(
+              label: 'كلمة المرور',
+              controller: _password,
+              obscureText: true,
+            ),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () {},
+                onPressed: () => _resetPassword(context),
                 child: const Text(
                   'هل نسيت كلمة المرور؟',
                   style: TextStyle(
@@ -93,13 +193,13 @@ class SignInScreen extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             PrimaryButton(
-              label: 'تسجيل الدخول',
+              label: _isSubmitting ? 'جار تسجيل الدخول...' : 'تسجيل الدخول',
               onPressed: () => _enterApp(context),
             ),
             const SizedBox(height: 18),
             SocialButton.google(
               label: 'تسجيل الدخول بواسطة Google',
-              onPressed: () => _enterApp(context),
+              onPressed: () => _signInWithGoogle(context),
             ),
           ],
         ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
+import '../data/repositories/app_repositories.dart';
 import '../data/session/session_store.dart';
 import '../features/home/main_shell.dart';
 import '../features/onboarding/onboarding_screen.dart';
@@ -9,9 +10,10 @@ import '../state/app_scope.dart';
 import 'splash_screen.dart';
 
 class LinkedArabicApp extends StatefulWidget {
-  const LinkedArabicApp({super.key, this.sessionStore});
+  const LinkedArabicApp({super.key, this.sessionStore, this.repositories});
 
   final SessionStore? sessionStore;
+  final AppRepositories? repositories;
 
   @override
   State<LinkedArabicApp> createState() => _LinkedArabicAppState();
@@ -23,8 +25,12 @@ class _LinkedArabicAppState extends State<LinkedArabicApp> {
   @override
   void initState() {
     super.initState();
+    final sessionStore = widget.sessionStore ?? SharedPreferencesSessionStore();
     _controller = AppController(
-      sessionStore: widget.sessionStore ?? SharedPreferencesSessionStore(),
+      sessionStore: sessionStore,
+      repositories:
+          widget.repositories ??
+          AppRepositories.production(sessionStore: sessionStore),
     )..bootstrap();
   }
 

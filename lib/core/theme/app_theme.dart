@@ -30,6 +30,10 @@ abstract final class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.white,
+        hintStyle: TextStyle(
+          color: AppColors.muted.withValues(alpha: .55),
+          fontWeight: FontWeight.w400,
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 13,
@@ -79,7 +83,10 @@ abstract final class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: _darkSurfaceAlt,
-        hintStyle: const TextStyle(color: _darkMuted),
+        hintStyle: TextStyle(
+          color: _darkMuted.withValues(alpha: .62),
+          fontWeight: FontWeight.w400,
+        ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 13,

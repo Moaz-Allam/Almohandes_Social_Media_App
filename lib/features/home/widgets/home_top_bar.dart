@@ -4,6 +4,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/search_pill.dart';
+import '../../../state/app_scope.dart';
 import '../../search/search_screen.dart';
 
 class HomeTopBar extends StatelessWidget {
@@ -26,6 +27,12 @@ class HomeTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final profile = AppScope.watch(context).profile;
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+    final badge = profile?.role.isNotEmpty == true ? profile!.role : null;
+
     return SafeArea(
       bottom: false,
       child: Container(
@@ -39,11 +46,11 @@ class HomeTopBar extends StatelessWidget {
             GestureDetector(
               key: const ValueKey('home-menu-avatar'),
               onTap: onMenu,
-              child: const AppAvatar(
-                name: 'ريم حسن',
+              child: AppAvatar(
+                name: name,
                 radius: 20,
                 color: AppColors.darkBlue,
-                badge: 'مهندسة',
+                badge: badge,
               ),
             ),
             const SizedBox(width: 10),

@@ -37,7 +37,6 @@ class LinkedBottomNavigation extends StatelessWidget {
                 icon: Icons.people_alt,
                 label: 'شبكتي',
                 selected: selectedTab == AppTab.network,
-                badge: '4',
                 onTap: () => onChanged(AppTab.network),
               ),
               _NavItem(
@@ -72,14 +71,12 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.badge,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -98,35 +95,7 @@ class _NavItem extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(icon, color: color, size: 26),
-                      if (badge != null)
-                        PositionedDirectional(
-                          end: -8,
-                          top: -6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.blue,
-                              borderRadius: BorderRadius.circular(99),
-                            ),
-                            child: Text(
-                              badge!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                  Icon(icon, color: color, size: 26),
                   const SizedBox(height: 2),
                   Text(
                     label,

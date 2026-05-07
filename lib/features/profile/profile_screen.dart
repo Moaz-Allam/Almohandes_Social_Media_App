@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/feed_post_model.dart';
+import '../../models/project_item.dart';
 import '../../models/saved_content.dart';
 import '../../shared/painters/card_pattern_painter.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
-import 'models/profile_content_item.dart';
+import '../settings/settings_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
@@ -16,31 +18,48 @@ class ProfileScreen extends StatelessWidget {
     required this.name,
     required this.headline,
     required this.color,
-    this.location = 'بغداد، العراق',
+    this.profileId,
+    this.location = 'العراق',
     this.isMe = false,
     this.isConnectionRequest = false,
   });
 
   const ProfileScreen.me({super.key})
-    : name = 'ريم حسن',
-      headline = 'مهندسة مدنية · إدارة مواقع',
+    : name = '',
+      headline = '',
       color = AppColors.darkBlue,
-      location = 'بغداد، العراق',
+      profileId = null,
+      location = 'العراق',
       isMe = true,
       isConnectionRequest = false;
 
   final String name;
   final String headline;
   final Color color;
+  final String? profileId;
   final String location;
   final bool isMe;
   final bool isConnectionRequest;
 
   @override
   Widget build(BuildContext context) {
-    final savedItems = isMe
-        ? AppScope.watch(context).savedItems
-        : const <SavedContent>[];
+    final app = AppScope.watch(context);
+    final currentProfile = app.profile;
+    final effectiveName = isMe
+        ? ((currentProfile?.fullName.isNotEmpty ?? false)
+              ? currentProfile!.fullName
+              : 'المستخدم')
+        : name;
+    final effectiveHeadline = isMe
+        ? _currentHeadline(currentProfile)
+        : headline;
+    final effectiveLocation = isMe
+        ? (currentProfile?.location.isNotEmpty == true
+              ? currentProfile!.location
+              : 'العراق')
+        : location;
+    final effectiveProfileId = isMe ? currentProfile?.id : profileId;
+    final effectiveColor = isMe ? AppColors.darkBlue : color;
 
     return Scaffold(
       body: SafeArea(
@@ -56,7 +75,7 @@ class ProfileScreen extends StatelessWidget {
                 tooltip: 'رجوع',
               ),
               title: Text(
-                name,
+                effectiveName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w900),
@@ -67,68 +86,24 @@ class ProfileScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _ProfileHero(
-                    name: name,
-                    headline: headline,
-                    color: color,
-                    location: location,
+                    profileId: effectiveProfileId,
+                    name: effectiveName,
+                    headline: effectiveHeadline,
+                    color: effectiveColor,
+                    location: effectiveLocation,
                     isMe: isMe,
+                    followersCount: currentProfile?.followersCount ?? 0,
+                    connectionsCount: currentProfile?.followingCount ?? 0,
                   ),
-                  if (isMe) ...[
-                    Divider(height: 10, thickness: 10, color: context.appSoft),
-                    _MyProfileWorkspace(savedItems: savedItems),
-                    const SizedBox(height: 28),
-                  ] else ...[
-                    Divider(height: 10, thickness: 10, color: context.appSoft),
-                    _PublicProfileWorkspace(
-                      name: name,
-                      headline: headline,
-                      color: color,
-                      location: location,
-                    ),
-                    Divider(height: 10, thickness: 10, color: context.appSoft),
-                    const _ProfileSection(
-                      title: 'الخبرة',
-                      child: Column(
-                        children: [
-                          _ExperienceRow(
-                            iconColor: AppColors.blue,
-                            title: 'مهندس موقع',
-                            company: 'شركة الرافدين للبناء · دوام كامل',
-                            date: 'فبراير 2025 - الآن · سنة و4 أشهر',
-                            place: 'بغداد، العراق',
-                          ),
-                          Divider(height: 28),
-                          _ExperienceRow(
-                            iconColor: AppColors.darkBlue,
-                            title: 'متطوع',
-                            company: 'مبادرة إعمار · دوام جزئي',
-                            date: 'أغسطس 2025 - الآن · 10 أشهر',
-                            place: 'البصرة، العراق',
-                          ),
-                          Divider(height: 28),
-                          _ExperienceRow(
-                            iconColor: AppColors.muted,
-                            title: 'منسقة سلامة موقع',
-                            company: 'مشروع طرق · مستقل',
-                            date: 'أبريل 2025 - الآن',
-                            place: 'أربيل، العراق',
-                          ),
-                        ],
-                      ),
-                    ),
-                    Divider(height: 10, thickness: 10, color: context.appSoft),
-                    const _ProfileSection(
-                      title: 'التعليم',
-                      child: _ExperienceRow(
-                        iconColor: AppColors.border,
-                        title: 'جامعة بغداد',
-                        company: 'بكالوريوس هندسة مدنية',
-                        date: '2023 - 2027',
-                        place: 'الدرجة: جيد جدا',
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                  ],
+                  Divider(height: 10, thickness: 10, color: context.appSoft),
+                  _ProfileWorkspace(
+                    profileId: effectiveProfileId,
+                    isMe: isMe,
+                    headline: effectiveHeadline,
+                    location: effectiveLocation,
+                    savedItems: isMe ? app.savedItems : const <SavedContent>[],
+                  ),
+                  const SizedBox(height: 28),
                 ],
               ),
             ),
@@ -137,22 +112,41 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  String _currentHeadline(dynamic profile) {
+    if (profile == null) {
+      return 'ملفك على منصة المهندس';
+    }
+    if (profile.headline.isNotEmpty) {
+      return profile.headline;
+    }
+    if (profile.role.isNotEmpty) {
+      return profile.role;
+    }
+    return 'ملفك على منصة المهندس';
+  }
 }
 
 class _ProfileHero extends StatefulWidget {
   const _ProfileHero({
+    required this.profileId,
     required this.name,
     required this.headline,
     required this.color,
     required this.location,
     required this.isMe,
+    required this.followersCount,
+    required this.connectionsCount,
   });
 
+  final String? profileId;
   final String name;
   final String headline;
   final Color color;
   final String location;
   final bool isMe;
+  final int followersCount;
+  final int connectionsCount;
 
   @override
   State<_ProfileHero> createState() => _ProfileHeroState();
@@ -161,11 +155,37 @@ class _ProfileHero extends StatefulWidget {
 class _ProfileHeroState extends State<_ProfileHero> {
   bool _connectionPending = false;
 
-  void _requestConnection() {
+  Future<void> _requestConnection() async {
     setState(() => _connectionPending = true);
+    final id = widget.profileId;
+    if (id != null && id.isNotEmpty) {
+      await AppScope.read(context).repositories.profiles.requestConnection(id);
+    }
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('تم إرسال طلب التواصل إلى ${widget.name}')),
     );
+  }
+
+  void _openEditProfile() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  }
+
+  Future<void> _followProfile() async {
+    final id = widget.profileId;
+    if (id != null && id.isNotEmpty) {
+      await AppScope.read(context).repositories.profiles.followProfile(id);
+    }
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('تمت المتابعة')));
   }
 
   @override
@@ -196,7 +216,7 @@ class _ProfileHeroState extends State<_ProfileHero> {
                 name: widget.name,
                 radius: 58,
                 color: widget.color,
-                badge: isMe ? 'متاح' : null,
+                badge: isMe ? 'أنا' : null,
               ),
             ),
             if (isMe)
@@ -204,9 +224,9 @@ class _ProfileHeroState extends State<_ProfileHero> {
                 top: 18,
                 end: 18,
                 child: CircleAvatar(
-                  backgroundColor: Colors.white,
+                  backgroundColor: context.appSurface,
                   child: IconButton(
-                    onPressed: () {},
+                    onPressed: _openEditProfile,
                     icon: const Icon(
                       Icons.edit,
                       color: AppColors.blue,
@@ -244,7 +264,9 @@ class _ProfileHeroState extends State<_ProfileHero> {
               Text(widget.location, style: TextStyle(color: context.appMuted)),
               const SizedBox(height: 8),
               Text(
-                isMe ? '2,900 متابع · 1,300 اتصال' : '370 اتصال',
+                isMe
+                    ? '${widget.followersCount} متابع · ${widget.connectionsCount} اتصال'
+                    : 'ملف عام',
                 style: const TextStyle(
                   color: AppColors.blue,
                   fontWeight: FontWeight.w900,
@@ -278,7 +300,7 @@ class _ProfileHeroState extends State<_ProfileHero> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () {},
+                        onPressed: _followProfile,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.blue,
                           minimumSize: const Size.fromHeight(46),
@@ -301,58 +323,32 @@ class _ProfileHeroState extends State<_ProfileHero> {
   }
 }
 
-enum _MyProfileTab { posts, about, saved }
+enum _ProfileTab { posts, about, savedOrProjects }
 
-enum _MyProfileViewMode { grid, media, list }
+enum _ProfileViewMode { grid, media, list }
 
-extension _MyProfileTabInfo on _MyProfileTab {
-  String get label {
-    return switch (this) {
-      _MyProfileTab.posts => 'المنشورات',
-      _MyProfileTab.about => 'نبذة',
-      _MyProfileTab.saved => 'المحفوظات',
-    };
-  }
+class _ProfileWorkspace extends StatefulWidget {
+  const _ProfileWorkspace({
+    required this.profileId,
+    required this.isMe,
+    required this.headline,
+    required this.location,
+    required this.savedItems,
+  });
 
-  IconData get icon {
-    return switch (this) {
-      _MyProfileTab.posts => Icons.videocam_outlined,
-      _MyProfileTab.about => Icons.description_outlined,
-      _MyProfileTab.saved => Icons.bookmark_outline,
-    };
-  }
-}
-
-extension _MyProfileViewModeInfo on _MyProfileViewMode {
-  IconData get icon {
-    return switch (this) {
-      _MyProfileViewMode.grid => Icons.grid_on,
-      _MyProfileViewMode.media => Icons.image_outlined,
-      _MyProfileViewMode.list => Icons.view_module_outlined,
-    };
-  }
-
-  String get label {
-    return switch (this) {
-      _MyProfileViewMode.grid => 'شبكة',
-      _MyProfileViewMode.media => 'وسائط',
-      _MyProfileViewMode.list => 'قائمة',
-    };
-  }
-}
-
-class _MyProfileWorkspace extends StatefulWidget {
-  const _MyProfileWorkspace({required this.savedItems});
-
+  final String? profileId;
+  final bool isMe;
+  final String headline;
+  final String location;
   final List<SavedContent> savedItems;
 
   @override
-  State<_MyProfileWorkspace> createState() => _MyProfileWorkspaceState();
+  State<_ProfileWorkspace> createState() => _ProfileWorkspaceState();
 }
 
-class _MyProfileWorkspaceState extends State<_MyProfileWorkspace> {
-  _MyProfileTab _tab = _MyProfileTab.posts;
-  _MyProfileViewMode _viewMode = _MyProfileViewMode.grid;
+class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
+  _ProfileTab _tab = _ProfileTab.posts;
+  _ProfileViewMode _viewMode = _ProfileViewMode.grid;
 
   @override
   Widget build(BuildContext context) {
@@ -361,13 +357,14 @@ class _MyProfileWorkspaceState extends State<_MyProfileWorkspace> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _MyProfileSegmentedTabs(
+          _ProfileSegmentedTabs(
             selected: _tab,
+            isMe: widget.isMe,
             onChanged: (value) => setState(() => _tab = value),
           ),
-          if (_tab == _MyProfileTab.posts) ...[
+          if (_tab == _ProfileTab.posts) ...[
             const SizedBox(height: 18),
-            _MyProfileViewModeTabs(
+            _ProfileViewModeTabs(
               selected: _viewMode,
               onChanged: (value) => setState(() => _viewMode = value),
             ),
@@ -375,10 +372,14 @@ class _MyProfileWorkspaceState extends State<_MyProfileWorkspace> {
           const SizedBox(height: 18),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
-            child: _MyProfileTabBody(
+            child: _ProfileTabBody(
               key: ValueKey('${_tab.name}-${_viewMode.name}'),
+              profileId: widget.profileId,
               tab: _tab,
               viewMode: _viewMode,
+              isMe: widget.isMe,
+              headline: widget.headline,
+              location: widget.location,
               savedItems: widget.savedItems,
             ),
           ),
@@ -388,14 +389,16 @@ class _MyProfileWorkspaceState extends State<_MyProfileWorkspace> {
   }
 }
 
-class _MyProfileSegmentedTabs extends StatelessWidget {
-  const _MyProfileSegmentedTabs({
+class _ProfileSegmentedTabs extends StatelessWidget {
+  const _ProfileSegmentedTabs({
     required this.selected,
+    required this.isMe,
     required this.onChanged,
   });
 
-  final _MyProfileTab selected;
-  final ValueChanged<_MyProfileTab> onChanged;
+  final _ProfileTab selected;
+  final bool isMe;
+  final ValueChanged<_ProfileTab> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -409,30 +412,50 @@ class _MyProfileSegmentedTabs extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (final tab in _MyProfileTab.values) ...[
+          for (final tab in _ProfileTab.values) ...[
             Expanded(
-              child: _MyProfileSegmentTab(
-                tab: tab,
+              child: _ProfileSegmentTab(
+                label: _tabLabel(tab, isMe),
+                icon: _tabIcon(tab, isMe),
                 selected: selected == tab,
                 onTap: () => onChanged(tab),
               ),
             ),
-            if (tab != _MyProfileTab.values.last) const SizedBox(width: 4),
+            if (tab != _ProfileTab.values.last) const SizedBox(width: 4),
           ],
         ],
       ),
     );
   }
+
+  String _tabLabel(_ProfileTab tab, bool isMe) {
+    return switch (tab) {
+      _ProfileTab.posts => 'المنشورات',
+      _ProfileTab.about => 'نبذة',
+      _ProfileTab.savedOrProjects => isMe ? 'المحفوظات' : 'المشاريع',
+    };
+  }
+
+  IconData _tabIcon(_ProfileTab tab, bool isMe) {
+    return switch (tab) {
+      _ProfileTab.posts => Icons.videocam_outlined,
+      _ProfileTab.about => Icons.description_outlined,
+      _ProfileTab.savedOrProjects =>
+        isMe ? Icons.bookmark_outline : Icons.folder_special_outlined,
+    };
+  }
 }
 
-class _MyProfileSegmentTab extends StatelessWidget {
-  const _MyProfileSegmentTab({
-    required this.tab,
+class _ProfileSegmentTab extends StatelessWidget {
+  const _ProfileSegmentTab({
+    required this.label,
+    required this.icon,
     required this.selected,
     required this.onTap,
   });
 
-  final _MyProfileTab tab;
+  final String label;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
 
@@ -454,11 +477,11 @@ class _MyProfileSegmentTab extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(tab.icon, color: foreground, size: 16),
+            Icon(icon, color: foreground, size: 16),
             const SizedBox(width: 5),
             Flexible(
               child: Text(
-                tab.label,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -475,14 +498,11 @@ class _MyProfileSegmentTab extends StatelessWidget {
   }
 }
 
-class _MyProfileViewModeTabs extends StatelessWidget {
-  const _MyProfileViewModeTabs({
-    required this.selected,
-    required this.onChanged,
-  });
+class _ProfileViewModeTabs extends StatelessWidget {
+  const _ProfileViewModeTabs({required this.selected, required this.onChanged});
 
-  final _MyProfileViewMode selected;
-  final ValueChanged<_MyProfileViewMode> onChanged;
+  final _ProfileViewMode selected;
+  final ValueChanged<_ProfileViewMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -492,9 +512,9 @@ class _MyProfileViewModeTabs extends StatelessWidget {
       ),
       child: Row(
         children: [
-          for (final mode in _MyProfileViewMode.values)
+          for (final mode in _ProfileViewMode.values)
             Expanded(
-              child: _MyProfileViewModeButton(
+              child: _ProfileViewModeButton(
                 mode: mode,
                 selected: selected == mode,
                 onTap: () => onChanged(mode),
@@ -506,14 +526,14 @@ class _MyProfileViewModeTabs extends StatelessWidget {
   }
 }
 
-class _MyProfileViewModeButton extends StatelessWidget {
-  const _MyProfileViewModeButton({
+class _ProfileViewModeButton extends StatelessWidget {
+  const _ProfileViewModeButton({
     required this.mode,
     required this.selected,
     required this.onTap,
   });
 
-  final _MyProfileViewMode mode;
+  final _ProfileViewMode mode;
   final bool selected;
   final VoidCallback onTap;
 
@@ -527,8 +547,8 @@ class _MyProfileViewModeButton extends StatelessWidget {
           SizedBox(
             height: 44,
             child: Tooltip(
-              message: mode.label,
-              child: Icon(mode.icon, color: color, size: 24),
+              message: _modeLabel(mode),
+              child: Icon(_modeIcon(mode), color: color, size: 24),
             ),
           ),
           AnimatedContainer(
@@ -541,30 +561,253 @@ class _MyProfileViewModeButton extends StatelessWidget {
       ),
     );
   }
+
+  IconData _modeIcon(_ProfileViewMode mode) {
+    return switch (mode) {
+      _ProfileViewMode.grid => Icons.grid_on,
+      _ProfileViewMode.media => Icons.image_outlined,
+      _ProfileViewMode.list => Icons.view_module_outlined,
+    };
+  }
+
+  String _modeLabel(_ProfileViewMode mode) {
+    return switch (mode) {
+      _ProfileViewMode.grid => 'شبكة',
+      _ProfileViewMode.media => 'وسائط',
+      _ProfileViewMode.list => 'قائمة',
+    };
+  }
 }
 
-class _MyProfileTabBody extends StatelessWidget {
-  const _MyProfileTabBody({
+class _ProfileTabBody extends StatelessWidget {
+  const _ProfileTabBody({
     super.key,
+    required this.profileId,
     required this.tab,
     required this.viewMode,
+    required this.isMe,
+    required this.headline,
+    required this.location,
     required this.savedItems,
   });
 
-  final _MyProfileTab tab;
-  final _MyProfileViewMode viewMode;
+  final String? profileId;
+  final _ProfileTab tab;
+  final _ProfileViewMode viewMode;
+  final bool isMe;
+  final String headline;
+  final String location;
   final List<SavedContent> savedItems;
 
   @override
   Widget build(BuildContext context) {
     return switch (tab) {
-      _MyProfileTab.posts => const _EmptyProfileGrid(
+      _ProfileTab.posts => _ProfilePosts(profileId: profileId, mode: viewMode),
+      _ProfileTab.about => _ProfileAboutPanel(
+        headline: headline,
+        location: location,
+      ),
+      _ProfileTab.savedOrProjects =>
+        isMe
+            ? _SavedGrid(savedItems: savedItems)
+            : _ProfileProjects(profileId: profileId),
+    };
+  }
+}
+
+class _ProfilePosts extends StatelessWidget {
+  const _ProfilePosts({required this.profileId, required this.mode});
+
+  final String? profileId;
+  final _ProfileViewMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = profileId;
+    if (id == null || id.isEmpty) {
+      return const _EmptyProfileGrid(
         icon: Icons.grid_on,
         message: 'لا توجد منشورات بعد',
+      );
+    }
+    return FutureBuilder<List<FeedPostModel>>(
+      future: AppScope.read(context).repositories.feed.fetchProfilePosts(id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const FeedPostSkeleton();
+        }
+        final posts = snapshot.data ?? const <FeedPostModel>[];
+        if (posts.isEmpty) {
+          return const _EmptyProfileGrid(
+            icon: Icons.grid_on,
+            message: 'لا توجد منشورات بعد',
+          );
+        }
+        return _ProfilePostsGrid(posts: posts, mode: mode);
+      },
+    );
+  }
+}
+
+class _ProfilePostsGrid extends StatelessWidget {
+  const _ProfilePostsGrid({required this.posts, required this.mode});
+
+  final List<FeedPostModel> posts;
+  final _ProfileViewMode mode;
+
+  void _openPost(BuildContext context, FeedPostModel post) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (mode == _ProfileViewMode.list) {
+      return Column(
+        children: [
+          for (var index = 0; index < posts.length; index++) ...[
+            ListTile(
+              onTap: () => _openPost(context, posts[index]),
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: context.appSurfaceAlt,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.article_outlined,
+                  color: AppColors.blue,
+                ),
+              ),
+              title: Text(
+                posts[index].body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(
+                '${posts[index].reactions} تفاعل · ${posts[index].comments}',
+              ),
+            ),
+            if (index != posts.length - 1)
+              Divider(height: 18, color: context.appBorder),
+          ],
+        ],
+      );
+    }
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 1,
+        ),
+        itemCount: posts.length,
+        itemBuilder: (context, index) {
+          final post = posts[index];
+          return InkWell(
+            key: ValueKey('profile-post-card-${post.id}'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _openPost(context, post),
+            child: Ink(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: context.appSurfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: context.appBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: AlignmentDirectional.topStart,
+                    child: Icon(
+                      mode == _ProfileViewMode.media
+                          ? Icons.image_outlined
+                          : Icons.article_outlined,
+                      color: AppColors.blue,
+                      size: 24,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    mode == _ProfileViewMode.media ? post.body : post.name,
+                    maxLines: mode == _ProfileViewMode.media ? 4 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.appText,
+                      fontSize: mode == _ProfileViewMode.media ? 11 : 12,
+                      height: 1.25,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
-      _MyProfileTab.about => const _MyProfileAboutPanel(),
-      _MyProfileTab.saved => _MyProfileSavedGrid(savedItems: savedItems),
-    };
+    );
+  }
+}
+
+class _ProfileProjects extends StatelessWidget {
+  const _ProfileProjects({required this.profileId});
+
+  final String? profileId;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = profileId;
+    if (id == null || id.isEmpty) {
+      return const _EmptyProfileGrid(
+        icon: Icons.folder_special_outlined,
+        message: 'لا توجد مشاريع بعد',
+      );
+    }
+    return FutureBuilder<List<ProjectItem>>(
+      future: AppScope.read(
+        context,
+      ).repositories.projects.fetchProjectsForProfile(id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const ProjectCardSkeleton();
+        }
+        final projects = snapshot.data ?? const <ProjectItem>[];
+        if (projects.isEmpty) {
+          return const _EmptyProfileGrid(
+            icon: Icons.folder_special_outlined,
+            message: 'لا توجد مشاريع بعد',
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: .9,
+          ),
+          itemCount: projects.length,
+          itemBuilder: (context, index) => _ProfileContentCard(
+            icon: Icons.folder_special_outlined,
+            title: projects[index].title,
+            subtitle: projects[index].tagline,
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -606,38 +849,34 @@ class _EmptyProfileGrid extends StatelessWidget {
   }
 }
 
-class _MyProfileAboutPanel extends StatelessWidget {
-  const _MyProfileAboutPanel();
+class _ProfileAboutPanel extends StatelessWidget {
+  const _ProfileAboutPanel({required this.headline, required this.location});
+
+  final String headline;
+  final String location;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: const [
-        _MyProfileInfoCard(
+      children: [
+        _ProfileInfoCard(
           icon: Icons.person_outline,
           title: 'نبذة مختصرة',
-          subtitle:
-              'مهندسة مدنية تهتم بإدارة المواقع وتوثيق تقدم الأعمال بوضوح.',
+          subtitle: headline.isEmpty ? 'لا توجد نبذة بعد' : headline,
         ),
-        SizedBox(height: 10),
-        _MyProfileInfoCard(
+        const SizedBox(height: 10),
+        _ProfileInfoCard(
           icon: Icons.location_on_outlined,
           title: 'الموقع',
-          subtitle: 'بغداد، العراق',
-        ),
-        SizedBox(height: 10),
-        _MyProfileInfoCard(
-          icon: Icons.groups_outlined,
-          title: 'الشبكة',
-          subtitle: '2,900 متابع · 1,300 اتصال',
+          subtitle: location,
         ),
       ],
     );
   }
 }
 
-class _MyProfileSavedGrid extends StatelessWidget {
-  const _MyProfileSavedGrid({required this.savedItems});
+class _SavedGrid extends StatelessWidget {
+  const _SavedGrid({required this.savedItems});
 
   final List<SavedContent> savedItems;
 
@@ -663,7 +902,7 @@ class _MyProfileSavedGrid extends StatelessWidget {
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
-        return _MyProfileContentCard(
+        return _ProfileContentCard(
           icon: item.icon,
           title: item.title,
           subtitle: item.subtitle,
@@ -673,8 +912,8 @@ class _MyProfileSavedGrid extends StatelessWidget {
   }
 }
 
-class _MyProfileInfoCard extends StatelessWidget {
-  const _MyProfileInfoCard({
+class _ProfileInfoCard extends StatelessWidget {
+  const _ProfileInfoCard({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -719,8 +958,8 @@ class _MyProfileInfoCard extends StatelessWidget {
   }
 }
 
-class _MyProfileContentCard extends StatelessWidget {
-  const _MyProfileContentCard({
+class _ProfileContentCard extends StatelessWidget {
+  const _ProfileContentCard({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -771,483 +1010,7 @@ class _MyProfileContentCard extends StatelessWidget {
   }
 }
 
-enum _PublicProfileTab { posts, about, projects }
-
-extension _PublicProfileTabInfo on _PublicProfileTab {
-  String get label {
-    return switch (this) {
-      _PublicProfileTab.posts => 'المنشورات',
-      _PublicProfileTab.about => 'نبذة',
-      _PublicProfileTab.projects => 'المشاريع',
-    };
-  }
-
-  IconData get icon {
-    return switch (this) {
-      _PublicProfileTab.posts => Icons.videocam_outlined,
-      _PublicProfileTab.about => Icons.description_outlined,
-      _PublicProfileTab.projects => Icons.folder_special_outlined,
-    };
-  }
-}
-
-class _PublicProfileWorkspace extends StatefulWidget {
-  const _PublicProfileWorkspace({
-    required this.name,
-    required this.headline,
-    required this.color,
-    required this.location,
-  });
-
-  final String name;
-  final String headline;
-  final Color color;
-  final String location;
-
-  @override
-  State<_PublicProfileWorkspace> createState() =>
-      _PublicProfileWorkspaceState();
-}
-
-class _PublicProfileWorkspaceState extends State<_PublicProfileWorkspace> {
-  _PublicProfileTab _tab = _PublicProfileTab.posts;
-  _MyProfileViewMode _viewMode = _MyProfileViewMode.grid;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 14, 8, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _PublicProfileSegmentedTabs(
-            selected: _tab,
-            onChanged: (value) => setState(() => _tab = value),
-          ),
-          if (_tab == _PublicProfileTab.posts) ...[
-            const SizedBox(height: 18),
-            _MyProfileViewModeTabs(
-              selected: _viewMode,
-              onChanged: (value) => setState(() => _viewMode = value),
-            ),
-          ],
-          const SizedBox(height: 18),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _PublicProfileTabBody(
-              key: ValueKey('${_tab.name}-${_viewMode.name}'),
-              tab: _tab,
-              viewMode: _viewMode,
-              name: widget.name,
-              headline: widget.headline,
-              color: widget.color,
-              location: widget.location,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PublicProfileSegmentedTabs extends StatelessWidget {
-  const _PublicProfileSegmentedTabs({
-    required this.selected,
-    required this.onChanged,
-  });
-
-  final _PublicProfileTab selected;
-  final ValueChanged<_PublicProfileTab> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: context.appSurfaceAlt,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: context.appBorder),
-      ),
-      child: Row(
-        children: [
-          for (final tab in _PublicProfileTab.values) ...[
-            Expanded(
-              child: _PublicProfileSegmentTab(
-                tab: tab,
-                selected: selected == tab,
-                onTap: () => onChanged(tab),
-              ),
-            ),
-            if (tab != _PublicProfileTab.values.last) const SizedBox(width: 4),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PublicProfileSegmentTab extends StatelessWidget {
-  const _PublicProfileSegmentTab({
-    required this.tab,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _PublicProfileTab tab;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected ? AppColors.white : context.appMuted;
-    final background = selected ? AppColors.blue : Colors.transparent;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 170),
-        padding: const EdgeInsets.symmetric(horizontal: 11),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(tab.icon, color: foreground, size: 16),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                tab.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PublicProfileTabBody extends StatelessWidget {
-  const _PublicProfileTabBody({
-    super.key,
-    required this.tab,
-    required this.viewMode,
-    required this.name,
-    required this.headline,
-    required this.color,
-    required this.location,
-  });
-
-  final _PublicProfileTab tab;
-  final _MyProfileViewMode viewMode;
-  final String name;
-  final String headline;
-  final Color color;
-  final String location;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (tab) {
-      _PublicProfileTab.posts => _PublicProfilePostsGrid(
-        posts: _publicProfilePosts(name, headline, color),
-        viewMode: viewMode,
-      ),
-      _PublicProfileTab.about => _PublicProfileAboutPanel(
-        headline: headline,
-        location: location,
-      ),
-      _PublicProfileTab.projects => _PublicProfileProjectsGrid(
-        projects: _publicProfileProjects(name),
-      ),
-    };
-  }
-}
-
-class _PublicProfilePostsGrid extends StatelessWidget {
-  const _PublicProfilePostsGrid({required this.posts, required this.viewMode});
-
-  final List<FeedPostModel> posts;
-  final _MyProfileViewMode viewMode;
-
-  void _openPost(BuildContext context, FeedPostModel post) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (viewMode == _MyProfileViewMode.list) {
-      return Column(
-        children: [
-          for (var index = 0; index < posts.length; index++) ...[
-            _PublicPostListTile(
-              key: ValueKey('profile-post-list-tile-$index'),
-              post: posts[index],
-              onTap: () => _openPost(context, posts[index]),
-            ),
-            if (index != posts.length - 1)
-              Divider(height: 18, color: context.appBorder),
-          ],
-        ],
-      );
-    }
-
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 1,
-        ),
-        itemCount: posts.length,
-        itemBuilder: (context, index) {
-          return _PublicPostSquareCard(
-            key: ValueKey('profile-post-card-$index'),
-            post: posts[index],
-            showBody: viewMode == _MyProfileViewMode.media,
-            onTap: () => _openPost(context, posts[index]),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _PublicPostSquareCard extends StatelessWidget {
-  const _PublicPostSquareCard({
-    super.key,
-    required this.post,
-    required this.showBody,
-    required this.onTap,
-  });
-
-  final FeedPostModel post;
-  final bool showBody;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Ink(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: context.appSurfaceAlt,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: context.appBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: AlignmentDirectional.topStart,
-              child: Icon(
-                showBody ? Icons.image_outlined : Icons.article_outlined,
-                color: AppColors.blue,
-                size: 24,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              showBody ? post.body : post.name,
-              maxLines: showBody ? 4 : 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: context.appText,
-                fontSize: showBody ? 11 : 12,
-                height: 1.25,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PublicPostListTile extends StatelessWidget {
-  const _PublicPostListTile({
-    super.key,
-    required this.post,
-    required this.onTap,
-  });
-
-  final FeedPostModel post;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: context.appSurfaceAlt,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: const Icon(Icons.article_outlined, color: AppColors.blue),
-      ),
-      title: Text(
-        post.body,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w900),
-      ),
-      subtitle: Text(
-        '${post.reactions} تفاعل · ${post.comments}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-}
-
-class _PublicProfileAboutPanel extends StatelessWidget {
-  const _PublicProfileAboutPanel({
-    required this.headline,
-    required this.location,
-  });
-
-  final String headline;
-  final String location;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _MyProfileInfoCard(
-          icon: Icons.person_outline,
-          title: 'نبذة مختصرة',
-          subtitle: '$headline يعمل على مشاريع تنفيذ وتعاون ميداني.',
-        ),
-        const SizedBox(height: 10),
-        _MyProfileInfoCard(
-          icon: Icons.location_on_outlined,
-          title: 'الموقع',
-          subtitle: location,
-        ),
-        const SizedBox(height: 10),
-        const _MyProfileInfoCard(
-          icon: Icons.groups_outlined,
-          title: 'الشبكة',
-          subtitle: '370 اتصال · 8 علاقات مشتركة',
-        ),
-      ],
-    );
-  }
-}
-
-class _PublicProfileProjectsGrid extends StatelessWidget {
-  const _PublicProfileProjectsGrid({required this.projects});
-
-  final List<ProfileContentItem> projects;
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: .9,
-      ),
-      itemCount: projects.length,
-      itemBuilder: (context, index) {
-        final item = projects[index];
-        return _MyProfileContentCard(
-          icon: item.icon,
-          title: item.title,
-          subtitle: item.subtitle,
-        );
-      },
-    );
-  }
-}
-
-List<FeedPostModel> _publicProfilePosts(
-  String name,
-  String headline,
-  Color color,
-) {
-  return [
-    FeedPostModel(
-      name: name,
-      headline: headline,
-      time: 'قبل ساعتين',
-      body: 'مشاركة عن تحديات متابعة التنفيذ اليومي وتنسيق فريق الموقع.',
-      reactions: '398',
-      comments: '64 تعليق',
-      avatarColor: color,
-      showMedia: false,
-    ),
-    FeedPostModel(
-      name: name,
-      headline: headline,
-      time: 'قبل يوم',
-      body: 'أسئلة عن توزيع الأدوار بين المهندس والحرفي ومشغل الآلية.',
-      reactions: '91',
-      comments: '22 تعليق',
-      avatarColor: color,
-      showMedia: true,
-    ),
-    FeedPostModel(
-      name: name,
-      headline: headline,
-      time: 'قبل 3 أيام',
-      body: 'قائمة مختصرة لأدوات التخطيط والتسليم الأسبوعي في الموقع.',
-      reactions: '77',
-      comments: '18 تعليق',
-      avatarColor: color,
-      showMedia: false,
-    ),
-  ];
-}
-
-List<ProfileContentItem> _publicProfileProjects(String name) {
-  return [
-    ProfileContentItem(
-      icon: Icons.folder_special_outlined,
-      title: 'مشروع تعاوني نشره $name',
-      subtitle: 'مشروع · هجين',
-      detail: 'مطلوب أعضاء فريق لديهم خبرة في التنفيذ والتواصل الميداني.',
-    ),
-    const ProfileContentItem(
-      icon: Icons.folder_special_outlined,
-      title: 'تجهيز مخططات تنفيذية لفريق صغير',
-      subtitle: 'مشروع · عن بعد',
-      detail: 'مشروع قصير لتنسيق المخططات قبل بدء التنفيذ.',
-    ),
-    const ProfileContentItem(
-      icon: Icons.folder_special_outlined,
-      title: 'متابعة أعمال تشطيب',
-      subtitle: 'مشروع بحثي · بغداد',
-      detail: 'تدريب عملي على التوثيق واختبار قوائم الفحص.',
-    ),
-  ];
-}
-
-ProfileContentItem _savedContentItem(SavedContent item) {
+_ContentCardData _savedContentItem(SavedContent item) {
   final icon = switch (item.type) {
     SavedContentType.post => Icons.article_outlined,
     SavedContentType.reel => Icons.smart_display_outlined,
@@ -1261,87 +1024,21 @@ ProfileContentItem _savedContentItem(SavedContent item) {
     SavedContentType.company => 'شركة محفوظة',
   };
 
-  return ProfileContentItem(
+  return _ContentCardData(
     icon: icon,
     title: item.title,
     subtitle: '$typeLabel · ${item.subtitle}',
-    detail: item.detail,
   );
 }
 
-class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _ExperienceRow extends StatelessWidget {
-  const _ExperienceRow({
-    required this.iconColor,
+final class _ContentCardData {
+  const _ContentCardData({
+    required this.icon,
     required this.title,
-    required this.company,
-    required this.date,
-    required this.place,
+    required this.subtitle,
   });
 
-  final Color iconColor;
+  final IconData icon;
   final String title;
-  final String company;
-  final String date;
-  final String place;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: iconColor.withValues(alpha: .18),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(Icons.business_center, color: iconColor),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(company, style: const TextStyle(fontSize: 16)),
-              Text(date, style: TextStyle(color: context.appMuted)),
-              Text(place, style: TextStyle(color: context.appMuted)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  final String subtitle;
 }

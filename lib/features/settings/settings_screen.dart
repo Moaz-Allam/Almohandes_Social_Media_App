@@ -36,6 +36,61 @@ class SettingsScreen extends StatelessWidget {
     ),
   ];
 
+  void _showHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('مساعدة'),
+        content: const Text(
+          'للدعم، افتح تذكرة من لوحة Supabase أو تواصل مع فريق إدارة منصة المهندس.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openSection(BuildContext context, SettingsItem section) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(section.icon, color: AppColors.blue, size: 34),
+              const SizedBox(height: 12),
+              Text(
+                section.title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                section.subtitle,
+                style: TextStyle(color: context.appMuted, height: 1.45),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('تم'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.watch(context);
@@ -68,7 +123,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => _showHelp(context),
                     icon: const Icon(Icons.help),
                     tooltip: 'مساعدة',
                   ),
@@ -137,7 +192,7 @@ class SettingsScreen extends StatelessWidget {
                         height: 1.25,
                       ),
                     ),
-                    onTap: () {},
+                    onTap: () => _openSection(context, section),
                   );
                 },
               ),

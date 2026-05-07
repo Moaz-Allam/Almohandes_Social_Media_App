@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../models/notification_item_model.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
 import '../messages/messages_screen.dart';
@@ -46,7 +47,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
     final app = AppScope.read(context);
     final wasUnlocked = app.hasPremiumLibrary;
 
-    app.unlockPremiumLibrary();
+    await app.unlockPremiumLibrary();
     await navigator.maybePop();
     messenger
       ..hideCurrentSnackBar()
@@ -81,6 +82,11 @@ class LinkedInMenuDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.watch(context);
+    final profile = controller.profile;
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+    final role = profile?.role.isNotEmpty == true ? profile!.role : null;
 
     return Drawer(
       width: 304,
@@ -96,26 +102,28 @@ class LinkedInMenuDrawer extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const AppAvatar(
-                      name: 'ريم حسن',
+                    AppAvatar(
+                      name: name,
                       radius: 30,
                       color: AppColors.darkBlue,
-                      badge: 'مهندسة',
+                      badge: role,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'ريم حسن',
-                            style: TextStyle(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
-                          SizedBox(height: 2),
-                          Text(
+                          const SizedBox(height: 2),
+                          const Text(
                             'عرض الملف · الإعدادات',
                             style: TextStyle(
                               color: AppColors.blue,
@@ -164,25 +172,9 @@ class LinkedInMenuDrawer extends StatelessWidget {
                 ),
               ),
             ),
-            const _SidebarNotification(
-              icon: Icons.person_add_alt,
-              text: 'لديك 5 دعوات تواصل جديدة',
-              time: 'الآن',
-            ),
-            const _SidebarNotification(
-              icon: Icons.thumb_up_alt_outlined,
-              text: 'أحمد تفاعل مع منشورك',
-              time: 'قبل 12 دقيقة',
-            ),
-            const _SidebarNotification(
-              icon: Icons.work_outline,
-              text: 'مشروع جديد يناسب مهاراتك',
-              time: 'قبل ساعة',
-            ),
-            const _SidebarNotification(
-              icon: Icons.smart_display_outlined,
-              text: 'ريل جديد من ريم حسن',
-              time: 'اليوم',
+            _SidebarNotificationsList(
+              future: controller.repositories.notifications
+                  .fetchNotifications(),
             ),
             Divider(height: 1, color: context.appBorder),
             ListTile(
@@ -193,7 +185,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
+              trailing: const Icon(Icons.chevron_left, color: AppColors.blue),
               onTap: () => _openAllNotifications(context),
             ),
             Divider(height: 1, color: context.appBorder),
@@ -222,6 +214,55 @@ class LinkedInMenuDrawer extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SidebarNotificationsList extends StatelessWidget {
+  const _SidebarNotificationsList({required this.future});
+
+  final Future<List<NotificationItemModel>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<NotificationItemModel>>(
+      future: future,
+      builder: (context, snapshot) {
+        final items = (snapshot.data ?? const <NotificationItemModel>[])
+            .take(4)
+            .toList();
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Text(
+              'جاري تحميل الإشعارات...',
+              style: TextStyle(color: AppColors.muted),
+            ),
+          );
+        }
+        if (items.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Text(
+              'لا توجد إشعارات بعد',
+              style: TextStyle(color: AppColors.muted),
+            ),
+          );
+        }
+        return Column(
+          children: [
+            for (final item in items)
+              _SidebarNotification(
+                icon: item.unread
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_none,
+                text: item.title,
+                time: item.time,
+              ),
+          ],
+        );
+      },
     );
   }
 }

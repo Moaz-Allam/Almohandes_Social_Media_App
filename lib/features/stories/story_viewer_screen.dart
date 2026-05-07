@@ -241,7 +241,9 @@ class _StoryImage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Text(
-              'قصة من ${story.name}',
+              story.content.trim().isEmpty
+                  ? 'قصة من ${story.name}'
+                  : story.content,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,

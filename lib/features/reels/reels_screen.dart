@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
+import '../../models/reel_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
 import '../../shared/widgets/like_burst.dart';
+import '../../shared/widgets/skeleton.dart';
+import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import '../messages/share_contact_screen.dart';
 
@@ -26,38 +29,11 @@ class _ReelsScreenState extends State<ReelsScreen>
     with SingleTickerProviderStateMixin {
   static const _reelDuration = Duration(seconds: 7);
 
-  static const _reels = [
-    _ReelItem(
-      name: 'ناتالي منصور',
-      headline: 'قائدة مشروع · منصة المهندس',
-      caption: 'أفضل لحظة اليوم كانت تنسيق فريق موقع كامل قبل بدء الصب.',
-      likes: '18K',
-      comments: '650',
-      reposts: '97',
-      color: AppColors.darkBlue,
-    ),
-    _ReelItem(
-      name: 'ريم حسن',
-      headline: 'مهندسة مدنية · إدارة مواقع',
-      caption: 'لقطة سريعة من جولة متابعة التشطيبات وتسليم الملاحظات.',
-      likes: '8.2K',
-      comments: '214',
-      reposts: '32',
-      color: AppColors.muted,
-    ),
-    _ReelItem(
-      name: 'أحمد منصور',
-      headline: 'مهندس كهرباء مواقع',
-      caption: 'كيف رتبنا لوحات التوزيع مع فريق السلامة قبل الفحص النهائي.',
-      likes: '5.7K',
-      comments: '141',
-      reposts: '28',
-      color: AppColors.blue,
-    ),
-  ];
-
   late final PageController _pageController;
   late final AnimationController _progressController;
+  late Future<List<ReelItem>> _reelsFuture;
+  final Set<String> _likedReels = {};
+  final Map<String, int> _localLikeCounts = {};
   int _index = 0;
   bool _showLike = false;
   bool _isAutoAdvancing = false;
@@ -65,6 +41,7 @@ class _ReelsScreenState extends State<ReelsScreen>
   @override
   void initState() {
     super.initState();
+    _reelsFuture = Future.value(const <ReelItem>[]);
     _pageController = PageController();
     _progressController =
         AnimationController(vsync: this, duration: _reelDuration)
@@ -73,7 +50,12 @@ class _ReelsScreenState extends State<ReelsScreen>
               _goToNextReel();
             }
           });
-    _restartProgress();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reelsFuture = AppScope.read(context).repositories.reels.fetchReels();
   }
 
   @override
@@ -91,12 +73,17 @@ class _ReelsScreenState extends State<ReelsScreen>
     if (_isAutoAdvancing) {
       return;
     }
+    final reels = _currentReels;
+    if (reels.isEmpty) {
+      _progressController.stop();
+      return;
+    }
     _isAutoAdvancing = true;
     _progressController
       ..stop()
       ..value = 0;
 
-    final next = (_index + 1) % _reels.length;
+    final next = (_index + 1) % reels.length;
     setState(() => _index = next);
 
     if (!_pageController.hasClients) {
@@ -119,8 +106,29 @@ class _ReelsScreenState extends State<ReelsScreen>
         });
   }
 
-  void _triggerLike() {
-    setState(() => _showLike = true);
+  List<ReelItem> _currentReels = const [];
+
+  void _triggerLike(ReelItem item) {
+    final nextLiked = !_likedReels.contains(item.id);
+    setState(() {
+      if (nextLiked) {
+        _likedReels.add(item.id);
+      } else {
+        _likedReels.remove(item.id);
+      }
+      final base = _localLikeCounts[item.id] ?? item.likesCount;
+      _localLikeCounts[item.id] = (base + (nextLiked ? 1 : -1)).clamp(
+        0,
+        1 << 31,
+      );
+      _showLike = nextLiked;
+    });
+    AppScope.read(
+      context,
+    ).repositories.reels.toggleLike(reelId: item.id, shouldLike: nextLiked);
+    if (!nextLiked) {
+      return;
+    }
     Future<void>.delayed(const Duration(milliseconds: 650), () {
       if (mounted) {
         setState(() => _showLike = false);
@@ -135,17 +143,19 @@ class _ReelsScreenState extends State<ReelsScreen>
     }
   }
 
-  void _openSendFlow(_ReelItem item) {
+  void _openSendFlow(ReelItem item) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ShareContactScreen(
           post: FeedPostModel(
+            id: 'reel:${item.id}',
+            profileId: item.profileId,
             name: item.name,
             headline: item.headline,
             time: 'الآن',
             body: item.caption,
-            reactions: item.likes,
-            comments: item.comments,
+            reactions: item.likesLabel,
+            comments: '${item.commentsLabel} تعليق',
             avatarColor: item.color,
             showMedia: false,
           ),
@@ -164,26 +174,56 @@ class _ReelsScreenState extends State<ReelsScreen>
           hint: 'ابحث في ريلز',
         ),
         Expanded(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                itemCount: _reels.length,
-                onPageChanged: _onPageChanged,
-                itemBuilder: (context, index) {
-                  return _ReelPage(
-                    item: _reels[index],
-                    isActive: index == _index,
-                    progress: _progressController,
-                    onLike: _triggerLike,
-                    onSend: () => _openSendFlow(_reels[index]),
-                  );
-                },
-              ),
-              LikeBurst(visible: _showLike, size: 104),
-            ],
+          child: FutureBuilder<List<ReelItem>>(
+            future: _reelsFuture,
+            builder: (context, snapshot) {
+              final isLoading =
+                  snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData;
+              if (isLoading) {
+                return const ReelSkeleton();
+              }
+              final reels = snapshot.data ?? const <ReelItem>[];
+              _currentReels = reels;
+              if (reels.isEmpty) {
+                _progressController.stop();
+                return const _ReelsEmptyState();
+              }
+              if (!_progressController.isAnimating &&
+                  _progressController.value == 0) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _restartProgress();
+                  }
+                });
+              }
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  PageView.builder(
+                    controller: _pageController,
+                    scrollDirection: Axis.vertical,
+                    itemCount: reels.length,
+                    onPageChanged: _onPageChanged,
+                    itemBuilder: (context, index) {
+                      final item = reels[index];
+                      final likes =
+                          _localLikeCounts[item.id] ?? item.likesCount;
+                      return _ReelPage(
+                        item: item,
+                        likesCount: likes,
+                        isLiked: _likedReels.contains(item.id),
+                        isActive: index == _index,
+                        progress: _progressController,
+                        onLike: () => _triggerLike(item),
+                        onSend: () => _openSendFlow(item),
+                      );
+                    },
+                  ),
+                  LikeBurst(visible: _showLike, size: 104),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -191,16 +231,55 @@ class _ReelsScreenState extends State<ReelsScreen>
   }
 }
 
+class _ReelsEmptyState extends StatelessWidget {
+  const _ReelsEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.smart_display_outlined,
+              color: AppColors.muted,
+              size: 48,
+            ),
+            SizedBox(height: 12),
+            Text(
+              'لا توجد ريلز بعد',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'ستظهر الريلز هنا بعد نشرها في Supabase.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted, height: 1.45),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ReelPage extends StatelessWidget {
   const _ReelPage({
     required this.item,
+    required this.likesCount,
+    required this.isLiked,
     required this.isActive,
     required this.progress,
     required this.onLike,
     required this.onSend,
   });
 
-  final _ReelItem item;
+  final ReelItem item;
+  final int likesCount;
+  final bool isLiked;
   final bool isActive;
   final Animation<double> progress;
   final VoidCallback onLike;
@@ -243,28 +322,39 @@ class _ReelPage extends StatelessWidget {
           ),
           Positioned(
             right: 12,
-            bottom: 62,
+            bottom: 78,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _ReelAction(
-                  icon: Icons.thumb_up_alt_outlined,
-                  label: item.likes,
+                  icon: isLiked
+                      ? Icons.thumb_up_alt
+                      : Icons.thumb_up_alt_outlined,
+                  label: _compactCount(likesCount),
+                  color: isLiked ? AppColors.blue : Colors.white,
                   onPressed: onLike,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 _ReelAction(
                   icon: Icons.mode_comment_outlined,
-                  label: item.comments,
+                  label: item.commentsLabel,
                   onPressed: () => _showComments(context),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 _ReelAction(
                   icon: Icons.repeat,
-                  label: item.reposts,
-                  onPressed: () {},
+                  label: item.repostsLabel,
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'إعادة نشر الريلز ستظهر بعد تفعيل جدول المشاركات',
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 _ReelAction(
                   icon: Icons.send_outlined,
                   label: '',
@@ -288,37 +378,15 @@ class _ReelPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  item.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              OutlinedButton(
-                                onPressed: () {},
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  side: const BorderSide(color: Colors.white),
-                                  minimumSize: const Size(72, 34),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                ),
-                                child: const Text('متابعة'),
-                              ),
-                            ],
+                          Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                           Text(
                             item.headline,
@@ -377,16 +445,18 @@ class _ReelAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.color = Colors.white,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 52,
+      width: 46,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onPressed,
@@ -395,7 +465,7 @@ class _ReelAction extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 25),
+              Icon(icon, color: color, size: 22),
               if (label.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
@@ -403,7 +473,7 @@ class _ReelAction extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
               ],
@@ -470,22 +540,12 @@ class _ReelBackdropPainter extends CustomPainter {
   }
 }
 
-class _ReelItem {
-  const _ReelItem({
-    required this.name,
-    required this.headline,
-    required this.caption,
-    required this.likes,
-    required this.comments,
-    required this.reposts,
-    required this.color,
-  });
-
-  final String name;
-  final String headline;
-  final String caption;
-  final String likes;
-  final String comments;
-  final String reposts;
-  final Color color;
+String _compactCount(int value) {
+  if (value >= 1000000) {
+    return '${(value / 1000000).toStringAsFixed(value % 1000000 == 0 ? 0 : 1)}M';
+  }
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(value % 1000 == 0 ? 0 : 1)}K';
+  }
+  return '$value';
 }

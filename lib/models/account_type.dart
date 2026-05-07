@@ -74,5 +74,12 @@ AccountType? accountTypeFromIndustry(String? industry) {
       return type;
     }
   }
-  return null;
+  return switch (value) {
+    'engineer' => AccountType.engineer,
+    'contractor' || 'company' || 'client' => AccountType.company,
+    'craftsman' => AccountType.craftsman,
+    'worker' => AccountType.worker,
+    'machinery' || 'equipment' => AccountType.equipment,
+    _ => null,
+  };
 }

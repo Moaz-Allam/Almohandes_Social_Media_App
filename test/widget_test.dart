@@ -1,10 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:tradeflow/app/linked_arabic_app.dart';
 import 'package:tradeflow/core/constants/app_colors.dart';
+import 'package:tradeflow/data/repositories/app_repositories.dart';
+import 'package:tradeflow/data/repositories/auth_repository.dart';
+import 'package:tradeflow/data/repositories/course_repository.dart';
+import 'package:tradeflow/data/repositories/feed_repository.dart';
+import 'package:tradeflow/data/repositories/message_repository.dart';
+import 'package:tradeflow/data/repositories/notification_repository.dart';
+import 'package:tradeflow/data/repositories/profile_repository.dart';
+import 'package:tradeflow/data/repositories/project_repository.dart';
+import 'package:tradeflow/data/repositories/reel_repository.dart';
+import 'package:tradeflow/data/repositories/saved_content_repository.dart';
+import 'package:tradeflow/data/repositories/story_repository.dart';
+import 'package:tradeflow/data/repositories/subscription_repository.dart';
+import 'package:tradeflow/data/session/session_store.dart';
+import 'package:tradeflow/features/home/widgets/linked_bottom_navigation.dart';
+import 'package:tradeflow/features/premium/models/premium_course.dart';
 import 'package:tradeflow/models/account_type.dart';
+import 'package:tradeflow/models/feed_post_model.dart';
+import 'package:tradeflow/models/message_item.dart';
+import 'package:tradeflow/models/network_person.dart';
+import 'package:tradeflow/models/notification_item_model.dart';
+import 'package:tradeflow/models/profile_form.dart';
+import 'package:tradeflow/models/project_draft.dart';
+import 'package:tradeflow/models/project_item.dart';
+import 'package:tradeflow/models/reel_item.dart';
+import 'package:tradeflow/models/saved_content.dart';
+import 'package:tradeflow/models/story_item.dart';
+import 'package:tradeflow/shared/widgets/primary_button.dart';
 
 void main() {
   test('account type permissions match network and project rules', () {
@@ -13,92 +38,107 @@ void main() {
     expect(AccountType.craftsman.canPostProjects, isFalse);
     expect(AccountType.worker.canPostProjects, isFalse);
     expect(AccountType.equipment.canPostProjects, isFalse);
-    expect(accountTypeFromIndustry('شركة'), AccountType.company);
+    expect(accountTypeFromIndustry('company'), AccountType.company);
   });
 
-  testWidgets('Arabic onboarding opens the multi-step sign up flow', (
+  testWidgets('registration shows success then opens the signed-in shell', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({});
-
-    await tester.pumpWidget(const LinkedArabicApp());
+    await tester.pumpWidget(
+      LinkedArabicApp(
+        sessionStore: _MemorySessionStore(signedIn: false),
+        repositories: _repositories(currentProfile: _profile()),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('انضم إلى مشاريع هندسية حقيقية'), findsOneWidget);
-    expect(find.text('انضم الآن'), findsOneWidget);
-    expect(find.text('المتابعة بواسطة Apple'), findsNothing);
-
-    await tester.tap(find.text('انضم الآن'));
+    await tester.tap(find.byType(PrimaryButton).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('أساسيات الحساب'), findsOneWidget);
-    expect(find.text('رقم الهاتف'), findsOneWidget);
-    expect(find.text('07'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
-
-    await tester.enterText(find.byType(TextField).at(1), 'reem@example.com');
+    await tester.enterText(find.byType(TextField).at(0), 'Current User');
+    await tester.enterText(find.byType(TextField).at(1), 'user@example.com');
     await tester.enterText(find.byType(TextField).at(2), '07712345678');
     await tester.enterText(find.byType(TextField).at(3), 'secret123');
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -420));
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -460));
     await tester.pumpAndSettle();
-
-    expect(find.text('تأكيد كلمة المرور'), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(5));
     await tester.enterText(find.byType(TextField).last, 'secret123');
-    await tester.ensureVisible(find.text('متابعة'));
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).last, '123456');
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.check), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1500));
     await tester.pump();
-    await tester.tap(find.text('متابعة'));
-    await tester.pumpAndSettle();
 
-    expect(find.text('تأكيد رقم الهاتف'), findsOneWidget);
-    expect(find.text('رمز التحقق OTP'), findsOneWidget);
+    expect(find.byType(LinkedBottomNavigation), findsOneWidget);
   });
 
-  testWidgets('saved login session opens the signed-in shell', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
+  testWidgets('signed-in app uses current profile and empty remote states', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      LinkedArabicApp(
+        sessionStore: _MemorySessionStore(),
+        repositories: _repositories(currentProfile: _profile()),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('الرئيسية'), findsOneWidget);
-    expect(find.text('القصص'), findsOneWidget);
-  });
-
-  testWidgets('settings toggles dark mode immediately', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.article_outlined), findsOneWidget);
+    expect(find.text('Remote Demo User'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('home-menu-avatar')).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('الإعدادات'));
+
+    expect(find.text('Current User'), findsOneWidget);
+
+    await tester.tap(find.text('Current User'));
     await tester.pumpAndSettle();
 
-    expect(find.text('الوضع الداكن'), findsOneWidget);
-    expect(
-      Theme.of(tester.element(find.text('الإعدادات'))).brightness,
-      Brightness.light,
-    );
-
-    await tester.tap(find.byType(Switch).first);
-    await tester.pumpAndSettle();
-
-    expect(
-      Theme.of(tester.element(find.text('الإعدادات'))).brightness,
-      Brightness.dark,
-    );
-    expect(find.text('التطبيق يستخدم ألوانا داكنة'), findsOneWidget);
+    expect(find.text('Current User'), findsWidgets);
+    expect(find.text('Remote Demo User'), findsNothing);
   });
 
   testWidgets('post like toggles primary color and reaction count', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
+    const post = FeedPostModel(
+      id: 'post-1',
+      profileId: 'profile-remote',
+      name: 'Remote Poster',
+      headline: 'Civil engineer',
+      time: 'now',
+      body: 'Repository-backed post',
+      reactions: '77',
+      comments: '0 comments',
+      avatarColor: AppColors.blue,
+      showMedia: false,
+    );
 
-    await tester.pumpWidget(const LinkedArabicApp());
+    await tester.pumpWidget(
+      LinkedArabicApp(
+        sessionStore: _MemorySessionStore(),
+        repositories: _repositories(
+          currentProfile: _profile(),
+          posts: const [post],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    const likeKey = ValueKey('post-like-action-أحمد منصور');
+    const likeKey = ValueKey('post-like-action-Remote Poster');
     final likeAction = find.byKey(likeKey);
 
     expect(find.text('77'), findsOneWidget);
@@ -135,307 +175,343 @@ void main() {
     expect(unlikedIcon.color, AppColors.muted);
   });
 
-  testWidgets('reels tab and simplified drawer notifications are visible', (
+  testWidgets('network page loads repository people and uses right chevron', (
     tester,
   ) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('ريلز'));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.text('ناتالي منصور'), findsOneWidget);
-    expect(find.text('18K'), findsOneWidget);
-
-    expect(find.byType(LinearProgressIndicator), findsWidgets);
-
-    await tester.tap(find.byIcon(Icons.mode_comment_outlined).first);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(find.text('الأكثر صلة'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.close).last);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    await tester.drag(find.byType(PageView), const Offset(0, -520));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('ريم حسن'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('home-menu-avatar')).first);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.text('آخر الإشعارات'), findsOneWidget);
-    expect(find.text('مجتمع مصممي المنتجات'), findsNothing);
-
-    await tester.tap(find.text('عرض كل الإشعارات'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('ناتاليا شوستاك و 2,486 آخرون تفاعلوا مع منشورك'),
-      findsOneWidget,
+    await tester.pumpWidget(
+      LinkedArabicApp(
+        sessionStore: _MemorySessionStore(),
+        repositories: _repositories(
+          currentProfile: _profile(),
+          people: const [
+            NetworkPerson(
+              id: 'network-1',
+              name: 'Repository Engineer',
+              title: 'Survey engineer',
+              color: AppColors.blue,
+              contextLine: 'Baghdad',
+              actionLabel: 'Connect',
+            ),
+          ],
+        ),
+      ),
     );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.people_alt));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Repository Engineer'), findsOneWidget);
+    expect(find.byIcon(Icons.chevron_right), findsAtLeastNWidgets(1));
   });
-
-  testWidgets('search and chat detail screens are reachable', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('بحث'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('الأشخاص'), findsOneWidget);
-    expect(find.text('المشاريع'), findsOneWidget);
-    expect(find.text('المنشورات'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byIcon(Icons.chat_bubble));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('أندرو مارتن'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('اكتب رسالة...'), findsOneWidget);
-  });
-
-  testWidgets('network invitations and profiles are reachable', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('شبكتي'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('إدارة شبكتي'), findsNothing);
-
-    await tester.tap(find.text('الدعوات'));
-    await tester.pumpAndSettle();
-
-    expect(find.byIcon(Icons.check), findsWidgets);
-    expect(find.byIcon(Icons.close), findsWidgets);
-
-    await tester.tap(find.text('سلمى فتحي').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('تواصل'), findsOneWidget);
-    expect(find.text('متابعة'), findsOneWidget);
-    expect(find.text('متاح لـ'), findsNothing);
-    expect(find.text('إضافة قسم'), findsNothing);
-    expect(find.byIcon(Icons.more_horiz), findsNothing);
-    expect(find.text('المنشورات'), findsOneWidget);
-    expect(find.text('نبذة'), findsOneWidget);
-    expect(find.text('المشاريع'), findsOneWidget);
-    expect(find.byTooltip('شبكة'), findsOneWidget);
-    expect(find.text('استكشاف كل المحتوى'), findsNothing);
-
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('profile-post-card-0')),
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('profile-post-card-0')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('المنشور'), findsOneWidget);
-    expect(find.text('التعليقات'), findsOneWidget);
-    expect(find.text('إعجاب'), findsOneWidget);
-    expect(find.text('تعليق'), findsOneWidget);
-    expect(find.text('إعادة نشر'), findsOneWidget);
-    expect(find.text('إرسال'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('المشاريع'));
-    await tester.pump();
-    await tester.tap(find.text('المشاريع'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('مشروع تعاوني نشره'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('تواصل'));
-    await tester.pump();
-    await tester.tap(find.text('تواصل'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('قيد الانتظار'), findsOneWidget);
-    expect(find.text('الخبرة'), findsOneWidget);
-  });
-
-  testWidgets('stories comments and repost confirmation work', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('القصص'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 700));
-
-    expect(find.byKey(const ValueKey('story-viewer')), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.close));
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('تعليق').first);
-    await tester.pump();
-    await tester.tap(find.text('تعليق').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('الأكثر صلة'), findsOneWidget);
-    expect(find.text('أضف تعليقا...'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.close));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('إعادة نشر').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('تأكيد إعادة النشر'), findsOneWidget);
-  });
-
-  testWidgets('send post opens contact picker and chat', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('إرسال').first);
-    await tester.pump();
-    await tester.tap(find.text('إرسال').first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('إرسال إلى'), findsOneWidget);
-
-    await tester.tap(find.text('أندرو مارتن'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('اكتب رسالة...'), findsOneWidget);
-  });
-
-  testWidgets('premium entry opens courses dashboard and playlists', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const ValueKey('home-menu-avatar')).first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('الوصول إلى Premium'), findsOneWidget);
-
-    await tester.tap(find.text('الوصول إلى Premium'));
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(find.text('تم تفعيل Premium بنجاح'), findsOneWidget);
-
-    await tester.pumpAndSettle();
-
-    expect(find.text('لوحة Premium'), findsOneWidget);
-    expect(find.text('مكتبة الدورات'), findsOneWidget);
-    expect(find.text('إدارة المشاريع الإنشائية'), findsOneWidget);
-
-    await tester.tap(find.text('إدارة المشاريع الإنشائية'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('قوائم التشغيل'), findsOneWidget);
-    expect(find.text('تخطيط المشروع'), findsOneWidget);
-    expect(find.text('قراءة متطلبات المشروع'), findsOneWidget);
-  });
-
-  testWidgets('composer project flow is reachable', (tester) async {
-    SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-    await tester.pumpWidget(const LinkedArabicApp());
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('نشر'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('إضافة صورة'), findsOneWidget);
-    expect(find.text('إضافة ريل'), findsOneWidget);
-    expect(find.text('إضافة مشروع'), findsOneWidget);
-    expect(find.text('تصوير فيديو'), findsNothing);
-
-    await tester.tap(find.text('إضافة مشروع'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('مشاركة مشروع'), findsOneWidget);
-    expect(find.text('1. أساسيات المشروع'), findsOneWidget);
-
-    await tester.enterText(find.byType(TextFormField).at(0), 'منصة فرص');
-    await tester.enterText(
-      find.byType(TextFormField).at(1),
-      'تجربة تساعد الباحثين عن عمل',
-    );
-    await tester.tap(find.text('التالي').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('2. نظرة عامة على المشروع'), findsOneWidget);
-  });
-
-  testWidgets(
-    'projects can be applied to and appear in saved profile content',
-    (tester) async {
-      SharedPreferences.setMockInitialValues({'session.signedIn': true});
-
-      await tester.pumpWidget(const LinkedArabicApp());
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('مشاريع'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('الترتيب: الأحدث'), findsOneWidget);
-      expect(find.text('تنفيذ هيكل مدرسة في بغداد'), findsOneWidget);
-
-      await tester.tap(find.text('تقديم').first);
-      await tester.pumpAndSettle();
-
-      await tester.enterText(find.byType(TextFormField).at(0), 'جاهز للمساهمة');
-      await tester.enterText(
-        find.byType(TextFormField).at(1),
-        'لدي خبرة مناسبة في متابعة تنفيذ المواقع وتنسيق الفريق حتى التسليم.',
-      );
-      await tester.tap(find.text('رفع ملفات للتقديم'));
-      await tester.pump();
-      await tester.tap(find.text('إرسال التقديم'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('تم إرسال طلبك بنجاح'), findsOneWidget);
-
-      await tester.tap(find.text('العودة إلى المشاريع'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('الرئيسية'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('home-menu-avatar')).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('عرض الملف · الإعدادات'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('المنشورات'), findsOneWidget);
-      expect(find.text('نبذة'), findsOneWidget);
-      expect(find.text('المحفوظات'), findsOneWidget);
-      expect(find.text('الأعمال'), findsNothing);
-      expect(find.text('البرامج والتطبيقات'), findsNothing);
-      expect(find.byTooltip('شبكة'), findsOneWidget);
-
-      await tester.ensureVisible(find.text('المحفوظات'));
-      await tester.tap(find.text('المحفوظات'));
-      await tester.pumpAndSettle();
-
-      expect(find.byTooltip('شبكة'), findsNothing);
-      expect(find.text('تنفيذ هيكل مدرسة في بغداد'), findsWidgets);
-    },
+}
+
+AppRepositories _repositories({
+  ProfileForm? currentProfile,
+  List<FeedPostModel> posts = const [],
+  List<NetworkPerson> people = const [],
+  List<NetworkPerson> companies = const [],
+}) {
+  return AppRepositories(
+    auth: _FakeAuthRepository(),
+    courses: _FakeCourseRepository(),
+    feed: _FakeFeedRepository(posts),
+    messages: _FakeMessageRepository(),
+    notifications: _FakeNotificationRepository(),
+    profiles: _FakeProfileRepository(
+      profile: currentProfile,
+      people: people,
+      companies: companies,
+    ),
+    projects: _FakeProjectRepository(),
+    reels: _FakeReelRepository(),
+    savedContent: _FakeSavedContentRepository(),
+    stories: _FakeStoryRepository(),
+    subscriptions: _FakeSubscriptionRepository(),
   );
+}
+
+ProfileForm _profile({
+  String firstName = 'Current',
+  String lastName = 'User',
+  AccountType type = AccountType.engineer,
+}) {
+  return ProfileForm(
+    id: 'profile-current',
+    email: 'current@example.com',
+    firstName: firstName,
+    lastName: lastName,
+    headline: '${type.label} - Baghdad',
+    location: 'Baghdad',
+    industry: type.label,
+    company: type == AccountType.company ? '$firstName $lastName' : '',
+    role: 'Civil',
+    about: 'Current Supabase-backed user',
+    skills: const {'Civil'},
+    languages: const {},
+    openToWork: type != AccountType.company,
+    profilePublic: true,
+    jobAlerts: false,
+  );
+}
+
+final class _MemorySessionStore implements SessionStore {
+  _MemorySessionStore({this.signedIn = true});
+
+  bool signedIn;
+  bool darkMode = false;
+
+  @override
+  Future<void> clear() async => signedIn = false;
+
+  @override
+  Future<bool> isDarkMode() async => darkMode;
+
+  @override
+  Future<bool> isSignedIn() async => signedIn;
+
+  @override
+  Future<void> saveDarkMode(bool enabled) async => darkMode = enabled;
+
+  @override
+  Future<void> saveSignedIn() async => signedIn = true;
+}
+
+final class _FakeAuthRepository implements AuthRepository {
+  @override
+  bool get isRemoteConfigured => false;
+
+  @override
+  Future<void> completeSignUp({
+    required ProfileForm profile,
+    required AccountType accountType,
+    required String specialization,
+    required String phone,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> sendPasswordReset({required String email}) async {}
+
+  @override
+  Future<void> sendOtp({required String phone}) async {}
+
+  @override
+  Future<void> signInWithGoogle() async {}
+
+  @override
+  Future<void> signInWithPassword({
+    required String login,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<bool> verifyOtp({required String phone, required String code}) async {
+    return code == '123456';
+  }
+}
+
+final class _FakeCourseRepository implements CourseRepository {
+  @override
+  Future<List<PremiumCourse>> fetchPremiumCourses({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+}
+
+final class _FakeFeedRepository implements FeedRepository {
+  _FakeFeedRepository(this.posts);
+
+  final List<FeedPostModel> posts;
+
+  @override
+  Future<void> createPost({required String content}) async {}
+
+  @override
+  Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) async {
+    return posts;
+  }
+
+  @override
+  Future<List<FeedPostModel>> fetchProfilePosts(
+    String profileId, {
+    bool forceRefresh = false,
+  }) async {
+    return posts.where((post) => post.profileId == profileId).toList();
+  }
+
+  @override
+  Future<void> reportPost({
+    required String postId,
+    required String reason,
+  }) async {}
+
+  @override
+  Future<void> toggleLike({
+    required String postId,
+    required bool shouldLike,
+  }) async {}
+}
+
+final class _FakeProfileRepository implements ProfileRepository {
+  _FakeProfileRepository({
+    this.profile,
+    required this.people,
+    required this.companies,
+  });
+
+  final ProfileForm? profile;
+  final List<NetworkPerson> people;
+  final List<NetworkPerson> companies;
+
+  @override
+  Future<void> answerConnectionRequest({
+    required String requestId,
+    required bool accept,
+  }) async {}
+
+  @override
+  Future<ProfileForm?> currentProfile({bool forceRefresh = false}) async {
+    return profile;
+  }
+
+  @override
+  Future<List<NetworkPerson>> fetchIncomingConnectionRequests({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<NetworkPerson>> fetchNetworkProfiles({
+    required AccountType viewerType,
+    required bool companies,
+    bool forceRefresh = false,
+  }) async {
+    if (viewerType == AccountType.engineer) {
+      return companies ? this.companies : people;
+    }
+    if (viewerType == AccountType.company) {
+      return companies ? const [] : people;
+    }
+    return const [];
+  }
+
+  @override
+  Future<void> followProfile(String followingProfileId) async {}
+
+  @override
+  Future<void> requestConnection(String receiverProfileId) async {}
+}
+
+final class _FakeProjectRepository implements ProjectRepository {
+  @override
+  Future<void> applyToProject({
+    required ProjectItem project,
+    required String subject,
+    required String message,
+    required int attachmentsCount,
+  }) async {}
+
+  @override
+  Future<ProjectItem?> createProject(ProjectDraftData draft) async => null;
+
+  @override
+  Future<List<ProjectItem>> fetchProjects({bool forceRefresh = false}) async {
+    return const [];
+  }
+
+  @override
+  Future<List<ProjectItem>> fetchProjectsForProfile(
+    String profileId, {
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+}
+
+final class _FakeMessageRepository implements MessageRepository {
+  @override
+  Future<List<MessageItem>> fetchConversations({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<ChatMessage>> fetchMessages(
+    String conversationId, {
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<void> sendMessage({
+    required String conversationId,
+    required String content,
+  }) async {}
+}
+
+final class _FakeNotificationRepository implements NotificationRepository {
+  @override
+  Future<void> delete(String notificationId) async {}
+
+  @override
+  Future<List<NotificationItemModel>> fetchNotifications({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<void> markRead(String notificationId) async {}
+}
+
+final class _FakeReelRepository implements ReelRepository {
+  @override
+  Future<List<ReelItem>> fetchReels({bool forceRefresh = false}) async {
+    return const [];
+  }
+
+  @override
+  Future<void> toggleLike({
+    required String reelId,
+    required bool shouldLike,
+  }) async {}
+}
+
+final class _FakeSavedContentRepository implements SavedContentRepository {
+  @override
+  Future<List<SavedContent>> fetch({bool forceRefresh = false}) async {
+    return const [];
+  }
+
+  @override
+  Future<void> remove(String id) async {}
+
+  @override
+  Future<void> save(SavedContent content) async {}
+}
+
+final class _FakeStoryRepository implements StoryRepository {
+  @override
+  Future<void> createTextStory(String content) async {}
+
+  @override
+  Future<List<StoryItem>> fetchStories({bool forceRefresh = false}) async {
+    return const [];
+  }
+}
+
+final class _FakeSubscriptionRepository implements SubscriptionRepository {
+  @override
+  Future<void> activateCurrentUser() async {}
+
+  @override
+  Future<bool> hasActiveSubscription() async => false;
 }

@@ -6,9 +6,16 @@ import '../../../models/notification_item_model.dart';
 import '../../../shared/widgets/app_avatar.dart';
 
 class NotificationTile extends StatelessWidget {
-  const NotificationTile({super.key, required this.item});
+  const NotificationTile({
+    super.key,
+    required this.item,
+    required this.onMarkRead,
+    required this.onDelete,
+  });
 
   final NotificationItemModel item;
+  final VoidCallback onMarkRead;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -47,10 +54,22 @@ class NotificationTile extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(item.time, style: TextStyle(color: context.appMuted)),
-                    IconButton(
-                      onPressed: () {},
+                    PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert, color: AppColors.muted),
-                      visualDensity: VisualDensity.compact,
+                      onSelected: (value) {
+                        if (value == 'read') {
+                          onMarkRead();
+                        } else if (value == 'delete') {
+                          onDelete();
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'read',
+                          child: Text('تعليم كمقروء'),
+                        ),
+                        PopupMenuItem(value: 'delete', child: Text('حذف')),
+                      ],
                     ),
                   ],
                 ),
@@ -71,7 +90,7 @@ class NotificationTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 7),
                 Text(
-                  '2,487 تفاعل · 275 تعليق',
+                  item.unread ? 'غير مقروء' : 'مقروء',
                   style: TextStyle(color: context.appMuted),
                 ),
               ],

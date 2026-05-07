@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 final class NetworkPerson {
   const NetworkPerson({
+    required this.id,
+    this.profileId,
     required this.name,
     required this.title,
     required this.color,
@@ -11,6 +13,8 @@ final class NetworkPerson {
     this.isCompany = false,
   });
 
+  final String id;
+  final String? profileId;
   final String name;
   final String title;
   final Color color;

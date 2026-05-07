@@ -25,7 +25,7 @@ final class SignupController extends ChangeNotifier {
   String _specialization = 'مدني';
   String _governorate = 'بغداد';
 
-  final displayName = TextEditingController(text: 'ريم حسن');
+  final displayName = TextEditingController();
   final email = TextEditingController();
   final phone = TextEditingController();
   final password = TextEditingController();

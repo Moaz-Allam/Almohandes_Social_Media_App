@@ -1,56 +1,41 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/network_person.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../state/app_scope.dart';
 import '../profile/profile_screen.dart';
 
-class InvitationsScreen extends StatelessWidget {
+class InvitationsScreen extends StatefulWidget {
   const InvitationsScreen({super.key});
 
-  static const _requests = [
-    NetworkPerson(
-      name: 'سلمى فتحي',
-      title: 'مهندسة مدنية · تنفيذ مواقع',
-      color: AppColors.blue,
-      badge: '9 اتصالات مشتركة · قبل ساعة',
-    ),
-    NetworkPerson(
-      name: 'أنس يونس',
-      title: 'مهندس كهرباء مواقع',
-      color: AppColors.darkBlue,
-      badge: '49 اتصالا مشتركا · أمس',
-    ),
-    NetworkPerson(
-      name: 'ليلى عادل',
-      title: 'مهندسة معمارية',
-      color: AppColors.muted,
-      badge: '12 اتصالا مشتركا · قبل يومين',
-    ),
-    NetworkPerson(
-      name: 'يوسف زين',
-      title: 'فني تكييف وتبريد',
-      color: AppColors.black,
-      badge: '7 اتصالات مشتركة · هذا الأسبوع',
-    ),
-    NetworkPerson(
-      name: 'نور خالد',
-      title: 'مهندسة مساحة',
-      color: AppColors.blue,
-      badge: '3 اتصالات مشتركة · هذا الأسبوع',
-    ),
-    NetworkPerson(
-      name: 'كريم حسن',
-      title: 'مشرف سلامة موقع',
-      color: AppColors.darkBlue,
-      badge: '22 اتصالا مشتركا · منذ أسبوع',
-    ),
-  ];
+  @override
+  State<InvitationsScreen> createState() => _InvitationsScreenState();
+}
+
+class _InvitationsScreenState extends State<InvitationsScreen> {
+  late Future<List<NetworkPerson>> _requestsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestsFuture = Future.value(const <NetworkPerson>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _requestsFuture = AppScope.read(
+      context,
+    ).repositories.profiles.fetchIncomingConnectionRequests();
+  }
 
   void _openProfile(BuildContext context, NetworkPerson person) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProfileScreen(
+          profileId: person.profileId ?? person.id,
           name: person.name,
           headline: person.title,
           color: person.color,
@@ -60,10 +45,21 @@ class InvitationsScreen extends StatelessWidget {
     );
   }
 
-  void _showDecision(BuildContext context, String action, String name) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$action طلب $name')));
+  Future<void> _answer(NetworkPerson request, bool accept) async {
+    await AppScope.read(context).repositories.profiles.answerConnectionRequest(
+      requestId: request.id,
+      accept: accept,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _requestsFuture = AppScope.read(context).repositories.profiles
+          .fetchIncomingConnectionRequests(forceRefresh: true);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(accept ? 'تم قبول الطلب' : 'تم رفض الطلب')),
+    );
   }
 
   @override
@@ -75,9 +71,9 @@ class InvitationsScreen extends StatelessWidget {
             Container(
               height: 58,
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                border: Border(bottom: BorderSide(color: context.appBorder)),
               ),
               child: Row(
                 children: [
@@ -99,79 +95,142 @@ class InvitationsScreen extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: ListView.separated(
-                itemCount: _requests.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final request = _requests[index];
-                  return ListTile(
-                    onTap: () => _openProfile(context, request),
-                    contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    leading: GestureDetector(
-                      onTap: () => _openProfile(context, request),
-                      child: AppAvatar(
-                        name: request.name,
-                        radius: 34,
-                        color: request.color,
-                      ),
-                    ),
-                    title: GestureDetector(
-                      onTap: () => _openProfile(context, request),
-                      child: Text(
-                        request.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    subtitle: GestureDetector(
-                      onTap: () => _openProfile(context, request),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            request.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+              child: FutureBuilder<List<NetworkPerson>>(
+                future: _requestsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final requests = snapshot.data ?? const <NetworkPerson>[];
+                  if (requests.isEmpty) {
+                    return const _EmptyInvitations();
+                  }
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      setState(() {
+                        _requestsFuture = AppScope.read(context)
+                            .repositories
+                            .profiles
+                            .fetchIncomingConnectionRequests(
+                              forceRefresh: true,
+                            );
+                      });
+                      await _requestsFuture;
+                    },
+                    child: ListView.separated(
+                      itemCount: requests.length,
+                      separatorBuilder: (context, index) =>
+                          Divider(height: 1, color: context.appBorder),
+                      itemBuilder: (context, index) {
+                        final request = requests[index];
+                        return ListTile(
+                          onTap: () => _openProfile(context, request),
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            14,
+                            12,
+                            14,
+                            12,
                           ),
-                          Text(
-                            request.badge ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: AppColors.muted),
+                          leading: GestureDetector(
+                            onTap: () => _openProfile(context, request),
+                            child: AppAvatar(
+                              name: request.name,
+                              radius: 34,
+                              color: request.color,
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
-                    trailing: SizedBox(
-                      width: 112,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          IconButton.outlined(
-                            onPressed: () =>
-                                _showDecision(context, 'رفضت', request.name),
-                            icon: const Icon(Icons.close),
-                            color: AppColors.muted,
-                            tooltip: 'رفض الطلب',
+                          title: GestureDetector(
+                            onTap: () => _openProfile(context, request),
+                            child: Text(
+                              request.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          IconButton.outlined(
-                            onPressed: () =>
-                                _showDecision(context, 'قبلت', request.name),
-                            icon: const Icon(Icons.check),
-                            color: AppColors.blue,
-                            tooltip: 'قبول الطلب',
+                          subtitle: GestureDetector(
+                            onTap: () => _openProfile(context, request),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  request.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  request.badge ?? request.contextLine,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
+                          trailing: SizedBox(
+                            width: 112,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton.outlined(
+                                  onPressed: () => _answer(request, false),
+                                  icon: const Icon(Icons.close),
+                                  color: AppColors.muted,
+                                  tooltip: 'رفض الطلب',
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.outlined(
+                                  onPressed: () => _answer(request, true),
+                                  icon: const Icon(Icons.check),
+                                  color: AppColors.blue,
+                                  tooltip: 'قبول الطلب',
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyInvitations extends StatelessWidget {
+  const _EmptyInvitations();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.person_add_alt, color: AppColors.muted, size: 46),
+            SizedBox(height: 12),
+            Text(
+              'لا توجد دعوات بعد',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'ستظهر طلبات التواصل الواردة هنا.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.muted, height: 1.45),
             ),
           ],
         ),
