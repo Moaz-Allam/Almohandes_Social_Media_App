@@ -7,6 +7,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../models/app_tab.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
@@ -97,9 +98,13 @@ class _ComposerScreenState extends State<ComposerScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر نشر المحتوى الآن'),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isPublishing = false);

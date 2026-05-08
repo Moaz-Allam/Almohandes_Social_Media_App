@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/reel_item.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
 import '../../shared/widgets/like_burst.dart';
@@ -289,9 +290,16 @@ class _ReelPage extends StatelessWidget {
                       ).repositories.reels.repost(item.id);
                     } catch (error) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('$error')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              userErrorMessage(
+                                error,
+                                fallback: 'تعذر إعادة نشر الريل الآن',
+                              ),
+                            ),
+                          ),
+                        );
                       }
                       return;
                     }

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/story_item.dart';
+import '../../../shared/errors/user_error_message.dart';
 import '../../../shared/widgets/media_preview.dart';
 import '../../../state/app_scope.dart';
 import '../../stories/story_viewer_screen.dart';
@@ -72,9 +73,13 @@ class _StoriesStripState extends State<StoriesStrip> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر نشر القصة الآن'),
+          ),
+        ),
+      );
       return;
     }
     if (!context.mounted) {

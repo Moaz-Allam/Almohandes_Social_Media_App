@@ -11,6 +11,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/message_item.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
@@ -107,7 +108,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
-      _refreshMessagesAfterSend();
+      _refreshMessagesAfterSend(optimistic.id);
       _scrollToLatest();
     } catch (error) {
       if (!mounted) {
@@ -209,7 +210,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!mounted) {
           return;
         }
-        _refreshMessagesAfterSend();
+        _refreshMessagesAfterSend(optimistic.id);
         _scrollToLatest();
       } catch (error) {
         if (!mounted) {
@@ -305,7 +306,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
-      _refreshMessagesAfterSend();
+      _refreshMessagesAfterSend(optimistic.id);
       _scrollToLatest();
     } catch (error) {
       if (!mounted) {
@@ -345,13 +346,17 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _refreshMessagesAfterSend() {
+  void _refreshMessagesAfterSend(String completedOptimisticId) {
     final messages = AppScope.read(context).repositories.messages;
     final refreshed = messages
         .fetchMessages(widget.contact.conversationId, forceRefresh: true)
         .then((items) {
           if (mounted) {
-            setState(() => _optimisticMessages.clear());
+            setState(() {
+              _optimisticMessages.removeWhere(
+                (message) => message.id == completedOptimisticId,
+              );
+            });
             AppScope.read(context).notifyMessageStateChanged();
           }
           return items;
@@ -435,9 +440,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$error')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          userErrorMessage(error, fallback: 'تعذر تنفيذ العملية الآن'),
+        ),
+      ),
+    );
   }
 
   @override

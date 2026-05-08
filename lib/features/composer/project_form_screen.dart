@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../models/project_draft.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../state/app_scope.dart';
 import 'widgets/composer_top_bar.dart';
 
@@ -73,6 +74,9 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     if (result == null || result.files.isEmpty) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _attachmentNames
         ..clear()
@@ -83,9 +87,6 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
         );
       _attachments = _attachmentNames.length;
     });
-    if (!mounted) {
-      return;
-    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('تمت إضافة المرفقات')));
@@ -108,9 +109,13 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تعذر نشر المشروع الآن: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر نشر المشروع الآن'),
+          ),
+        ),
+      );
       setState(() => _isSubmitting = false);
     }
   }

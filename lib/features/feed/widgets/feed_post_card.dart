@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/saved_content.dart';
+import '../../../shared/errors/user_error_message.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/comments_bottom_sheet.dart';
 import '../../../shared/widgets/like_burst.dart';
@@ -156,7 +157,13 @@ class _FeedPostCardState extends State<FeedPostCard> {
         if (!context.mounted) {
           return;
         }
-        messenger.showSnackBar(SnackBar(content: Text('$error')));
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              userErrorMessage(error, fallback: 'تعذر إعادة النشر الآن'),
+            ),
+          ),
+        );
         return;
       }
       if (!context.mounted) {

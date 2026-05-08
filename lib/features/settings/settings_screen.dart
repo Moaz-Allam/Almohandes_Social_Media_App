@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../models/settings_item.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
 
@@ -125,9 +126,13 @@ class SettingsScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تعذر حذف الحساب: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر حذف الحساب الآن'),
+          ),
+        ),
+      );
     }
   }
 

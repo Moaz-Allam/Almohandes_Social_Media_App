@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -59,7 +60,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
       if (!mounted) {
         return;
       }
-      _showMessage('$error');
+      _showMessage(userErrorMessage(error, fallback: 'تعذر إنشاء الحساب الآن'));
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -122,7 +123,9 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
         _form.nextStep();
       } catch (error) {
         if (mounted) {
-          _showMessage('$error');
+          _showMessage(
+            userErrorMessage(error, fallback: 'تعذر إرسال رمز التحقق الآن'),
+          );
         }
       } finally {
         if (mounted) {
@@ -151,7 +154,9 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
         _form.nextStep();
       } catch (error) {
         if (mounted) {
-          _showMessage('$error');
+          _showMessage(
+            userErrorMessage(error, fallback: 'تعذر التحقق من الرمز الآن'),
+          );
         }
       } finally {
         if (mounted) {
@@ -289,7 +294,12 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                                 }
                               } catch (error) {
                                 if (context.mounted) {
-                                  _showMessage('$error');
+                                  _showMessage(
+                                    userErrorMessage(
+                                      error,
+                                      fallback: 'تعذر إرسال رمز التحقق الآن',
+                                    ),
+                                  );
                                 }
                               }
                             },

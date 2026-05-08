@@ -243,11 +243,9 @@ class _StoryImage extends StatelessWidget {
             mediaUrl: story.mediaUrl,
             mediaType: story.mediaType,
             fallbackLabel: story.isVideo ? 'فيديو' : 'صورة',
+            autoplay: story.isVideo,
+            showVideoControls: story.isVideo,
           ),
-          if (story.isVideo)
-            const Center(
-              child: Icon(Icons.play_circle, color: Colors.white, size: 72),
-            ),
           if (text.isNotEmpty)
             PositionedDirectional(
               start: 24,

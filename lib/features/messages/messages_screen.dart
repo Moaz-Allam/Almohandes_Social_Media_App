@@ -106,7 +106,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   ),
                   IconButton(
                     onPressed: _refresh,
-                    icon: const Icon(Icons.more_vert),
+                    icon: const Icon(Icons.refresh),
                     tooltip: 'تحديث',
                   ),
                   IconButton(

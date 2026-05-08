@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/comment_item.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../state/app_scope.dart';
 import 'app_avatar.dart';
 
@@ -119,9 +120,13 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
         _optimisticComments.removeWhere((item) => item.id == optimistic.id);
       });
       _commentController.text = text;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر إرسال التعليق الآن'),
+          ),
+        ),
+      );
     }
   }
 

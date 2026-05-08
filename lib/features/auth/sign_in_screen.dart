@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/home/main_shell.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -48,9 +49,13 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تعذر تسجيل الدخول: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر تسجيل الدخول الآن'),
+          ),
+        ),
+      );
       return;
     } finally {
       if (mounted) {
@@ -81,9 +86,13 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('تعذر إرسال الرابط: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر إرسال الرابط الآن'),
+          ),
+        ),
+      );
     }
   }
 

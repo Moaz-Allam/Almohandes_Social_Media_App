@@ -196,13 +196,13 @@ final class SupabaseAuthRepository implements AuthRepository {
         }
       }
       if (remote.auth.currentSession == null) {
-        await sessionStore.saveSignedIn();
-        return;
+        throw const RepositoryFailure(
+          'تم إنشاء الحساب. سجل الدخول بعد تأكيد البريد الإلكتروني.',
+        );
       }
       final userId = authResponse.user?.id ?? remote.auth.currentUser?.id;
       if (userId == null) {
-        await sessionStore.saveSignedIn();
-        return;
+        throw const RepositoryFailure('تعذر تأكيد جلسة الحساب الجديدة');
       }
 
       final profileId = await _upsertProfile(
@@ -225,6 +225,9 @@ final class SupabaseAuthRepository implements AuthRepository {
       }
       await sessionStore.saveSignedIn();
     } catch (error) {
+      if (error is RepositoryFailure) {
+        rethrow;
+      }
       throw RepositoryFailure('تعذر إنشاء الحساب الآن', error);
     }
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6,6 +7,8 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../painters/post_media_painter.dart';
+import 'video_controller_source_stub.dart'
+    if (dart.library.io) 'video_controller_source_io.dart';
 
 class MediaPreview extends StatelessWidget {
   const MediaPreview({
@@ -95,8 +98,10 @@ class _VideoFramePreview extends StatefulWidget {
 }
 
 class _VideoFramePreviewState extends State<_VideoFramePreview> {
+  PreparedVideoController? _preparedController;
   VideoPlayerController? _controller;
   bool _failed = false;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -108,11 +113,14 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
   void didUpdateWidget(covariant _VideoFramePreview oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.mediaUrl != widget.mediaUrl) {
-      _controller?.dispose();
+      _disposePreparedController();
       _controller = null;
       _failed = false;
       _initialize();
       return;
+    }
+    if (oldWidget.showControls != widget.showControls) {
+      unawaited(_controller?.setVolume(widget.showControls ? 1 : 0));
     }
     if (oldWidget.autoplay != widget.autoplay) {
       _syncPlayback();
@@ -120,20 +128,34 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
   }
 
   Future<void> _initialize() async {
+    final generation = ++_loadGeneration;
+    PreparedVideoController? prepared;
     try {
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(widget.mediaUrl),
-      );
-      _controller = controller;
+      prepared = await prepareVideoController(widget.mediaUrl);
+      if (!mounted || generation != _loadGeneration) {
+        unawaited(prepared.dispose());
+        return;
+      }
+      final controller = prepared.controller;
       await controller.initialize();
       await controller.setLooping(true);
       await controller.setVolume(widget.showControls ? 1 : 0);
+      if (!mounted || generation != _loadGeneration) {
+        unawaited(prepared.dispose());
+        return;
+      }
+      _preparedController = prepared;
+      _controller = controller;
+      prepared = null;
       await _syncPlayback();
       if (mounted) {
         setState(() {});
       }
     } catch (_) {
-      if (mounted) {
+      if (prepared != null) {
+        unawaited(prepared.dispose());
+      }
+      if (mounted && generation == _loadGeneration) {
         setState(() => _failed = true);
       }
     }
@@ -171,8 +193,18 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _loadGeneration++;
+    _disposePreparedController();
     super.dispose();
+  }
+
+  void _disposePreparedController() {
+    final prepared = _preparedController;
+    _preparedController = null;
+    _controller = null;
+    if (prepared != null) {
+      unawaited(prepared.dispose());
+    }
   }
 
   @override
