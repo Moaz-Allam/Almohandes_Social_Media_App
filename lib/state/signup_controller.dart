@@ -11,12 +11,14 @@ final class SignupController extends ChangeNotifier {
       password,
       confirmPassword,
       otp,
+      about,
+      customSkill,
     ]) {
       controller.addListener(notifyListeners);
     }
   }
 
-  static const totalSteps = 5;
+  static const totalSteps = 6;
 
   final pageController = PageController();
 
@@ -24,6 +26,7 @@ final class SignupController extends ChangeNotifier {
   AccountType _userType = AccountType.engineer;
   String _specialization = 'مدني';
   String _governorate = 'بغداد';
+  final Set<String> _skills = {'مدني'};
 
   final displayName = TextEditingController();
   final email = TextEditingController();
@@ -31,6 +34,8 @@ final class SignupController extends ChangeNotifier {
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
   final otp = TextEditingController();
+  final about = TextEditingController();
+  final customSkill = TextEditingController();
 
   int get step => _step;
 
@@ -44,6 +49,28 @@ final class SignupController extends ChangeNotifier {
 
   String get governorate => _governorate;
 
+  Set<String> get skills => Set.unmodifiable(_skills);
+
+  String get effectiveAbout {
+    final value = about.text.trim();
+    return value.isEmpty ? _userType.description : value;
+  }
+
+  Set<String> get effectiveSkills {
+    if (_skills.isEmpty) {
+      return {_specialization};
+    }
+    return Set.unmodifiable(_skills);
+  }
+
+  List<String> get suggestedSkills {
+    return {
+      _specialization,
+      ...specializationOptions,
+      ..._skills,
+    }.toList(growable: false);
+  }
+
   List<String> get specializationOptions {
     return switch (_userType) {
       AccountType.engineer => engineerSpecializations,
@@ -51,6 +78,7 @@ final class SignupController extends ChangeNotifier {
       AccountType.craftsman => craftsmanSpecializations,
       AccountType.worker => workerSpecializations,
       AccountType.equipment => equipmentTypes,
+      AccountType.admin => engineerSpecializations,
     };
   }
 
@@ -73,17 +101,52 @@ final class SignupController extends ChangeNotifier {
     }
     _userType = value;
     _specialization = specializationOptions.first;
+    _skills
+      ..clear()
+      ..add(_specialization);
     notifyListeners();
   }
 
   void setSpecialization(String value) {
+    final previous = _specialization;
     _specialization = value;
+    if (_skills.isEmpty || _skills.remove(previous)) {
+      _skills.add(value);
+    } else {
+      _skills.add(value);
+    }
     notifyListeners();
   }
 
   void setGovernorate(String value) {
     _governorate = value;
     notifyListeners();
+  }
+
+  void toggleSkill(String value) {
+    if (_skills.contains(value)) {
+      if (_skills.length > 1) {
+        _skills.remove(value);
+      }
+    } else {
+      _skills.add(value);
+    }
+    notifyListeners();
+  }
+
+  void addCustomSkill() {
+    final values = customSkill.text
+        .split(RegExp(r'[,،]'))
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty);
+    var changed = false;
+    for (final value in values) {
+      changed = _skills.add(value) || changed;
+    }
+    customSkill.clear();
+    if (changed) {
+      notifyListeners();
+    }
   }
 
   void nextStep() {
@@ -116,8 +179,8 @@ final class SignupController extends ChangeNotifier {
       industry: _userType.label,
       company: _userType == AccountType.company ? displayName.text : '',
       role: _specialization,
-      about: _userType.description,
-      skills: {_specialization},
+      about: effectiveAbout,
+      skills: effectiveSkills,
       languages: const {},
       openToWork: _userType != AccountType.company,
       profilePublic: true,
@@ -143,6 +206,8 @@ final class SignupController extends ChangeNotifier {
     password.dispose();
     confirmPassword.dispose();
     otp.dispose();
+    about.dispose();
+    customSkill.dispose();
     super.dispose();
   }
 }

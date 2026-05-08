@@ -1,16 +1,20 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/project_item.dart';
-import '../../models/saved_content.dart';
-import '../../shared/painters/card_pattern_painter.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../shared/widgets/media_preview.dart';
 import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
-import '../settings/settings_screen.dart';
+import '../messages/messages_screen.dart';
+import '../projects/project_requests_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
@@ -22,6 +26,8 @@ class ProfileScreen extends StatelessWidget {
     this.location = 'العراق',
     this.isMe = false,
     this.isConnectionRequest = false,
+    this.avatarUrl,
+    this.initialConnectionStatus = 'none',
   });
 
   const ProfileScreen.me({super.key})
@@ -31,7 +37,9 @@ class ProfileScreen extends StatelessWidget {
       profileId = null,
       location = 'العراق',
       isMe = true,
-      isConnectionRequest = false;
+      isConnectionRequest = false,
+      avatarUrl = null,
+      initialConnectionStatus = 'none';
 
   final String name;
   final String headline;
@@ -40,6 +48,8 @@ class ProfileScreen extends StatelessWidget {
   final String location;
   final bool isMe;
   final bool isConnectionRequest;
+  final String? avatarUrl;
+  final String initialConnectionStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +68,16 @@ class ProfileScreen extends StatelessWidget {
               ? currentProfile!.location
               : 'العراق')
         : location;
+    final effectiveAbout = isMe
+        ? (currentProfile?.about.isNotEmpty == true
+              ? currentProfile!.about
+              : effectiveHeadline)
+        : headline;
+    final effectiveSkills = isMe
+        ? (currentProfile?.skills.toList(growable: false) ?? const <String>[])
+        : const <String>[];
+    final effectiveAvatarUrl = isMe ? currentProfile?.avatarUrl : avatarUrl;
+    final effectiveCoverUrl = isMe ? currentProfile?.coverUrl : null;
     final effectiveProfileId = isMe ? currentProfile?.id : profileId;
     final effectiveColor = isMe ? AppColors.darkBlue : color;
 
@@ -91,17 +111,22 @@ class ProfileScreen extends StatelessWidget {
                     headline: effectiveHeadline,
                     color: effectiveColor,
                     location: effectiveLocation,
+                    about: effectiveAbout,
+                    avatarUrl: effectiveAvatarUrl,
+                    coverUrl: effectiveCoverUrl,
                     isMe: isMe,
                     followersCount: currentProfile?.followersCount ?? 0,
                     connectionsCount: currentProfile?.followingCount ?? 0,
+                    initialConnectionStatus: initialConnectionStatus,
                   ),
                   Divider(height: 10, thickness: 10, color: context.appSoft),
                   _ProfileWorkspace(
                     profileId: effectiveProfileId,
                     isMe: isMe,
                     headline: effectiveHeadline,
+                    about: effectiveAbout,
                     location: effectiveLocation,
-                    savedItems: isMe ? app.savedItems : const <SavedContent>[],
+                    skills: effectiveSkills,
                   ),
                   const SizedBox(height: 28),
                 ],
@@ -115,7 +140,7 @@ class ProfileScreen extends StatelessWidget {
 
   String _currentHeadline(dynamic profile) {
     if (profile == null) {
-      return 'ملفك على منصة المهندس';
+      return 'ملفك الشخصي';
     }
     if (profile.headline.isNotEmpty) {
       return profile.headline;
@@ -123,7 +148,7 @@ class ProfileScreen extends StatelessWidget {
     if (profile.role.isNotEmpty) {
       return profile.role;
     }
-    return 'ملفك على منصة المهندس';
+    return 'ملفك الشخصي';
   }
 }
 
@@ -134,9 +159,13 @@ class _ProfileHero extends StatefulWidget {
     required this.headline,
     required this.color,
     required this.location,
+    required this.about,
+    required this.avatarUrl,
+    required this.coverUrl,
     required this.isMe,
     required this.followersCount,
     required this.connectionsCount,
+    required this.initialConnectionStatus,
   });
 
   final String? profileId;
@@ -144,19 +173,43 @@ class _ProfileHero extends StatefulWidget {
   final String headline;
   final Color color;
   final String location;
+  final String about;
+  final String? avatarUrl;
+  final String? coverUrl;
   final bool isMe;
   final int followersCount;
   final int connectionsCount;
+  final String initialConnectionStatus;
 
   @override
   State<_ProfileHero> createState() => _ProfileHeroState();
 }
 
 class _ProfileHeroState extends State<_ProfileHero> {
-  bool _connectionPending = false;
+  late String _connectionStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectionStatus = widget.initialConnectionStatus;
+    _loadConnectionStatus();
+  }
+
+  Future<void> _loadConnectionStatus() async {
+    final id = widget.profileId;
+    if (widget.isMe || id == null || id.isEmpty) {
+      return;
+    }
+    final status = await AppScope.read(
+      context,
+    ).repositories.profiles.connectionStatus(id);
+    if (mounted && status != 'none') {
+      setState(() => _connectionStatus = status);
+    }
+  }
 
   Future<void> _requestConnection() async {
-    setState(() => _connectionPending = true);
+    setState(() => _connectionStatus = 'pending');
     final id = widget.profileId;
     if (id != null && id.isNotEmpty) {
       await AppScope.read(context).repositories.profiles.requestConnection(id);
@@ -169,10 +222,88 @@ class _ProfileHeroState extends State<_ProfileHero> {
     );
   }
 
-  void _openEditProfile() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  Future<void> _openEditAbout() async {
+    final controller = TextEditingController(text: widget.about);
+    final about = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          4,
+          18,
+          18 + MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'تعديل النبذة',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              minLines: 5,
+              maxLines: 8,
+              textDirection: TextDirection.rtl,
+              decoration: const InputDecoration(
+                labelText: 'نبذة تعريفية',
+                hintText: 'اكتب نبذة قصيرة تظهر في ملفك الشخصي',
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.blue),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (about == null || !mounted) {
+      return;
+    }
+    await AppScope.read(context).updateMyAbout(about);
+  }
+
+  void _openAvatar() {
+    _openMediaViewer(
+      media: _ProfileMedia.avatar,
+      imageUrl: widget.avatarUrl,
+      title: 'صورة الملف الشخصي',
+    );
+  }
+
+  void _openCover() {
+    _openMediaViewer(
+      media: _ProfileMedia.cover,
+      imageUrl: widget.coverUrl,
+      title: 'صورة الغلاف',
+    );
+  }
+
+  void _openMediaViewer({
+    required _ProfileMedia media,
+    required String? imageUrl,
+    required String title,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ProfileMediaViewer(
+          media: media,
+          title: title,
+          name: widget.name,
+          color: widget.color,
+          imageUrl: imageUrl,
+          canEdit: widget.isMe,
+        ),
+      ),
+    );
   }
 
   Future<void> _followProfile() async {
@@ -188,6 +319,12 @@ class _ProfileHeroState extends State<_ProfileHero> {
     ).showSnackBar(const SnackBar(content: Text('تمت المتابعة')));
   }
 
+  void _openMessages() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const MessagesScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMe = widget.isMe;
@@ -197,28 +334,67 @@ class _ProfileHeroState extends State<_ProfileHero> {
         Stack(
           clipBehavior: Clip.none,
           children: [
-            SizedBox(
-              height: 92,
-              child: CustomPaint(
-                painter: CardPatternPainter(color: widget.color),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: widget.color.withValues(alpha: .32),
-                  ),
-                  child: const SizedBox.expand(),
-                ),
+            GestureDetector(
+              onTap: isMe || (widget.coverUrl?.isNotEmpty ?? false)
+                  ? _openCover
+                  : null,
+              child: SizedBox(
+                width: double.infinity,
+                height: 92,
+                child: widget.coverUrl?.isNotEmpty == true
+                    ? _ProfileImageView(
+                        imageUrl: widget.coverUrl!,
+                        fit: BoxFit.cover,
+                        fallback: _PatternCover(color: widget.color),
+                      )
+                    : _PatternCover(color: widget.color),
               ),
             ),
+            if (isMe)
+              PositionedDirectional(
+                top: 12,
+                start: 18,
+                child: _MediaEditHint(
+                  icon: Icons.image_outlined,
+                  label: 'الغلاف',
+                  onTap: _openCover,
+                ),
+              ),
             PositionedDirectional(
               top: 42,
               start: 18,
-              child: AppAvatar(
-                name: widget.name,
-                radius: 58,
-                color: widget.color,
-                badge: isMe ? 'أنا' : null,
+              child: GestureDetector(
+                onTap: isMe || (widget.avatarUrl?.isNotEmpty ?? false)
+                    ? _openAvatar
+                    : null,
+                child: AppAvatar(
+                  name: widget.name,
+                  radius: 58,
+                  color: widget.color,
+                  badge: isMe ? 'أنا' : null,
+                  imageUrl: widget.avatarUrl,
+                ),
               ),
             ),
+            if (isMe)
+              PositionedDirectional(
+                top: 112,
+                start: 92,
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: context.appSurface,
+                  child: IconButton(
+                    onPressed: _openAvatar,
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.camera_alt_outlined,
+                      color: AppColors.blue,
+                      size: 16,
+                    ),
+                    tooltip: 'تغيير الصورة',
+                  ),
+                ),
+              ),
             if (isMe)
               PositionedDirectional(
                 top: 18,
@@ -226,13 +402,13 @@ class _ProfileHeroState extends State<_ProfileHero> {
                 child: CircleAvatar(
                   backgroundColor: context.appSurface,
                   child: IconButton(
-                    onPressed: _openEditProfile,
+                    onPressed: _openEditAbout,
                     icon: const Icon(
                       Icons.edit,
                       color: AppColors.blue,
                       size: 18,
                     ),
-                    tooltip: 'تعديل',
+                    tooltip: 'تعديل النبذة',
                   ),
                 ),
               ),
@@ -263,13 +439,16 @@ class _ProfileHeroState extends State<_ProfileHero> {
               const SizedBox(height: 6),
               Text(widget.location, style: TextStyle(color: context.appMuted)),
               const SizedBox(height: 8),
-              Text(
-                isMe
-                    ? '${widget.followersCount} متابع · ${widget.connectionsCount} اتصال'
-                    : 'ملف عام',
-                style: const TextStyle(
-                  color: AppColors.blue,
-                  fontWeight: FontWeight.w900,
+              GestureDetector(
+                onTap: isMe ? _openMessages : null,
+                child: Text(
+                  isMe
+                      ? '${widget.followersCount} متابع · ${widget.connectionsCount} اتصال'
+                      : 'ملف عام',
+                  style: const TextStyle(
+                    color: AppColors.blue,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               if (!isMe) ...[
@@ -278,11 +457,11 @@ class _ProfileHeroState extends State<_ProfileHero> {
                   children: [
                     Expanded(
                       child: FilledButton(
-                        onPressed: _connectionPending
-                            ? null
-                            : _requestConnection,
+                        onPressed: _connectionStatus == 'none'
+                            ? _requestConnection
+                            : null,
                         style: FilledButton.styleFrom(
-                          backgroundColor: !_connectionPending
+                          backgroundColor: _connectionStatus == 'none'
                               ? AppColors.blue
                               : context.appSoft,
                           disabledBackgroundColor: context.appSoft,
@@ -292,9 +471,11 @@ class _ProfileHeroState extends State<_ProfileHero> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        child: Text(
-                          _connectionPending ? 'قيد الانتظار' : 'تواصل',
-                        ),
+                        child: Text(switch (_connectionStatus) {
+                          'accepted' => 'متصل',
+                          'pending' => 'قيد الانتظار',
+                          _ => 'تواصل',
+                        }),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -332,15 +513,17 @@ class _ProfileWorkspace extends StatefulWidget {
     required this.profileId,
     required this.isMe,
     required this.headline,
+    required this.about,
     required this.location,
-    required this.savedItems,
+    required this.skills,
   });
 
   final String? profileId;
   final bool isMe;
   final String headline;
+  final String about;
   final String location;
-  final List<SavedContent> savedItems;
+  final List<String> skills;
 
   @override
   State<_ProfileWorkspace> createState() => _ProfileWorkspaceState();
@@ -379,8 +562,9 @@ class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
               viewMode: _viewMode,
               isMe: widget.isMe,
               headline: widget.headline,
+              about: widget.about,
               location: widget.location,
-              savedItems: widget.savedItems,
+              skills: widget.skills,
             ),
           ),
         ],
@@ -432,7 +616,7 @@ class _ProfileSegmentedTabs extends StatelessWidget {
     return switch (tab) {
       _ProfileTab.posts => 'المنشورات',
       _ProfileTab.about => 'نبذة',
-      _ProfileTab.savedOrProjects => isMe ? 'المحفوظات' : 'المشاريع',
+      _ProfileTab.savedOrProjects => isMe ? 'مشاريعي' : 'المشاريع',
     };
   }
 
@@ -441,7 +625,7 @@ class _ProfileSegmentedTabs extends StatelessWidget {
       _ProfileTab.posts => Icons.videocam_outlined,
       _ProfileTab.about => Icons.description_outlined,
       _ProfileTab.savedOrProjects =>
-        isMe ? Icons.bookmark_outline : Icons.folder_special_outlined,
+        isMe ? Icons.folder_special_outlined : Icons.folder_special_outlined,
     };
   }
 }
@@ -464,34 +648,37 @@ class _ProfileSegmentTab extends StatelessWidget {
     final foreground = selected ? AppColors.white : context.appMuted;
     final background = selected ? AppColors.blue : Colors.transparent;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 170),
-        padding: const EdgeInsets.symmetric(horizontal: 11),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: foreground, size: 16),
-            const SizedBox(width: 5),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
+    return SizedBox.expand(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 170),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: foreground, size: 16),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -587,8 +774,9 @@ class _ProfileTabBody extends StatelessWidget {
     required this.viewMode,
     required this.isMe,
     required this.headline,
+    required this.about,
     required this.location,
-    required this.savedItems,
+    required this.skills,
   });
 
   final String? profileId;
@@ -596,8 +784,9 @@ class _ProfileTabBody extends StatelessWidget {
   final _ProfileViewMode viewMode;
   final bool isMe;
   final String headline;
+  final String about;
   final String location;
-  final List<SavedContent> savedItems;
+  final List<String> skills;
 
   @override
   Widget build(BuildContext context) {
@@ -605,12 +794,14 @@ class _ProfileTabBody extends StatelessWidget {
       _ProfileTab.posts => _ProfilePosts(profileId: profileId, mode: viewMode),
       _ProfileTab.about => _ProfileAboutPanel(
         headline: headline,
+        about: about,
         location: location,
+        skills: skills,
       ),
-      _ProfileTab.savedOrProjects =>
-        isMe
-            ? _SavedGrid(savedItems: savedItems)
-            : _ProfileProjects(profileId: profileId),
+      _ProfileTab.savedOrProjects => _ProfileProjects(
+        profileId: profileId,
+        showRequests: isMe,
+      ),
     };
   }
 }
@@ -664,36 +855,39 @@ class _ProfilePostsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final visiblePosts = mode == _ProfileViewMode.media
+        ? posts.where((post) => post.showMedia).toList(growable: false)
+        : posts;
+    if (visiblePosts.isEmpty) {
+      return const _EmptyProfileGrid(
+        icon: Icons.image_outlined,
+        message: 'لا توجد وسائط بعد',
+      );
+    }
     if (mode == _ProfileViewMode.list) {
       return Column(
         children: [
-          for (var index = 0; index < posts.length; index++) ...[
-            ListTile(
-              onTap: () => _openPost(context, posts[index]),
-              contentPadding: EdgeInsets.zero,
-              leading: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: context.appSurfaceAlt,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(
-                  Icons.article_outlined,
-                  color: AppColors.blue,
-                ),
-              ),
-              title: Text(
-                posts[index].body,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-              subtitle: Text(
-                '${posts[index].reactions} تفاعل · ${posts[index].comments}',
-              ),
+          for (var index = 0; index < visiblePosts.length; index++) ...[
+            Builder(
+              builder: (context) {
+                final post = visiblePosts[index];
+                return ListTile(
+                  onTap: () => _openPost(context, post),
+                  contentPadding: EdgeInsets.zero,
+                  leading: _ProfilePostThumb(post: post, size: 48),
+                  title: Text(
+                    post.body.trim().isEmpty ? _postKindLabel(post) : post.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  subtitle: Text(
+                    '${_postKindLabel(post)} · ${post.reactions} تفاعل · ${post.comments}',
+                  ),
+                );
+              },
             ),
-            if (index != posts.length - 1)
+            if (index != visiblePosts.length - 1)
               Divider(height: 18, color: context.appBorder),
           ],
         ],
@@ -711,59 +905,98 @@ class _ProfilePostsGrid extends StatelessWidget {
           mainAxisSpacing: 8,
           childAspectRatio: 1,
         ),
-        itemCount: posts.length,
+        itemCount: visiblePosts.length,
         itemBuilder: (context, index) {
-          final post = posts[index];
+          final post = visiblePosts[index];
           return InkWell(
             key: ValueKey('profile-post-card-${post.id}'),
             borderRadius: BorderRadius.circular(8),
             onTap: () => _openPost(context, post),
-            child: Ink(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: context.appSurfaceAlt,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: context.appBorder),
+            child: _ProfilePostThumb(post: post),
+          );
+        },
+      ),
+    );
+  }
+
+  String _postKindLabel(FeedPostModel post) {
+    if (post.isReel) {
+      return 'ريل';
+    }
+    if (post.isImagePost || post.showMedia) {
+      return 'صورة';
+    }
+    return 'منشور';
+  }
+}
+
+class _ProfilePostThumb extends StatelessWidget {
+  const _ProfilePostThumb({required this.post, this.size});
+
+  final FeedPostModel post;
+  final double? size;
+
+  @override
+  Widget build(BuildContext context) {
+    final child = post.showMedia
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              MediaPreview(
+                mediaUrl: post.mediaUrl,
+                mediaType: post.mediaType,
+                fallbackLabel: post.isReel ? 'ريل' : 'صورة',
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    alignment: AlignmentDirectional.topStart,
-                    child: Icon(
-                      mode == _ProfileViewMode.media
-                          ? Icons.image_outlined
-                          : Icons.article_outlined,
-                      color: AppColors.blue,
-                      size: 24,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    mode == _ProfileViewMode.media ? post.body : post.name,
-                    maxLines: mode == _ProfileViewMode.media ? 4 : 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: context.appText,
-                      fontSize: mode == _ProfileViewMode.media ? 11 : 12,
-                      height: 1.25,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
+              if (post.isReel)
+                const Center(
+                  child: Icon(Icons.play_circle, color: Colors.white, size: 34),
+                ),
+            ],
+          )
+        : Container(
+            color: AppColors.blue,
+            alignment: Alignment.center,
+            child: const Text(
+              'منشور',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
               ),
             ),
           );
-        },
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.appSurfaceAlt,
+            border: Border.all(color: context.appBorder),
+          ),
+          child: child,
+        ),
       ),
     );
   }
 }
 
 class _ProfileProjects extends StatelessWidget {
-  const _ProfileProjects({required this.profileId});
+  const _ProfileProjects({required this.profileId, required this.showRequests});
 
   final String? profileId;
+  final bool showRequests;
+
+  void _openProject(BuildContext context, ProjectItem project) {
+    if (!showRequests) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectRequestsScreen(project: project),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -800,11 +1033,17 @@ class _ProfileProjects extends StatelessWidget {
             childAspectRatio: .9,
           ),
           itemCount: projects.length,
-          itemBuilder: (context, index) => _ProfileContentCard(
-            icon: Icons.folder_special_outlined,
-            title: projects[index].title,
-            subtitle: projects[index].tagline,
-          ),
+          itemBuilder: (context, index) {
+            final project = projects[index];
+            return _ProfileContentCard(
+              icon: Icons.folder_special_outlined,
+              title: project.title,
+              subtitle: showRequests
+                  ? 'اضغط لعرض طلبات المشروع'
+                  : project.tagline,
+              onTap: showRequests ? () => _openProject(context, project) : null,
+            );
+          },
         );
       },
     );
@@ -850,19 +1089,32 @@ class _EmptyProfileGrid extends StatelessWidget {
 }
 
 class _ProfileAboutPanel extends StatelessWidget {
-  const _ProfileAboutPanel({required this.headline, required this.location});
+  const _ProfileAboutPanel({
+    required this.headline,
+    required this.about,
+    required this.location,
+    required this.skills,
+  });
 
   final String headline;
+  final String about;
   final String location;
+  final List<String> skills;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         _ProfileInfoCard(
-          icon: Icons.person_outline,
-          title: 'نبذة مختصرة',
-          subtitle: headline.isEmpty ? 'لا توجد نبذة بعد' : headline,
+          icon: Icons.description_outlined,
+          title: 'نبذة تعريفية',
+          subtitle: about.isEmpty ? 'لا توجد نبذة بعد' : about,
+        ),
+        const SizedBox(height: 10),
+        _ProfileInfoCard(
+          icon: Icons.badge_outlined,
+          title: 'المسمى',
+          subtitle: headline.isEmpty ? 'غير محدد' : headline,
         ),
         const SizedBox(height: 10),
         _ProfileInfoCard(
@@ -870,44 +1122,66 @@ class _ProfileAboutPanel extends StatelessWidget {
           title: 'الموقع',
           subtitle: location,
         ),
+        if (skills.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          _ProfileSkillsCard(skills: skills),
+        ],
       ],
     );
   }
 }
 
-class _SavedGrid extends StatelessWidget {
-  const _SavedGrid({required this.savedItems});
+class _ProfileSkillsCard extends StatelessWidget {
+  const _ProfileSkillsCard({required this.skills});
 
-  final List<SavedContent> savedItems;
+  final List<String> skills;
 
   @override
   Widget build(BuildContext context) {
-    final items = savedItems.map(_savedContentItem).toList();
-    if (items.isEmpty) {
-      return const _EmptyProfileGrid(
-        icon: Icons.bookmark_outline,
-        message: 'لا توجد محفوظات بعد',
-      );
-    }
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: .9,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: context.appBorder),
       ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return _ProfileContentCard(
-          icon: item.icon,
-          title: item.title,
-          subtitle: item.subtitle,
-        );
-      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline, color: AppColors.blue),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'المهارات',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final skill in skills)
+                Chip(
+                  label: Text(skill),
+                  backgroundColor: context.appSurfaceAlt,
+                  side: BorderSide(color: context.appBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  labelStyle: TextStyle(
+                    color: context.appText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -963,82 +1237,304 @@ class _ProfileContentCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.appSurface,
+    return Material(
+      color: context.appSurface,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.appBorder),
+        side: BorderSide(color: context.appBorder),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: context.appSurfaceAlt,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: AppColors.blue),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: context.appSurfaceAlt,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: AppColors.blue),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: context.appMuted, fontSize: 12),
+              ),
+            ],
           ),
-          const Spacer(),
-          Text(
-            title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w900, height: 1.25),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: context.appMuted, fontSize: 12),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-_ContentCardData _savedContentItem(SavedContent item) {
-  final icon = switch (item.type) {
-    SavedContentType.post => Icons.article_outlined,
-    SavedContentType.reel => Icons.smart_display_outlined,
-    SavedContentType.project => Icons.folder_special_outlined,
-    SavedContentType.company => Icons.business_outlined,
-  };
-  final typeLabel = switch (item.type) {
-    SavedContentType.post => 'منشور محفوظ',
-    SavedContentType.reel => 'ريل محفوظ',
-    SavedContentType.project => 'مشروع محفوظ',
-    SavedContentType.company => 'شركة محفوظة',
-  };
+class _PatternCover extends StatelessWidget {
+  const _PatternCover({required Color color});
 
-  return _ContentCardData(
-    icon: icon,
-    title: item.title,
-    subtitle: '$typeLabel · ${item.subtitle}',
-  );
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(color: context.appSurfaceAlt),
+      child: const SizedBox.expand(),
+    );
+  }
 }
 
-final class _ContentCardData {
-  const _ContentCardData({
+class _ProfileImageView extends StatelessWidget {
+  const _ProfileImageView({
+    required this.imageUrl,
+    required this.fit,
+    required this.fallback,
+  });
+
+  final String imageUrl;
+  final BoxFit fit;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytesFromDataUrl(imageUrl);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        fit: fit,
+        errorBuilder: (context, error, stackTrace) => fallback,
+      );
+    }
+    return Image.network(
+      imageUrl,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => fallback,
+    );
+  }
+
+  Uint8List? _bytesFromDataUrl(String value) {
+    if (!value.startsWith('data:')) {
+      return null;
+    }
+    final comma = value.indexOf(',');
+    if (comma == -1) {
+      return null;
+    }
+    try {
+      return base64Decode(value.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _MediaEditHint extends StatelessWidget {
+  const _MediaEditHint({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.label,
+    required this.onTap,
   });
 
   final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: .55),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _ProfileMedia { avatar, cover }
+
+class _ProfileMediaViewer extends StatefulWidget {
+  const _ProfileMediaViewer({
+    required this.media,
+    required this.title,
+    required this.name,
+    required this.color,
+    required this.imageUrl,
+    required this.canEdit,
+  });
+
+  final _ProfileMedia media;
   final String title;
-  final String subtitle;
+  final String name;
+  final Color color;
+  final String? imageUrl;
+  final bool canEdit;
+
+  @override
+  State<_ProfileMediaViewer> createState() => _ProfileMediaViewerState();
+}
+
+class _ProfileMediaViewerState extends State<_ProfileMediaViewer> {
+  String? _imageUrl;
+  bool _isPicking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageUrl = widget.imageUrl;
+  }
+
+  Future<void> _pickImage() async {
+    if (_isPicking) {
+      return;
+    }
+    setState(() => _isPicking = true);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: widget.media == _ProfileMedia.cover ? 1400 : 720,
+        imageQuality: 82,
+      );
+      if (picked == null) {
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      final mimeType = picked.mimeType ?? _mimeTypeFromPath(picked.path);
+      final dataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      if (!mounted) {
+        return;
+      }
+      setState(() => _imageUrl = dataUrl);
+      final app = AppScope.read(context);
+      if (widget.media == _ProfileMedia.avatar) {
+        await app.updateMyAvatar(dataUrl);
+      } else {
+        await app.updateMyCover(dataUrl);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPicking = false);
+      }
+    }
+  }
+
+  String _mimeTypeFromPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    return 'image/jpeg';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = _imageUrl != null && _imageUrl!.trim().isNotEmpty;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(widget.title),
+        actions: [
+          if (widget.canEdit)
+            IconButton(
+              onPressed: _isPicking ? null : _pickImage,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              tooltip: 'اختيار صورة',
+            ),
+        ],
+      ),
+      body: Center(
+        child: hasImage
+            ? InteractiveViewer(
+                child: _ProfileImageView(
+                  imageUrl: _imageUrl!,
+                  fit: BoxFit.contain,
+                  fallback: _MediaPlaceholder(viewer: widget),
+                ),
+              )
+            : _MediaPlaceholder(viewer: widget),
+      ),
+      floatingActionButton: widget.canEdit
+          ? FloatingActionButton.extended(
+              onPressed: _isPicking ? null : _pickImage,
+              backgroundColor: AppColors.blue,
+              icon: _isPicking
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(_isPicking ? 'جاري الاختيار...' : 'تغيير الصورة'),
+            )
+          : null,
+    );
+  }
+}
+
+class _MediaPlaceholder extends StatelessWidget {
+  const _MediaPlaceholder({required this.viewer});
+
+  final _ProfileMediaViewer viewer;
+
+  @override
+  Widget build(BuildContext context) {
+    if (viewer.media == _ProfileMedia.avatar) {
+      return AppAvatar(name: viewer.name, radius: 88, color: viewer.color);
+    }
+    return SizedBox(
+      height: 220,
+      width: double.infinity,
+      child: _PatternCover(color: viewer.color),
+    );
+  }
 }

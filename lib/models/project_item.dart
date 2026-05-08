@@ -15,6 +15,9 @@ final class ProjectItem {
     required this.budget,
     required this.postedBy,
     required this.color,
+    this.profileId,
+    this.creatorAvatarUrl,
+    this.hasApplied = false,
   });
 
   final String id;
@@ -30,4 +33,28 @@ final class ProjectItem {
   final String budget;
   final String postedBy;
   final Color color;
+  final String? profileId;
+  final String? creatorAvatarUrl;
+  final bool hasApplied;
+
+  ProjectItem copyWith({bool? hasApplied}) {
+    return ProjectItem(
+      id: id,
+      title: title,
+      tagline: tagline,
+      category: category,
+      type: type,
+      workMode: workMode,
+      location: location,
+      stage: stage,
+      skills: skills,
+      commitment: commitment,
+      budget: budget,
+      postedBy: postedBy,
+      color: color,
+      profileId: profileId,
+      creatorAvatarUrl: creatorAvatarUrl,
+      hasApplied: hasApplied ?? this.hasApplied,
+    );
+  }
 }

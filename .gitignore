@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local CLI tooling
+.supabase-export-tools/node_modules/
+
 # Symbolication related
 app.*.symbols
 

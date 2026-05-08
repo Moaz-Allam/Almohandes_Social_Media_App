@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -22,6 +23,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
   final _subject = TextEditingController();
   final _description = TextEditingController();
   int _attachments = 0;
+  final List<String> _attachmentNames = [];
   bool _isSubmitting = false;
 
   @override
@@ -31,11 +33,24 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
     super.dispose();
   }
 
-  void _addAttachment() {
-    setState(() => _attachments += 1);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تمت إضافة ملف للتقديم')));
+  Future<void> _addAttachment() async {
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      type: FileType.any,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _attachmentNames.addAll(result.files.map((file) => file.name));
+      _attachments = _attachmentNames.length;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تمت إضافة ${result.files.length} ملفات')),
+    );
   }
 
   Future<void> _submit() async {
@@ -48,6 +63,18 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     final project = widget.project;
     final appController = AppScope.read(context);
+    final appliedIds = await appController.repositories.projects
+        .fetchAppliedProjectIds(forceRefresh: true);
+    if (appliedIds.contains(project.id)) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لقد قدمت على هذا المشروع مسبقا')),
+      );
+      return;
+    }
     try {
       await appController.repositories.projects.applyToProject(
         project: project,
@@ -179,6 +206,31 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
                 ),
               ),
             ),
+            if (_attachmentNames.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              for (final name in _attachmentNames.take(4))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.insert_drive_file_outlined,
+                        color: AppColors.blue,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
             const SizedBox(height: 22),
             FilledButton(
               onPressed: _submit,

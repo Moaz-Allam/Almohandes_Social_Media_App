@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/story_item.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../shared/widgets/media_preview.dart';
 
 class StoryViewerScreen extends StatefulWidget {
   const StoryViewerScreen({
@@ -29,8 +30,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   @override
   void initState() {
     super.initState();
-    _index = widget.initialIndex;
-    _controller = PageController(initialPage: widget.initialIndex);
+    _index = widget.stories.isEmpty
+        ? 0
+        : widget.initialIndex.clamp(0, widget.stories.length - 1);
+    _controller = PageController(initialPage: _index);
     _progress = AnimationController(vsync: this, duration: _storyDuration)
       ..addStatusListener((status) {
         if (status == AnimationStatus.completed) {
@@ -86,6 +89,9 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.stories.isEmpty) {
+      return const Scaffold(backgroundColor: Colors.black);
+    }
     final currentStory = widget.stories[_index];
 
     return Scaffold(
@@ -169,6 +175,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                           name: currentStory.name,
                           radius: 22,
                           color: currentStory.color,
+                          imageUrl: currentStory.avatarUrl,
                         ),
                       ],
                     ),
@@ -227,6 +234,46 @@ class _StoryImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = story.content.trim();
+    if (story.hasVisualMedia) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          MediaPreview(
+            mediaUrl: story.mediaUrl,
+            mediaType: story.mediaType,
+            fallbackLabel: story.isVideo ? 'فيديو' : 'صورة',
+          ),
+          if (story.isVideo)
+            const Center(
+              child: Icon(Icons.play_circle, color: Colors.white, size: 72),
+            ),
+          if (text.isNotEmpty)
+            PositionedDirectional(
+              start: 24,
+              end: 24,
+              bottom: 48,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: .58),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -241,9 +288,7 @@ class _StoryImage extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Text(
-              story.content.trim().isEmpty
-                  ? 'قصة من ${story.name}'
-                  : story.content,
+              text.isEmpty ? 'قصة من ${story.name}' : text,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'profile_form.dart';
 
-enum AccountType { engineer, company, craftsman, worker, equipment }
+enum AccountType { engineer, company, craftsman, worker, equipment, admin }
 
 extension AccountTypeInfo on AccountType {
   String get label {
@@ -12,6 +12,7 @@ extension AccountTypeInfo on AccountType {
       AccountType.craftsman => 'حرفي',
       AccountType.worker => 'عامل',
       AccountType.equipment => 'آليات',
+      AccountType.admin => 'إدارة',
     };
   }
 
@@ -22,6 +23,7 @@ extension AccountTypeInfo on AccountType {
       AccountType.craftsman => 'نجار، حداد، صباغ',
       AccountType.worker => 'عمال البناء والتشييد',
       AccountType.equipment => 'شفل، كرين، حدادة...',
+      AccountType.admin => 'إدارة المنصة',
     };
   }
 
@@ -32,6 +34,7 @@ extension AccountTypeInfo on AccountType {
       AccountType.craftsman => Icons.handyman,
       AccountType.worker => Icons.construction,
       AccountType.equipment => Icons.local_shipping_outlined,
+      AccountType.admin => Icons.admin_panel_settings_outlined,
     };
   }
 
@@ -42,6 +45,7 @@ extension AccountTypeInfo on AccountType {
       AccountType.craftsman => 'ما حرفتك؟',
       AccountType.worker => 'ما نوع عملك؟',
       AccountType.equipment => 'نوع الآلية؟',
+      AccountType.admin => 'صلاحيات الإدارة',
     };
   }
 
@@ -52,11 +56,18 @@ extension AccountTypeInfo on AccountType {
       AccountType.craftsman => 'اختر تخصصك',
       AccountType.worker => 'اختر مجال عملك',
       AccountType.equipment => 'اختر نوع الآلية التي تمتلكها',
+      AccountType.admin => 'حساب إداري لمتابعة المنصة',
     };
   }
 
   bool get canPostProjects {
     return this == AccountType.engineer || this == AccountType.company;
+  }
+
+  bool get canViewNetwork {
+    return this == AccountType.engineer ||
+        this == AccountType.company ||
+        this == AccountType.admin;
   }
 }
 
@@ -80,6 +91,7 @@ AccountType? accountTypeFromIndustry(String? industry) {
     'craftsman' => AccountType.craftsman,
     'worker' => AccountType.worker,
     'machinery' || 'equipment' => AccountType.equipment,
+    'admin' => AccountType.admin,
     _ => null,
   };
 }

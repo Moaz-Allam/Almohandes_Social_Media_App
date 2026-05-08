@@ -67,6 +67,7 @@ final class AppController extends ChangeNotifier {
   Future<void> signIn() async {
     _isSignedIn = true;
     await _sessionStore.saveSignedIn();
+    await refreshSessionData();
     notifyListeners();
   }
 
@@ -79,6 +80,7 @@ final class AppController extends ChangeNotifier {
       password: password,
     );
     _isSignedIn = true;
+    await refreshSessionData();
     notifyListeners();
   }
 
@@ -99,13 +101,75 @@ final class AppController extends ChangeNotifier {
     final remoteProfile = await repositories.profiles.currentProfile(
       forceRefresh: true,
     );
-    _profile = remoteProfile ?? profile;
+    _profile = remoteProfile == null
+        ? profile
+        : remoteProfile.copyWith(
+            about: remoteProfile.about.isEmpty ? profile.about : null,
+            skills: remoteProfile.skills.isEmpty ? profile.skills : null,
+          );
     _isSignedIn = true;
     await _sessionStore.saveSignedIn();
     notifyListeners();
   }
 
+  Future<void> refreshSessionData() async {
+    if (!_isSignedIn) {
+      return;
+    }
+    final (remoteProfile, remoteSavedItems, hasPremium) = await (
+      repositories.profiles.currentProfile(forceRefresh: true),
+      repositories.savedContent.fetch(forceRefresh: true),
+      repositories.subscriptions.hasActiveSubscription(),
+    ).wait;
+    _profile = remoteProfile ?? _profile;
+    _hasPremiumLibrary = hasPremium || (_profile?.isPremium ?? false);
+    _mergeSavedItems(remoteSavedItems);
+    notifyListeners();
+  }
+
+  Future<void> updateMyAbout(String about) async {
+    final current = _profile;
+    if (current == null) {
+      return;
+    }
+    _profile = current.copyWith(about: about.trim());
+    notifyListeners();
+    await repositories.profiles.updateCurrentProfile(about: about.trim());
+  }
+
+  Future<void> updateMyAvatar(String avatarUrl) async {
+    final current = _profile;
+    if (current == null) {
+      return;
+    }
+    _profile = current.copyWith(avatarUrl: avatarUrl);
+    notifyListeners();
+    await repositories.profiles.updateCurrentProfile(avatarUrl: avatarUrl);
+  }
+
+  Future<void> updateMyCover(String coverUrl) async {
+    final current = _profile;
+    if (current == null) {
+      return;
+    }
+    _profile = current.copyWith(coverUrl: coverUrl);
+    notifyListeners();
+    await repositories.profiles.updateCurrentProfile(coverUrl: coverUrl);
+  }
+
   Future<void> signOut() async {
+    await repositories.auth.signOut();
+    _isSignedIn = false;
+    _hasPremiumLibrary = false;
+    _profile = null;
+    _selectedTab = AppTab.feed;
+    _savedItems.clear();
+    await _sessionStore.clear();
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount() async {
+    await repositories.profiles.deleteCurrentProfile();
     await repositories.auth.signOut();
     _isSignedIn = false;
     _hasPremiumLibrary = false;

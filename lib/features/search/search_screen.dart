@@ -6,6 +6,7 @@ import '../../models/account_type.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/network_person.dart';
 import '../../models/project_item.dart';
+import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
 import '../profile/profile_screen.dart';
@@ -187,9 +188,11 @@ class _PeopleResults extends StatelessWidget {
           itemBuilder: (context, index) {
             final row = rows[index];
             return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: context.appPaleBlue,
-                child: const Icon(Icons.person, color: AppColors.blue),
+              leading: AppAvatar(
+                name: row.name,
+                radius: 22,
+                color: row.color,
+                imageUrl: row.avatarUrl,
               ),
               title: Text(
                 row.name,
@@ -209,6 +212,8 @@ class _PeopleResults extends StatelessWidget {
                     name: row.name,
                     headline: row.title,
                     color: row.color,
+                    avatarUrl: row.avatarUrl,
+                    initialConnectionStatus: row.connectionStatus,
                   ),
                 ),
               ),

@@ -9,6 +9,8 @@ final class MessageItem {
     required this.time,
     required this.unread,
     required this.color,
+    this.unreadCount = 0,
+    this.avatarUrl,
   });
 
   final String conversationId;
@@ -18,6 +20,8 @@ final class MessageItem {
   final String time;
   final bool unread;
   final Color color;
+  final int unreadCount;
+  final String? avatarUrl;
 }
 
 final class ChatMessage {
@@ -26,10 +30,19 @@ final class ChatMessage {
     required this.text,
     required this.incoming,
     required this.createdAt,
+    this.type = 'text',
   });
 
   final String id;
   final String text;
   final bool incoming;
   final DateTime createdAt;
+  final String type;
+
+  bool get isVoice => type == 'voice';
+  bool get isImage => type == 'image';
+  bool get isVideo => type == 'video';
+  bool get isFile => type == 'file';
+  bool get isShareLink =>
+      text.startsWith('app://post/') || text.startsWith('app://reel/');
 }

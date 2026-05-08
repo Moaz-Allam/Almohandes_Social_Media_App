@@ -6,6 +6,6 @@ final class RepositoryFailure implements Exception {
 
   @override
   String toString() {
-    return cause == null ? message : '$message: $cause';
+    return message;
   }
 }

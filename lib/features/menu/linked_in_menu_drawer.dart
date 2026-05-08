@@ -9,7 +9,9 @@ import '../messages/messages_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../premium/premium_dashboard_screen.dart';
+import '../premium/premium_access_screen.dart';
 import '../profile/profile_screen.dart';
+import '../saved/saved_items_screen.dart';
 
 class LinkedInMenuDrawer extends StatelessWidget {
   const LinkedInMenuDrawer({super.key, required this.onSettings});
@@ -43,29 +45,24 @@ class LinkedInMenuDrawer extends StatelessWidget {
 
   Future<void> _openPremiumDashboard(BuildContext context) async {
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     final app = AppScope.read(context);
-    final wasUnlocked = app.hasPremiumLibrary;
-
-    await app.unlockPremiumLibrary();
     await navigator.maybePop();
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            wasUnlocked ? 'تم فتح لوحة Premium' : 'تم تفعيل Premium بنجاح',
-          ),
-          duration: const Duration(milliseconds: 900),
-        ),
-      );
-    await Future<void>.delayed(const Duration(milliseconds: 650));
     if (!navigator.mounted) {
       return;
     }
     navigator.push(
-      MaterialPageRoute(builder: (_) => const PremiumDashboardScreen()),
+      MaterialPageRoute(
+        builder: (_) => app.hasPremiumLibrary
+            ? const PremiumDashboardScreen()
+            : const PremiumAccessScreen(),
+      ),
     );
+  }
+
+  Future<void> _openSavedItems(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await navigator.maybePop();
+    navigator.push(MaterialPageRoute(builder: (_) => const SavedItemsScreen()));
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -100,37 +97,28 @@ class LinkedInMenuDrawer extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     AppAvatar(
                       name: name,
                       radius: 30,
                       color: AppColors.darkBlue,
                       badge: role,
+                      imageUrl: profile?.avatarUrl,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
                           ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'عرض الملف · الإعدادات',
-                            style: TextStyle(
-                              color: AppColors.blue,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                     IconButton(
@@ -161,6 +149,19 @@ class LinkedInMenuDrawer extends StatelessWidget {
               onTap: () => _openPremiumDashboard(context),
             ),
             Divider(height: 1, color: context.appBorder),
+            ListTile(
+              leading: const Icon(
+                Icons.bookmark_outline,
+                color: AppColors.muted,
+              ),
+              title: const Text(
+                'المحفوظات',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
+              onTap: () => _openSavedItems(context),
+            ),
+            Divider(height: 1, color: context.appBorder),
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
@@ -185,7 +186,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              trailing: const Icon(Icons.chevron_left, color: AppColors.blue),
+              trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
               onTap: () => _openAllNotifications(context),
             ),
             Divider(height: 1, color: context.appBorder),
@@ -294,6 +295,11 @@ class _SidebarNotification extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: context.appMuted, fontSize: 12),
+      ),
+      trailing: const Icon(
+        Icons.chevron_right,
+        color: AppColors.blue,
+        size: 18,
       ),
       onTap: () {},
     );

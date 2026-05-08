@@ -6,10 +6,10 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/saved_content.dart';
-import '../../../shared/painters/post_media_painter.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/comments_bottom_sheet.dart';
 import '../../../shared/widgets/like_burst.dart';
+import '../../../shared/widgets/media_preview.dart';
 import '../../../state/app_scope.dart';
 import '../../messages/share_contact_screen.dart';
 import '../../profile/profile_screen.dart';
@@ -40,6 +40,13 @@ class _FeedPostCardState extends State<FeedPostCard> {
   int _parseReactionCount(String value) {
     final digitsOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
     return int.tryParse(digitsOnly) ?? 0;
+  }
+
+  String? _effectiveAvatarUrlFrom(dynamic profile) {
+    if (profile?.id != null && profile!.id == post.profileId) {
+      return profile.avatarUrl;
+    }
+    return post.avatarUrl;
   }
 
   @override
@@ -78,13 +85,14 @@ class _FeedPostCardState extends State<FeedPostCard> {
           name: post.name,
           headline: post.headline,
           color: post.avatarColor,
+          avatarUrl: _effectiveAvatarUrlFrom(AppScope.read(context).profile),
         ),
       ),
     );
   }
 
   void _showComments(BuildContext context) {
-    showLinkedCommentsSheet(context);
+    showLinkedCommentsSheet(context, targetType: 'post', targetId: post.id);
   }
 
   void _openSendFlow(BuildContext context) {
@@ -140,14 +148,29 @@ class _FeedPostCardState extends State<FeedPostCard> {
     );
 
     if (confirmed == true && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تمت إعادة النشر')));
+      final feed = AppScope.read(context).repositories.feed;
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await feed.repost(post.id);
+      } catch (error) {
+        if (!context.mounted) {
+          return;
+        }
+        messenger.showSnackBar(SnackBar(content: Text('$error')));
+        return;
+      }
+      if (!context.mounted) {
+        return;
+      }
+      messenger.showSnackBar(const SnackBar(content: Text('تمت إعادة النشر')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final effectiveAvatarUrl = _effectiveAvatarUrlFrom(
+      AppScope.watch(context).profile,
+    );
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -174,6 +197,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                         name: post.name,
                         radius: 28,
                         color: post.avatarColor,
+                        imageUrl: effectiveAvatarUrl,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -208,9 +232,13 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 ),
               ),
               if (post.showMedia)
-                const AspectRatio(
+                AspectRatio(
                   aspectRatio: 1.55,
-                  child: CustomPaint(painter: PostMediaPainter()),
+                  child: MediaPreview(
+                    mediaUrl: post.mediaUrl,
+                    mediaType: post.mediaType,
+                    fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+                  ),
                 ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),

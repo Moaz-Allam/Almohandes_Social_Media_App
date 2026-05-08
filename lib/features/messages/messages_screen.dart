@@ -18,6 +18,7 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen> {
   late Future<List<MessageItem>> _contactsFuture;
+  bool _didStartLoading = false;
 
   @override
   void initState() {
@@ -28,6 +29,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_didStartLoading) {
+      return;
+    }
+    _didStartLoading = true;
     _contactsFuture = AppScope.read(
       context,
     ).repositories.messages.fetchConversations();
@@ -42,10 +47,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
     await _contactsFuture;
   }
 
-  void _openChat(BuildContext context, MessageItem contact) {
-    Navigator.of(
+  Future<void> _openChat(BuildContext context, MessageItem contact) async {
+    await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => ChatScreen(contact: contact)));
+    if (mounted) {
+      await _refresh();
+    }
   }
 
   void _openProfile(BuildContext context, MessageItem contact) {
@@ -56,6 +64,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
           name: contact.name,
           headline: contact.preview,
           color: contact.color,
+          avatarUrl: contact.avatarUrl,
+          initialConnectionStatus: 'accepted',
         ),
       ),
     );
@@ -186,7 +196,7 @@ class _MessagesEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 6),
             Text(
-              'ستظهر المحادثات هنا بعد إنشائها في Supabase.',
+              'ستظهر المحادثات هنا بعد إنشائها.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted, height: 1.45),
             ),

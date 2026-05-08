@@ -3,12 +3,21 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/project_item.dart';
+import '../../../shared/widgets/app_avatar.dart';
 
 class ProjectCard extends StatelessWidget {
-  const ProjectCard({super.key, required this.project, required this.onApply});
+  const ProjectCard({
+    super.key,
+    required this.project,
+    required this.onApply,
+    this.canApply = true,
+    this.actionLabel,
+  });
 
   final ProjectItem project;
   final VoidCallback onApply;
+  final bool canApply;
+  final String? actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -33,8 +42,8 @@ class ProjectCard extends StatelessWidget {
                   color: project.color,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Icon(
-                  Icons.folder_special_outlined,
+                child: Icon(
+                  _categoryIcon(project.category),
                   color: AppColors.white,
                 ),
               ),
@@ -97,22 +106,37 @@ class ProjectCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  project.postedBy,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                child: Row(
+                  children: [
+                    AppAvatar(
+                      name: project.postedBy,
+                      radius: 16,
+                      color: project.color,
+                      imageUrl: project.creatorAvatarUrl,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        project.postedBy,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               FilledButton(
-                onPressed: onApply,
+                onPressed: canApply ? onApply : null,
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.blue,
+                  disabledBackgroundColor: context.appSoft,
+                  disabledForegroundColor: context.appMuted,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(22),
                   ),
                 ),
-                child: const Text('تقديم'),
+                child: Text(actionLabel ?? (canApply ? 'تقديم' : 'مشروعك')),
               ),
             ],
           ),
@@ -120,6 +144,19 @@ class ProjectCard extends StatelessWidget {
       ),
     );
   }
+}
+
+IconData _categoryIcon(String category) {
+  return switch (category) {
+    'مدني' => Icons.apartment_outlined,
+    'معماري' => Icons.architecture_outlined,
+    'كهرباء' => Icons.electrical_services_outlined,
+    'ميكانيك' => Icons.precision_manufacturing_outlined,
+    'آليات' => Icons.local_shipping_outlined,
+    'تشطيبات' => Icons.format_paint_outlined,
+    'سلامة' => Icons.health_and_safety_outlined,
+    _ => Icons.folder_special_outlined,
+  };
 }
 
 class _ProjectMetaChip extends StatelessWidget {

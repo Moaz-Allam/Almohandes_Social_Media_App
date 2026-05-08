@@ -6,7 +6,7 @@ import '../../features/home/main_shell.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
-import '../../shared/widgets/social_button.dart';
+import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
 import 'sign_up_flow_screen.dart';
 
@@ -51,36 +51,6 @@ class _SignInScreenState extends State<SignInScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('تعذر تسجيل الدخول: $error')));
-      return;
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-    }
-    if (!context.mounted) {
-      return;
-    }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const MainShell()),
-      (_) => false,
-    );
-  }
-
-  Future<void> _signInWithGoogle(BuildContext context) async {
-    if (_isSubmitting) {
-      return;
-    }
-    setState(() => _isSubmitting = true);
-    final app = AppScope.read(context);
-    try {
-      await app.repositories.auth.signInWithGoogle();
-      await app.signIn();
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذر تسجيل الدخول بواسطة Google: $error')),
-        );
-      }
       return;
     } finally {
       if (mounted) {
@@ -195,11 +165,12 @@ class _SignInScreenState extends State<SignInScreen> {
             PrimaryButton(
               label: _isSubmitting ? 'جار تسجيل الدخول...' : 'تسجيل الدخول',
               onPressed: () => _enterApp(context),
+              isLoading: _isSubmitting,
             ),
-            const SizedBox(height: 18),
-            SocialButton.google(
-              label: 'تسجيل الدخول بواسطة Google',
-              onPressed: () => _signInWithGoogle(context),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => showPrivacyPolicyDialog(context),
+              child: const Text('Privacy Policy'),
             ),
           ],
         ),

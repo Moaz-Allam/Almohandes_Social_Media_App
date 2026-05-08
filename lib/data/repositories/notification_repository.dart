@@ -107,18 +107,12 @@ final class SupabaseNotificationRepository implements NotificationRepository {
   }
 
   String _timeLabel(Object? value) {
-    final date = DateTime.tryParse('$value');
+    final date = DateTime.tryParse('$value')?.toLocal();
     if (date == null) {
       return '';
     }
-    final diff = DateTime.now().difference(date);
-    if (diff.inMinutes < 60) {
-      return 'قبل ${diff.inMinutes.clamp(1, 59)} د';
-    }
-    if (diff.inHours < 24) {
-      return 'قبل ${diff.inHours} س';
-    }
-    return 'قبل ${diff.inDays} يوم';
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${date.year}-${two(date.month)}-${two(date.day)} ${two(date.hour)}:${two(date.minute)}';
   }
 
   Future<String?> _currentProfileId(SupabaseClient remote) async {

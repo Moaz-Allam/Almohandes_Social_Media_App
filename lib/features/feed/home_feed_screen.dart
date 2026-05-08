@@ -107,7 +107,7 @@ class _FeedEmptyState extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'ستظهر منشورات المستخدمين هنا بعد إضافتها في Supabase.',
+            'ستظهر منشورات المستخدمين هنا بعد إضافتها.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.muted, height: 1.45),
           ),

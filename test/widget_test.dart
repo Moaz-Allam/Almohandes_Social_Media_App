@@ -5,6 +5,7 @@ import 'package:tradeflow/app/linked_arabic_app.dart';
 import 'package:tradeflow/core/constants/app_colors.dart';
 import 'package:tradeflow/data/repositories/app_repositories.dart';
 import 'package:tradeflow/data/repositories/auth_repository.dart';
+import 'package:tradeflow/data/repositories/comment_repository.dart';
 import 'package:tradeflow/data/repositories/course_repository.dart';
 import 'package:tradeflow/data/repositories/feed_repository.dart';
 import 'package:tradeflow/data/repositories/message_repository.dart';
@@ -19,11 +20,13 @@ import 'package:tradeflow/data/session/session_store.dart';
 import 'package:tradeflow/features/home/widgets/linked_bottom_navigation.dart';
 import 'package:tradeflow/features/premium/models/premium_course.dart';
 import 'package:tradeflow/models/account_type.dart';
+import 'package:tradeflow/models/comment_item.dart';
 import 'package:tradeflow/models/feed_post_model.dart';
 import 'package:tradeflow/models/message_item.dart';
 import 'package:tradeflow/models/network_person.dart';
 import 'package:tradeflow/models/notification_item_model.dart';
 import 'package:tradeflow/models/profile_form.dart';
+import 'package:tradeflow/models/project_application_request.dart';
 import 'package:tradeflow/models/project_draft.dart';
 import 'package:tradeflow/models/project_item.dart';
 import 'package:tradeflow/models/reel_item.dart';
@@ -74,6 +77,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await tester.tap(find.byType(PrimaryButton).last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField).first,
+      'مهندس متخصص في المشاريع السكنية والتجارية.',
+    );
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
 
@@ -214,6 +223,7 @@ AppRepositories _repositories({
 }) {
   return AppRepositories(
     auth: _FakeAuthRepository(),
+    comments: _FakeCommentRepository(),
     courses: _FakeCourseRepository(),
     feed: _FakeFeedRepository(posts),
     messages: _FakeMessageRepository(),
@@ -297,9 +307,6 @@ final class _FakeAuthRepository implements AuthRepository {
   Future<void> sendOtp({required String phone}) async {}
 
   @override
-  Future<void> signInWithGoogle() async {}
-
-  @override
   Future<void> signInWithPassword({
     required String login,
     required String password,
@@ -323,13 +330,40 @@ final class _FakeCourseRepository implements CourseRepository {
   }
 }
 
+final class _FakeCommentRepository implements CommentRepository {
+  @override
+  Future<CommentItem?> addComment({
+    required String targetType,
+    required String targetId,
+    required String content,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<List<CommentItem>> fetchComments({
+    required String targetType,
+    required String targetId,
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+}
+
 final class _FakeFeedRepository implements FeedRepository {
   _FakeFeedRepository(this.posts);
 
   final List<FeedPostModel> posts;
 
   @override
-  Future<void> createPost({required String content}) async {}
+  Future<void> createPost({
+    required String content,
+    String mediaUrl = '',
+    String mediaType = 'text',
+  }) async {}
+
+  @override
+  Future<void> repost(String postId) async {}
 
   @override
   Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) async {
@@ -380,6 +414,16 @@ final class _FakeProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<void> deleteCurrentProfile() async {}
+
+  @override
+  Future<void> updateCurrentProfile({
+    String? about,
+    String? avatarUrl,
+    String? coverUrl,
+  }) async {}
+
+  @override
   Future<List<NetworkPerson>> fetchIncomingConnectionRequests({
     bool forceRefresh = false,
   }) async {
@@ -400,6 +444,9 @@ final class _FakeProfileRepository implements ProfileRepository {
     }
     return const [];
   }
+
+  @override
+  Future<String> connectionStatus(String otherProfileId) async => 'none';
 
   @override
   Future<void> followProfile(String followingProfileId) async {}
@@ -432,6 +479,21 @@ final class _FakeProjectRepository implements ProjectRepository {
   }) async {
     return const [];
   }
+
+  @override
+  Future<List<ProjectApplicationRequest>> fetchProjectApplications(
+    String projectId, {
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<Set<String>> fetchAppliedProjectIds({
+    bool forceRefresh = false,
+  }) async {
+    return const <String>{};
+  }
 }
 
 final class _FakeMessageRepository implements MessageRepository {
@@ -455,6 +517,28 @@ final class _FakeMessageRepository implements MessageRepository {
     required String conversationId,
     required String content,
   }) async {}
+
+  @override
+  Future<void> sendVoiceMessage({
+    required String conversationId,
+    required String voiceUrl,
+  }) async {}
+
+  @override
+  Future<void> sendFileMessage({
+    required String conversationId,
+    required String fileName,
+    required String fileUrl,
+  }) async {}
+
+  @override
+  Future<void> blockConnection(String profileId) async {}
+
+  @override
+  Future<void> removeConnection(String profileId) async {}
+
+  @override
+  Future<void> deleteConversation(String conversationId) async {}
 }
 
 final class _FakeNotificationRepository implements NotificationRepository {
@@ -474,9 +558,18 @@ final class _FakeNotificationRepository implements NotificationRepository {
 
 final class _FakeReelRepository implements ReelRepository {
   @override
+  Future<void> createReel({
+    required String caption,
+    required String videoUrl,
+  }) async {}
+
+  @override
   Future<List<ReelItem>> fetchReels({bool forceRefresh = false}) async {
     return const [];
   }
+
+  @override
+  Future<void> repost(String reelId) async {}
 
   @override
   Future<void> toggleLike({
@@ -499,6 +592,13 @@ final class _FakeSavedContentRepository implements SavedContentRepository {
 }
 
 final class _FakeStoryRepository implements StoryRepository {
+  @override
+  Future<void> createStory({
+    required String content,
+    String mediaUrl = '',
+    String mediaType = 'text',
+  }) async {}
+
   @override
   Future<void> createTextStory(String content) async {}
 

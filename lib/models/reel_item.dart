@@ -13,6 +13,7 @@ final class ReelItem {
     required this.color,
     this.videoUrl,
     this.thumbnailUrl,
+    this.avatarUrl,
   });
 
   final String id;
@@ -26,6 +27,7 @@ final class ReelItem {
   final Color color;
   final String? videoUrl;
   final String? thumbnailUrl;
+  final String? avatarUrl;
 
   String get likesLabel => _compactCount(likesCount);
   String get commentsLabel => _compactCount(commentsCount);

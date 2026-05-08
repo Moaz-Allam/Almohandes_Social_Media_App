@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
+import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -21,6 +22,7 @@ class SignUpFlowScreen extends StatefulWidget {
 
 class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
   late final SignupController _form;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -35,22 +37,40 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
   }
 
   Future<void> _complete() async {
-    await AppScope.read(context).completeSignUp(
-      _form.toProfile(),
-      accountType: _form.userType,
-      specialization: _form.specialization,
-      phone: _form.phone.text,
-      password: _form.password.text,
-    );
-    if (!mounted) {
+    if (_isSubmitting) {
       return;
     }
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const SignUpSuccessScreen()),
-    );
+    setState(() => _isSubmitting = true);
+    try {
+      await AppScope.read(context).completeSignUp(
+        _form.toProfile(),
+        accountType: _form.userType,
+        specialization: _form.specialization,
+        phone: _form.phone.text,
+        password: _form.password.text,
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const SignUpSuccessScreen()),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('$error');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   void _goBack() {
+    if (_isSubmitting) {
+      return;
+    }
     if (_form.step == 0) {
       Navigator.of(context).maybePop();
       return;
@@ -65,6 +85,9 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
   }
 
   Future<void> _handlePrimary() async {
+    if (_isSubmitting) {
+      return;
+    }
     if (_form.step == 0) {
       if (_form.displayName.text.trim().isEmpty ||
           _form.email.text.trim().isEmpty) {
@@ -98,7 +121,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     }
 
     if (_form.isLastStep) {
-      _complete();
+      await _complete();
       return;
     }
     _form.nextStep();
@@ -122,6 +145,10 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                     children: [
                       const LinkedInLogo(scale: .78),
                       const Spacer(),
+                      TextButton(
+                        onPressed: () => showPrivacyPolicyDialog(context),
+                        child: const Text('Privacy Policy'),
+                      ),
                       IconButton(
                         onPressed: () => Navigator.of(
                           context,
@@ -229,7 +256,9 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                         subtitle:
                             'اختر نوع المستخدم المناسب. يمكنك اختيار نوع واحد فقط.',
                         children: [
-                          for (final type in AccountType.values) ...[
+                          for (final type in AccountType.values.where(
+                            (type) => type != AccountType.admin,
+                          )) ...[
                             _UserTypeCard(
                               type: type,
                               selected: _form.userType == type,
@@ -266,6 +295,40 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                           ),
                         ],
                       ),
+                      SignupPage(
+                        step: _stepLabel(5),
+                        title: 'نبذة تعريفية ومهارات',
+                        subtitle:
+                            'أضف نبذة قصيرة ومهارات تظهر في ملفك الشخصي بعد إنشاء الحساب.',
+                        children: [
+                          LinkedTextField(
+                            label: 'نبذة تعريفية',
+                            hint:
+                                'مثال: مهندس متخصص في المشاريع السكنية والتجارية.',
+                            controller: _form.about,
+                            maxLines: 4,
+                            keyboardType: TextInputType.multiline,
+                          ),
+                          const SizedBox(height: 18),
+                          const SectionLabel('المهارات'),
+                          const SizedBox(height: 10),
+                          _SkillSelection(
+                            values: _form.suggestedSkills,
+                            selected: _form.skills,
+                            onToggle: _form.toggleSkill,
+                          ),
+                          const SizedBox(height: 14),
+                          _CustomSkillField(
+                            controller: _form.customSkill,
+                            onAdd: _form.addCustomSkill,
+                          ),
+                          const SizedBox(height: 18),
+                          _ProfileInfoPreview(
+                            about: _form.effectiveAbout,
+                            skills: _form.effectiveSkills,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -281,7 +344,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                         child: SizedBox(
                           height: 52,
                           child: OutlinedButton(
-                            onPressed: _goBack,
+                            onPressed: _isSubmitting ? null : _goBack,
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: AppColors.blue),
                               foregroundColor: AppColors.blue,
@@ -296,8 +359,11 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: PrimaryButton(
-                          label: _form.isLastStep ? 'إنهاء' : 'متابعة',
+                          label: _isSubmitting
+                              ? 'جاري الإنشاء...'
+                              : (_form.isLastStep ? 'إنهاء' : 'متابعة'),
                           onPressed: _handlePrimary,
+                          isLoading: _isSubmitting,
                         ),
                       ),
                     ],
@@ -500,6 +566,182 @@ class _OptionTile extends StatelessWidget {
               const Icon(Icons.check_circle, color: AppColors.blue, size: 20),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SkillSelection extends StatelessWidget {
+  const _SkillSelection({
+    required this.values,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final List<String> values;
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final value in values)
+          FilterChip(
+            label: Text(value),
+            selected: selected.contains(value),
+            onSelected: (_) => onToggle(value),
+            avatar: selected.contains(value)
+                ? const Icon(Icons.check, size: 16)
+                : null,
+            selectedColor: context.appPaleBlue,
+            checkmarkColor: AppColors.blue,
+            side: BorderSide(
+              color: selected.contains(value)
+                  ? AppColors.blue
+                  : context.appBorder,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            labelStyle: TextStyle(
+              color: selected.contains(value)
+                  ? AppColors.blue
+                  : context.appText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CustomSkillField extends StatelessWidget {
+  const _CustomSkillField({required this.controller, required this.onAdd});
+
+  final TextEditingController controller;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      textDirection: TextDirection.rtl,
+      onSubmitted: (_) => onAdd(),
+      decoration: InputDecoration(
+        labelText: 'مهارة إضافية',
+        hintText: 'اكتب مهارة ثم اضغط إضافة',
+        suffixIcon: IconButton(
+          onPressed: onAdd,
+          icon: const Icon(Icons.add_circle_outline),
+          tooltip: 'إضافة',
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileInfoPreview extends StatelessWidget {
+  const _ProfileInfoPreview({required this.about, required this.skills});
+
+  final String about;
+  final Set<String> skills;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PreviewBlock(
+          icon: Icons.description_outlined,
+          title: 'نبذة تعريفية',
+          child: Text(
+            about,
+            style: TextStyle(
+              color: context.appMuted,
+              fontSize: 15,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _PreviewBlock(
+          icon: Icons.lightbulb_outline,
+          title: 'المهارات',
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final skill in skills)
+                Chip(
+                  label: Text(skill),
+                  backgroundColor: context.appSurfaceAlt,
+                  side: BorderSide(color: context.appBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  labelStyle: TextStyle(
+                    color: context.appText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviewBlock extends StatelessWidget {
+  const _PreviewBlock({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.blue,
+                child: Icon(icon, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: context.appText,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
     );
   }

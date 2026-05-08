@@ -22,11 +22,19 @@ class MessageTile extends StatelessWidget {
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      tileColor: item.unread
+          ? context.appPaleBlue.withValues(alpha: .35)
+          : null,
       leading: Stack(
         children: [
           GestureDetector(
             onTap: onProfileTap,
-            child: AppAvatar(name: item.name, radius: 29, color: item.color),
+            child: AppAvatar(
+              name: item.name,
+              radius: 29,
+              color: item.color,
+              imageUrl: item.avatarUrl,
+            ),
           ),
           PositionedDirectional(
             end: 0,
@@ -71,17 +79,17 @@ class MessageTile extends StatelessWidget {
           ),
           if (item.unread)
             Container(
-              width: 18,
-              height: 18,
+              constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
               margin: const EdgeInsetsDirectional.only(start: 8),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.blue,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(99),
               ),
-              child: const Center(
+              child: Center(
                 child: Text(
-                  '1',
-                  style: TextStyle(
+                  item.unreadCount > 99 ? '99+' : '${item.unreadCount}',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,

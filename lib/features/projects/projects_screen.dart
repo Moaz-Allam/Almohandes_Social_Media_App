@@ -28,13 +28,18 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   String _category = 'كل الفئات';
   String _type = 'كل الأنواع';
   String _workMode = 'كل الأنماط';
-  late Future<List<ProjectItem>> _projectsFuture;
+  bool _appliedOnly = false;
+  late Future<({Set<String> appliedIds, List<ProjectItem> projects})>
+  _projectsFuture;
   bool _didStartLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _projectsFuture = Future.value(const <ProjectItem>[]);
+    _projectsFuture = Future.value((
+      projects: const <ProjectItem>[],
+      appliedIds: const <String>{},
+    ));
   }
 
   @override
@@ -44,13 +49,30 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       return;
     }
     _didStartLoading = true;
-    _projectsFuture = AppScope.read(
-      context,
-    ).repositories.projects.fetchProjects();
+    _projectsFuture = _loadProjects();
   }
 
-  List<ProjectItem> _visibleProjects(List<ProjectItem> projects) {
+  Future<({Set<String> appliedIds, List<ProjectItem> projects})> _loadProjects({
+    bool forceRefresh = false,
+  }) async {
+    final projects = AppScope.read(
+      context,
+    ).repositories.projects.fetchProjects(forceRefresh: forceRefresh);
+    final appliedIds = AppScope.read(
+      context,
+    ).repositories.projects.fetchAppliedProjectIds(forceRefresh: forceRefresh);
+    final result = await (projects, appliedIds).wait;
+    return (projects: result.$1, appliedIds: result.$2);
+  }
+
+  List<ProjectItem> _visibleProjects(
+    List<ProjectItem> projects,
+    Set<String> appliedIds,
+  ) {
     final filtered = projects.where((project) {
+      if (_appliedOnly && !appliedIds.contains(project.id)) {
+        return false;
+      }
       final categoryMatches =
           _category == 'كل الفئات' || project.category == _category;
       final typeMatches = _type == 'كل الأنواع' || project.type == _type;
@@ -65,12 +87,18 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     return filtered;
   }
 
-  void _openApplication(ProjectItem project) {
-    Navigator.of(context).push(
+  Future<void> _openApplication(ProjectItem project) async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProjectApplicationScreen(project: project),
       ),
     );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _projectsFuture = _loadProjects(forceRefresh: true);
+    });
   }
 
   @override
@@ -132,52 +160,84 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   values: const ['كل الأنماط', 'عن بعد', 'هجين', 'موقعي'],
                   onSelected: (value) => setState(() => _workMode = value),
                 ),
+                FilterChip(
+                  selected: _appliedOnly,
+                  onSelected: (value) => setState(() => _appliedOnly = value),
+                  label: const Text('قدمت عليها'),
+                  avatar: _appliedOnly
+                      ? const Icon(Icons.check, size: 16)
+                      : null,
+                  selectedColor: context.appPaleBlue,
+                  checkmarkColor: AppColors.blue,
+                  side: BorderSide(
+                    color: _appliedOnly ? AppColors.blue : context.appBorder,
+                  ),
+                ),
               ],
             ),
           ),
         ),
         Expanded(
-          child: FutureBuilder<List<ProjectItem>>(
-            future: _projectsFuture,
-            builder: (context, snapshot) {
-              final projects = _visibleProjects(
-                snapshot.data ?? const <ProjectItem>[],
-              );
-              if (snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData) {
-                return const _ProjectsSkeletonList();
-              }
-              if (projects.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'لا توجد مشاريع بهذه الفلاتر.',
-                    style: TextStyle(color: AppColors.muted),
-                  ),
-                );
-              }
-              return RefreshIndicator(
-                onRefresh: () async {
-                  setState(() {
-                    _projectsFuture = AppScope.read(
-                      context,
-                    ).repositories.projects.fetchProjects(forceRefresh: true);
-                  });
-                  await _projectsFuture;
-                },
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                  itemCount: projects.length,
-                  itemBuilder: (context, index) {
-                    final project = projects[index];
-                    return ProjectCard(
-                      project: project,
-                      onApply: () => _openApplication(project),
+          child:
+              FutureBuilder<
+                ({Set<String> appliedIds, List<ProjectItem> projects})
+              >(
+                future: _projectsFuture,
+                builder: (context, snapshot) {
+                  final data =
+                      snapshot.data ??
+                      (
+                        projects: const <ProjectItem>[],
+                        appliedIds: const <String>{},
+                      );
+                  final projects = _visibleProjects(
+                    data.projects,
+                    data.appliedIds,
+                  );
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const _ProjectsSkeletonList();
+                  }
+                  if (projects.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'لا توجد مشاريع بهذه الفلاتر.',
+                        style: TextStyle(color: AppColors.muted),
+                      ),
                     );
-                  },
-                ),
-              );
-            },
-          ),
+                  }
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      setState(() {
+                        _projectsFuture = _loadProjects(forceRefresh: true);
+                      });
+                      await _projectsFuture;
+                    },
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                      itemCount: projects.length,
+                      itemBuilder: (context, index) {
+                        final project = projects[index];
+                        final myProfileId = AppScope.watch(context).profile?.id;
+                        final didApply = data.appliedIds.contains(project.id);
+                        return ProjectCard(
+                          project: project.copyWith(hasApplied: didApply),
+                          onApply: () => _openApplication(project),
+                          canApply:
+                              !didApply &&
+                              (project.profileId == null ||
+                                  project.profileId != myProfileId),
+                          actionLabel: didApply
+                              ? 'تم التقديم'
+                              : (project.profileId == myProfileId
+                                    ? 'مشروعك'
+                                    : null),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
         ),
       ],
     );

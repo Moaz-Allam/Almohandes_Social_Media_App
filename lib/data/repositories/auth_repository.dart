@@ -14,8 +14,6 @@ abstract interface class AuthRepository {
     required String password,
   });
 
-  Future<void> signInWithGoogle();
-
   Future<void> sendPasswordReset({required String email});
 
   Future<void> sendOtp({required String phone});
@@ -49,7 +47,7 @@ final class SupabaseAuthRepository implements AuthRepository {
   }) async {
     final remote = client;
     if (remote == null) {
-      throw const RepositoryFailure('Supabase غير مهيأ لتسجيل الدخول');
+      throw const RepositoryFailure('خدمة تسجيل الدخول غير مهيأة الآن');
     }
 
     try {
@@ -60,22 +58,7 @@ final class SupabaseAuthRepository implements AuthRepository {
       );
       await sessionStore.saveSignedIn();
     } catch (error) {
-      throw RepositoryFailure('تعذر تسجيل الدخول من Supabase', error);
-    }
-  }
-
-  @override
-  Future<void> signInWithGoogle() async {
-    final remote = client;
-    if (remote == null) {
-      throw const RepositoryFailure('Supabase غير مهيأ لتسجيل الدخول');
-    }
-
-    try {
-      await remote.auth.signInWithOAuth(OAuthProvider.google);
-      await sessionStore.saveSignedIn();
-    } catch (error) {
-      throw RepositoryFailure('تعذر تسجيل الدخول بواسطة Google', error);
+      throw RepositoryFailure('تعذر تسجيل الدخول الآن', error);
     }
   }
 
@@ -83,7 +66,7 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<void> sendPasswordReset({required String email}) async {
     final remote = client;
     if (remote == null) {
-      throw const RepositoryFailure('Supabase غير مهيأ لاستعادة كلمة المرور');
+      throw const RepositoryFailure('خدمة استعادة كلمة المرور غير مهيأة الآن');
     }
     if (!email.trim().contains('@')) {
       throw const RepositoryFailure(
@@ -157,7 +140,10 @@ final class SupabaseAuthRepository implements AuthRepository {
         data: {
           'full_name': profile.fullName,
           'phone': _normalizePhone(phone),
-          'role': accountTypeToSupabaseRole(accountType),
+          // Keep auth triggers on legacy databases from failing on roles their
+          // enum or RLS policies do not know yet; the profile row is updated
+          // below after the authenticated session exists.
+          'role': 'engineer',
         },
       );
       if (remote.auth.currentSession == null && password.isNotEmpty) {
@@ -170,37 +156,37 @@ final class SupabaseAuthRepository implements AuthRepository {
           // Some projects require email confirmation before a Supabase session.
         }
       }
+      if (remote.auth.currentSession == null) {
+        await sessionStore.saveSignedIn();
+        return;
+      }
       final userId = authResponse.user?.id ?? remote.auth.currentUser?.id;
       if (userId == null) {
         await sessionStore.saveSignedIn();
         return;
       }
 
-      final profileRow = await remote
-          .from('profiles')
-          .upsert({
-            'user_id': userId,
-            'full_name': profile.fullName,
-            'email': profile.email.trim(),
-            'phone': _normalizePhone(phone),
-            'role': accountTypeToSupabaseRole(accountType),
-            'governorate': governorateToSupabase(profile.location),
-            'bio': profile.about,
-          }, onConflict: 'user_id')
-          .select('id')
-          .single();
-
-      final profileId = '${profileRow['id']}';
-      await _upsertDetails(
+      final profileId = await _upsertProfile(
         remote,
-        profileId: profileId,
+        userId: userId,
+        profile: profile,
         accountType: accountType,
-        specialization: specialization,
-        companyName: profile.company,
+        phone: phone,
       );
+      try {
+        await _upsertDetails(
+          remote,
+          profileId: profileId,
+          accountType: accountType,
+          specialization: specialization,
+          companyName: profile.company,
+        );
+      } catch (_) {
+        // The app can continue when optional role detail tables are absent.
+      }
       await sessionStore.saveSignedIn();
     } catch (error) {
-      throw RepositoryFailure('تعذر إنشاء الحساب في Supabase', error);
+      throw RepositoryFailure('تعذر إنشاء الحساب الآن', error);
     }
   }
 
@@ -214,6 +200,99 @@ final class SupabaseAuthRepository implements AuthRepository {
         // Local session is still cleared by AppController.
       }
     }
+  }
+
+  Future<String> _upsertProfile(
+    SupabaseClient remote, {
+    required String userId,
+    required ProfileForm profile,
+    required AccountType accountType,
+    required String phone,
+  }) async {
+    final role = accountTypeToSupabaseRole(accountType);
+    final governorate = governorateToSupabase(profile.location);
+    final normalizedPhone = _normalizePhone(phone);
+
+    try {
+      final profileId = await remote.rpc<String>(
+        'complete_signup_profile_for_app',
+        params: {
+          'p_full_name': profile.fullName,
+          'p_email': profile.email.trim(),
+          'p_phone': normalizedPhone,
+          'p_role': role,
+          'p_governorate': governorate,
+          'p_bio': profile.about,
+        },
+      );
+      if (profileId.trim().isNotEmpty) {
+        return profileId;
+      }
+    } catch (_) {
+      // Fall back for environments where the signup RPC is not installed yet.
+    }
+
+    late final Map<String, dynamic> profileRow;
+    try {
+      profileRow = await _writeProfileWithTables(
+        remote,
+        userId: userId,
+        profile: profile,
+        role: role,
+        governorate: governorate,
+        normalizedPhone: normalizedPhone,
+        includeRole: true,
+      );
+    } catch (_) {
+      profileRow = await _writeProfileWithTables(
+        remote,
+        userId: userId,
+        profile: profile,
+        role: role,
+        governorate: governorate,
+        normalizedPhone: normalizedPhone,
+        includeRole: false,
+      );
+    }
+
+    return '${profileRow['id']}';
+  }
+
+  Future<Map<String, dynamic>> _writeProfileWithTables(
+    SupabaseClient remote, {
+    required String userId,
+    required ProfileForm profile,
+    required String role,
+    required String governorate,
+    required String normalizedPhone,
+    required bool includeRole,
+  }) async {
+    final existing = await remote
+        .from('profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
+    final values = {
+      'full_name': profile.fullName,
+      'email': profile.email.trim(),
+      'phone': normalizedPhone,
+      if (includeRole) 'role': role,
+      'governorate': governorate,
+      'bio': profile.about,
+    };
+    if (existing != null) {
+      return await remote
+          .from('profiles')
+          .update(values)
+          .eq('id', existing['id'])
+          .select('id')
+          .single();
+    }
+    return await remote
+        .from('profiles')
+        .insert({'user_id': userId, ...values})
+        .select('id')
+        .single();
   }
 
   Future<void> _upsertDetails(
@@ -250,6 +329,8 @@ final class SupabaseAuthRepository implements AuthRepository {
           'machinery_name': specialization,
           'is_available': true,
         }, onConflict: 'profile_id');
+      case AccountType.admin:
+        break;
     }
   }
 

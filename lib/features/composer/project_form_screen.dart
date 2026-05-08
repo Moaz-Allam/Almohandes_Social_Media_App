@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -23,6 +24,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   final _draft = _ProjectDraft();
   int _step = 0;
   int _attachments = 0;
+  final List<String> _attachmentNames = [];
   bool _isSubmitting = false;
 
   bool get _isLastStep => _step == _projectSteps.length - 1;
@@ -63,11 +65,30 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
     _goToStep(_step - 1);
   }
 
-  void _addAttachment() {
-    setState(() => _attachments += 1);
+  Future<void> _addAttachment() async {
+    final result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      type: FileType.any,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    setState(() {
+      _attachmentNames
+        ..clear()
+        ..addAll(
+          result.files.map(
+            (file) => file.name.isEmpty ? 'مرفق بدون اسم' : file.name,
+          ),
+        );
+      _attachments = _attachmentNames.length;
+    });
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('تمت إضافة مرفق للمشروع')));
+    ).showSnackBar(const SnackBar(content: Text('تمت إضافة المرفقات')));
   }
 
   Future<void> _submit() async {
@@ -82,7 +103,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تمت مشاركة المشروع')));
-      Navigator.of(context).maybePop();
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
         return;
@@ -255,6 +276,34 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                         side: const BorderSide(color: AppColors.blue),
                       ),
                     ),
+                    if (_attachmentNames.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      for (final name in _attachmentNames.take(4))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.insert_drive_file_outlined,
+                                color: AppColors.blue,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: context.appMuted,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ],
                 ),
                 _ProjectStepView(

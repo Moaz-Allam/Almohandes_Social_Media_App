@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../models/message_item.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/search_pill.dart';
 import '../../../state/app_scope.dart';
@@ -51,6 +52,7 @@ class HomeTopBar extends StatelessWidget {
                 radius: 20,
                 color: AppColors.darkBlue,
                 badge: badge,
+                imageUrl: profile?.avatarUrl,
               ),
             ),
             const SizedBox(width: 10),
@@ -62,12 +64,67 @@ class HomeTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            IconButton(
-              onPressed: onMessages,
-              icon: const Icon(Icons.chat_bubble, color: AppColors.muted),
-              tooltip: 'الرسائل',
+            FutureBuilder<List<MessageItem>>(
+              future: AppScope.read(
+                context,
+              ).repositories.messages.fetchConversations(),
+              builder: (context, snapshot) {
+                final unreadCount = (snapshot.data ?? const <MessageItem>[])
+                    .fold<int>(
+                      0,
+                      (sum, item) =>
+                          sum + (item.unreadCount > 0 ? item.unreadCount : 0),
+                    );
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      onPressed: onMessages,
+                      icon: const Icon(
+                        Icons.chat_bubble,
+                        color: AppColors.muted,
+                      ),
+                      tooltip: 'الرسائل',
+                    ),
+                    if (unreadCount > 0)
+                      PositionedDirectional(
+                        top: 3,
+                        end: 2,
+                        child: _UnreadBadge(count: unreadCount),
+                      ),
+                  ],
+                );
+              },
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: AppColors.blue,
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: context.appSurface, width: 2),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
         ),
       ),
     );

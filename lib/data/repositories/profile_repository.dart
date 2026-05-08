@@ -7,9 +7,18 @@ import '../../models/network_person.dart';
 import '../../models/profile_form.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/supabase_enum_mapper.dart';
+import 'repository_failure.dart';
 
 abstract interface class ProfileRepository {
   Future<ProfileForm?> currentProfile({bool forceRefresh = false});
+
+  Future<void> updateCurrentProfile({
+    String? about,
+    String? avatarUrl,
+    String? coverUrl,
+  });
+
+  Future<void> deleteCurrentProfile();
 
   Future<List<NetworkPerson>> fetchNetworkProfiles({
     required AccountType viewerType,
@@ -22,6 +31,8 @@ abstract interface class ProfileRepository {
   });
 
   Future<void> requestConnection(String receiverProfileId);
+
+  Future<String> connectionStatus(String otherProfileId);
 
   Future<void> followProfile(String followingProfileId);
 
@@ -68,6 +79,75 @@ final class SupabaseProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<void> updateCurrentProfile({
+    String? about,
+    String? avatarUrl,
+    String? coverUrl,
+  }) async {
+    final remote = client;
+    final userId = remote?.auth.currentUser?.id;
+    if (remote == null || userId == null) {
+      return;
+    }
+
+    final values = <String, dynamic>{};
+    if (about != null) {
+      values['bio'] = about;
+    }
+    if (avatarUrl != null) {
+      values['avatar_url'] = avatarUrl;
+    }
+    if (coverUrl != null) {
+      values['cover_url'] = coverUrl;
+    }
+    if (values.isEmpty) {
+      return;
+    }
+    values['updated_at'] = DateTime.now().toIso8601String();
+
+    try {
+      await remote.from('profiles').update(values).eq('user_id', userId);
+      _cache.clear();
+    } catch (_) {
+      if (coverUrl == null || values.length <= 2) {
+        return;
+      }
+      final fallbackValues = Map<String, dynamic>.from(values)
+        ..remove('cover_url');
+      try {
+        await remote
+            .from('profiles')
+            .update(fallbackValues)
+            .eq('user_id', userId);
+        _cache.clear();
+      } catch (_) {
+        // Local optimistic profile state remains authoritative for the session.
+      }
+    }
+  }
+
+  @override
+  Future<void> deleteCurrentProfile() async {
+    final remote = client;
+    final userId = remote?.auth.currentUser?.id;
+    if (remote == null || userId == null) {
+      return;
+    }
+
+    try {
+      await remote.rpc('delete_current_user_for_app');
+    } catch (error) {
+      throw RepositoryFailure(
+        'تعذر حذف الحساب بالكامل. طبّق آخر تحديثات قاعدة البيانات ثم حاول مرة أخرى.',
+        error,
+      );
+    }
+    _cache.clear();
+    _networkCaches.clear();
+    _incomingRequestsCache.clear();
+  }
+
+  @override
   Future<List<NetworkPerson>> fetchNetworkProfiles({
     required AccountType viewerType,
     required bool companies,
@@ -96,6 +176,10 @@ final class SupabaseProfileRepository implements ProfileRepository {
     }
 
     try {
+      if (viewerType == AccountType.admin ||
+          (viewerType == AccountType.company && companies)) {
+        throw const FormatException('Use direct network query');
+      }
       final rows = await remote.rpc<List<dynamic>>(
         'get_network_profiles_for_app',
         params: {
@@ -103,13 +187,17 @@ final class SupabaseProfileRepository implements ProfileRepository {
           'p_limit': 60,
         },
       );
-      return [
+      final people = [
         for (var i = 0; i < rows.length; i++)
           _networkPersonFromRow(
             Map<String, dynamic>.from(rows[i] as Map),
             colorIndex: i,
           ),
       ];
+      if (people.isEmpty) {
+        throw const FormatException('Fallback to direct network query');
+      }
+      return _withConnectionStatuses(people);
     } catch (_) {
       try {
         var query = remote
@@ -117,9 +205,12 @@ final class SupabaseProfileRepository implements ProfileRepository {
             .select(
               'id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified',
             );
+        final currentProfileId = await _currentProfileId(remote);
 
         if (companies) {
-          if (viewerType != AccountType.engineer) {
+          if (viewerType != AccountType.engineer &&
+              viewerType != AccountType.company &&
+              viewerType != AccountType.admin) {
             return const [];
           }
           query = query.inFilter('role', const ['contractor', 'client']);
@@ -132,6 +223,15 @@ final class SupabaseProfileRepository implements ProfileRepository {
               'machinery',
             ]),
             AccountType.company => query.eq('role', 'engineer'),
+            AccountType.admin => query.inFilter('role', const [
+              'engineer',
+              'contractor',
+              'client',
+              'craftsman',
+              'worker',
+              'machinery',
+              'admin',
+            ]),
             AccountType.craftsman ||
             AccountType.worker ||
             AccountType.equipment => query.eq('role', '__none__'),
@@ -142,13 +242,15 @@ final class SupabaseProfileRepository implements ProfileRepository {
             .order('is_verified', ascending: false)
             .order('projects_count', ascending: false)
             .limit(60);
-        return [
+        final people = [
           for (var i = 0; i < rows.length; i++)
-            _networkPersonFromRow(
-              Map<String, dynamic>.from(rows[i] as Map),
-              colorIndex: i,
-            ),
+            if ('${(rows[i] as Map)['id'] ?? ''}' != currentProfileId)
+              _networkPersonFromRow(
+                Map<String, dynamic>.from(rows[i] as Map),
+                colorIndex: i,
+              ),
         ];
+        return _withConnectionStatuses(people);
       } catch (_) {
         return const [];
       }
@@ -163,10 +265,12 @@ final class SupabaseProfileRepository implements ProfileRepository {
     final type = accountTypeFromSupabaseRole('${row['role'] ?? ''}');
     final location = governorateFromSupabase('${row['governorate'] ?? ''}');
     final bio = '${row['bio'] ?? ''}'.trim();
+    final skills = _stringSetFrom(row['skills']);
 
     return ProfileForm(
       id: row['id'] == null ? null : '${row['id']}',
       avatarUrl: row['avatar_url'] == null ? null : '${row['avatar_url']}',
+      coverUrl: row['cover_url'] == null ? null : '${row['cover_url']}',
       followersCount: _intFrom(row['followers_count']),
       followingCount: _intFrom(row['following_count']),
       postsCount: _intFrom(row['posts_count']),
@@ -183,7 +287,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       company: type == AccountType.company ? fullName : '',
       role: type.label,
       about: bio.isEmpty ? type.description : bio,
-      skills: const {},
+      skills: skills,
       languages: const {},
       openToWork: type != AccountType.company,
       profilePublic: true,
@@ -196,6 +300,22 @@ final class SupabaseProfileRepository implements ProfileRepository {
       return value;
     }
     return int.tryParse('$value') ?? 0;
+  }
+
+  Set<String> _stringSetFrom(Object? value) {
+    if (value is Iterable) {
+      return {
+        for (final item in value)
+          if ('$item'.trim().isNotEmpty) '$item'.trim(),
+      };
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      return {
+        for (final item in value.split(RegExp(r'[,،]')))
+          if (item.trim().isNotEmpty) item.trim(),
+      };
+    }
+    return const <String>{};
   }
 
   @override
@@ -252,6 +372,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
         'request_connection_for_app',
         params: {'p_receiver_profile_id': receiverProfileId},
       );
+      await _notifyConnectionRequest(remote, receiverProfileId);
+      _networkCaches.clear();
     } catch (_) {
       try {
         final profileId = await _currentProfileId(remote);
@@ -263,9 +385,36 @@ final class SupabaseProfileRepository implements ProfileRepository {
           'receiver_profile_id': receiverProfileId,
           'status': 'pending',
         }, onConflict: 'requester_profile_id,receiver_profile_id');
+        await _notifyConnectionRequest(remote, receiverProfileId);
+        _networkCaches.clear();
       } catch (_) {
         // Connection request remains optimistic in the UI.
       }
+    }
+  }
+
+  @override
+  Future<String> connectionStatus(String otherProfileId) async {
+    final remote = client;
+    if (remote == null || otherProfileId.isEmpty) {
+      return 'none';
+    }
+
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null || profileId == otherProfileId) {
+        return 'none';
+      }
+      final row = await remote
+          .from('connection_requests')
+          .select('status,requester_profile_id,receiver_profile_id')
+          .or(
+            'and(requester_profile_id.eq.$profileId,receiver_profile_id.eq.$otherProfileId),and(requester_profile_id.eq.$otherProfileId,receiver_profile_id.eq.$profileId)',
+          )
+          .maybeSingle();
+      return row == null ? 'none' : '${row['status'] ?? 'none'}';
+    } catch (_) {
+      return 'none';
     }
   }
 
@@ -309,7 +458,12 @@ final class SupabaseProfileRepository implements ProfileRepository {
             'responded_at': DateTime.now().toIso8601String(),
           })
           .eq('id', requestId);
+      if (accept) {
+        await _createConversationForAcceptedRequest(remote, requestId);
+        await _notifyAcceptedConnection(remote, requestId);
+      }
       _incomingRequestsCache.clear();
+      _networkCaches.clear();
     } catch (_) {
       // Keep the local visual decision even if the optional table is missing.
     }
@@ -333,6 +487,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
       contextLine: person.contextLine,
       actionLabel: person.actionLabel,
       isCompany: person.isCompany,
+      avatarUrl: person.avatarUrl,
+      connectionStatus: person.connectionStatus,
     );
   }
 
@@ -351,7 +507,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
 
   bool _canViewNetwork(AccountType viewerType) {
     return viewerType == AccountType.engineer ||
-        viewerType == AccountType.company;
+        viewerType == AccountType.company ||
+        viewerType == AccountType.admin;
   }
 
   NetworkPerson _networkPersonFromRow(
@@ -380,6 +537,156 @@ final class SupabaseProfileRepository implements ProfileRepository {
       ),
       actionLabel: type == AccountType.company ? 'متابعة' : 'تواصل',
       isCompany: type == AccountType.company,
+      avatarUrl: row['avatar_url'] == null ? null : '${row['avatar_url']}',
+    );
+  }
+
+  Future<void> _createConversationForAcceptedRequest(
+    SupabaseClient remote,
+    String requestId,
+  ) async {
+    try {
+      final row = await remote
+          .from('connection_requests')
+          .select('requester_profile_id,receiver_profile_id')
+          .eq('id', requestId)
+          .maybeSingle();
+      if (row == null) {
+        return;
+      }
+      final requester = '${row['requester_profile_id'] ?? ''}';
+      final receiver = '${row['receiver_profile_id'] ?? ''}';
+      if (requester.isEmpty || receiver.isEmpty) {
+        return;
+      }
+      final ordered = requester.compareTo(receiver) <= 0
+          ? (requester, receiver)
+          : (receiver, requester);
+      await remote.from('conversations').upsert({
+        'participant_one': ordered.$1,
+        'participant_two': ordered.$2,
+        'last_message_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'participant_one,participant_two');
+    } catch (_) {
+      // Accepted connections still appear in messages through connection requests.
+    }
+  }
+
+  Future<List<NetworkPerson>> _withConnectionStatuses(
+    List<NetworkPerson> people,
+  ) async {
+    final remote = client;
+    if (remote == null || people.isEmpty) {
+      return people;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return people;
+      }
+      final ids = people.map((person) => person.id).toSet();
+      final rows = await remote
+          .from('connection_requests')
+          .select('requester_profile_id,receiver_profile_id,status')
+          .or(
+            'requester_profile_id.eq.$profileId,receiver_profile_id.eq.$profileId',
+          );
+      final statuses = <String, String>{};
+      for (final raw in rows) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final requester = '${row['requester_profile_id'] ?? ''}';
+        final receiver = '${row['receiver_profile_id'] ?? ''}';
+        final other = requester == profileId ? receiver : requester;
+        if (ids.contains(other)) {
+          statuses[other] = '${row['status'] ?? 'none'}';
+        }
+      }
+      return [
+        for (final person in people)
+          if ((statuses[person.id] ?? person.connectionStatus) != 'accepted')
+            _personWithConnection(
+              person,
+              statuses[person.id] ?? person.connectionStatus,
+            ),
+      ];
+    } catch (_) {
+      return people;
+    }
+  }
+
+  Future<void> _notifyConnectionRequest(
+    SupabaseClient remote,
+    String receiverProfileId,
+  ) async {
+    try {
+      final sender = await _currentProfileId(remote);
+      if (sender == null || sender == receiverProfileId) {
+        return;
+      }
+      await remote.from('notifications').insert({
+        'profile_id': receiverProfileId,
+        'title': 'طلب تواصل جديد',
+        'message': 'لديك طلب تواصل جديد',
+        'type': 'connection',
+        'action_url': 'app://profile/$sender',
+      });
+    } catch (_) {
+      // Notifications are best-effort.
+    }
+  }
+
+  Future<void> _notifyAcceptedConnection(
+    SupabaseClient remote,
+    String requestId,
+  ) async {
+    try {
+      final row = await remote
+          .from('connection_requests')
+          .select('requester_profile_id,receiver_profile_id')
+          .eq('id', requestId)
+          .maybeSingle();
+      if (row == null) {
+        return;
+      }
+      final current = await _currentProfileId(remote);
+      final requester = '${row['requester_profile_id'] ?? ''}';
+      final receiver = '${row['receiver_profile_id'] ?? ''}';
+      final recipient = current == requester ? receiver : requester;
+      if (current == null || recipient.isEmpty || recipient == current) {
+        return;
+      }
+      await remote.from('notifications').insert({
+        'profile_id': recipient,
+        'title': 'تم قبول طلب التواصل',
+        'message': 'أصبح بإمكانكما المراسلة الآن',
+        'type': 'connection',
+        'action_url': 'app://chat/$current',
+      });
+    } catch (_) {
+      // Notifications are best-effort.
+    }
+  }
+
+  NetworkPerson _personWithConnection(NetworkPerson person, String status) {
+    final normalized = status == 'accepted' || status == 'pending'
+        ? status
+        : 'none';
+    return NetworkPerson(
+      id: person.id,
+      profileId: person.profileId,
+      name: person.name,
+      title: person.title,
+      color: person.color,
+      badge: person.badge,
+      contextLine: person.contextLine,
+      actionLabel: switch (normalized) {
+        'accepted' => 'متصل',
+        'pending' => 'قيد الانتظار',
+        _ => person.actionLabel,
+      },
+      isCompany: person.isCompany,
+      avatarUrl: person.avatarUrl,
+      connectionStatus: normalized,
     );
   }
 
@@ -393,6 +700,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       AccountType.craftsman => 'حرفي',
       AccountType.worker => 'عامل',
       AccountType.equipment => 'آليات ومعدات',
+      AccountType.admin => 'إدارة المنصة',
     };
   }
 

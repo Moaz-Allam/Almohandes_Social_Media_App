@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../features/onboarding/onboarding_screen.dart';
 import '../../models/settings_item.dart';
+import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -42,7 +44,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('مساعدة'),
         content: const Text(
-          'للدعم، افتح تذكرة من لوحة Supabase أو تواصل مع فريق إدارة منصة المهندس.',
+          'للدعم، افتح تذكرة من لوحة الإدارة أو تواصل مع فريق الدعم.',
         ),
         actions: [
           TextButton(
@@ -52,6 +54,69 @@ class SettingsScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteAccount(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف الحساب'),
+        content: const Text(
+          'سيتم حذف ملفك الشخصي وتسجيل خروجك من التطبيق. هل تريد المتابعة؟',
+          textDirection: TextDirection.rtl,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('حذف الحساب'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await AppScope.read(context).deleteAccount();
+      if (!context.mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Account deleted'),
+          content: const Text(
+            'Your account and related app data were deleted. You will now return to onboarding.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+      if (!context.mounted) {
+        return;
+      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        (_) => false,
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('تعذر حذف الحساب: $error')));
+    }
   }
 
   void _openSection(BuildContext context, SettingsItem section) {
@@ -132,7 +197,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: _sections.length + 1,
+                itemCount: _sections.length + 3,
                 separatorBuilder: (context, index) =>
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
@@ -168,6 +233,63 @@ class SettingsScreen extends StatelessWidget {
                       value: controller.isDarkMode,
                       activeThumbColor: AppColors.blue,
                       onChanged: controller.setDarkMode,
+                    );
+                  }
+                  if (index == _sections.length + 1) {
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      leading: const Icon(
+                        Icons.privacy_tip_outlined,
+                        color: AppColors.blue,
+                      ),
+                      title: const Text(
+                        'سياسة الخصوصية',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'راجع كيفية استخدام بياناتك داخل التطبيق',
+                        style: TextStyle(
+                          color: context.appMuted,
+                          fontSize: 14.5,
+                          height: 1.25,
+                        ),
+                      ),
+                      onTap: () => showPrivacyPolicyDialog(context),
+                    );
+                  }
+                  if (index == _sections.length + 2) {
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      leading: const Icon(
+                        Icons.delete_forever_outlined,
+                        color: Colors.redAccent,
+                      ),
+                      title: const Text(
+                        'حذف الحساب',
+                        style: TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'حذف الملف الشخصي وتسجيل الخروج من التطبيق',
+                        style: TextStyle(
+                          color: context.appMuted,
+                          fontSize: 14.5,
+                          height: 1.25,
+                        ),
+                      ),
+                      onTap: () => _deleteAccount(context),
                     );
                   }
                   final section = _sections[index - 1];

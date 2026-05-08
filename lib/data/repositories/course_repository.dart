@@ -105,7 +105,7 @@ final class SupabaseCourseRepository implements CourseRepository {
       id: id,
       title: title,
       subtitle: description,
-      instructor: 'منصة المهندس',
+      instructor: 'فريق التدريب',
       icon: _iconFor('${row['category'] ?? ''}'),
       color: _colorFor(index),
       progress: (progress?.percentage ?? 0) / 100,
@@ -141,7 +141,7 @@ final class SupabaseCourseRepository implements CourseRepository {
         row['description'],
         fallback: 'لا يوجد وصف لهذه الدورة بعد.',
       ),
-      instructor: 'منصة المهندس',
+      instructor: 'فريق التدريب',
       icon: Icons.school_outlined,
       color: _colorFor(index),
       progress: videos.isEmpty

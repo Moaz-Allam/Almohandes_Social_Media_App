@@ -4,9 +4,9 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/onboarding_slide.dart';
 import '../../shared/painters/onboarding_scene_painter.dart';
+import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/primary_button.dart';
-import '../../shared/widgets/social_button.dart';
 import '../auth/sign_in_screen.dart';
 import '../auth/sign_up_flow_screen.dart';
 
@@ -83,11 +83,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _Dots(count: _slides.length, active: _page),
               const SizedBox(height: 28),
               PrimaryButton(label: 'انضم الآن', onPressed: _openJoin),
-              const SizedBox(height: 8),
-              SocialButton.google(
-                label: 'المتابعة بواسطة Google',
-                onPressed: _openSignIn,
-              ),
               const SizedBox(height: 14),
               TextButton(
                 onPressed: _openSignIn,
@@ -98,6 +93,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
                   ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => showPrivacyPolicyDialog(context),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 28),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Privacy Policy',
+                  style: TextStyle(fontSize: 11, color: AppColors.muted),
                 ),
               ),
             ],

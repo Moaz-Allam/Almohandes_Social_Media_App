@@ -34,7 +34,29 @@ class _ShareContactScreenState extends State<ShareContactScreen> {
     ).repositories.messages.fetchConversations();
   }
 
-  void _sendToContact(BuildContext context, MessageItem contact) {
+  Future<void> _sendToContact(BuildContext context, MessageItem contact) async {
+    final post = widget.post;
+    final isReel = post.id.startsWith('reel:') || post.isReel;
+    final itemId = isReel ? post.id.replaceFirst('reel:', '') : post.id;
+    final link = isReel ? 'app://reel/$itemId' : 'app://post/$itemId';
+    final preview = post.body.trim().isEmpty ? post.name : post.body.trim();
+    try {
+      await AppScope.read(context).repositories.messages.sendMessage(
+        conversationId: contact.conversationId,
+        content: '$link\n$preview',
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => ChatScreen(contact: contact)),
@@ -124,6 +146,7 @@ class _ShareContactScreenState extends State<ShareContactScreen> {
                           name: contact.name,
                           radius: 27,
                           color: contact.color,
+                          imageUrl: contact.avatarUrl,
                         ),
                         title: Text(
                           contact.name,

@@ -1,6 +1,7 @@
 import '../session/session_store.dart';
 import '../supabase/supabase_bootstrap.dart';
 import 'auth_repository.dart';
+import 'comment_repository.dart';
 import 'course_repository.dart';
 import 'feed_repository.dart';
 import 'message_repository.dart';
@@ -15,6 +16,7 @@ import 'subscription_repository.dart';
 final class AppRepositories {
   AppRepositories({
     required this.auth,
+    required this.comments,
     required this.courses,
     required this.feed,
     required this.messages,
@@ -31,6 +33,7 @@ final class AppRepositories {
     final client = SupabaseBootstrap.maybeClient();
     return AppRepositories(
       auth: SupabaseAuthRepository(client: client, sessionStore: sessionStore),
+      comments: SupabaseCommentRepository(client: client),
       courses: SupabaseCourseRepository(client: client),
       feed: SupabaseFeedRepository(client: client),
       messages: SupabaseMessageRepository(client: client),
@@ -45,6 +48,7 @@ final class AppRepositories {
   }
 
   final AuthRepository auth;
+  final CommentRepository comments;
   final CourseRepository courses;
   final FeedRepository feed;
   final MessageRepository messages;

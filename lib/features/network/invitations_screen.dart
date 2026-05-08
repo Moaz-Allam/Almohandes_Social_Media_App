@@ -39,6 +39,8 @@ class _InvitationsScreenState extends State<InvitationsScreen> {
           name: person.name,
           headline: person.title,
           color: person.color,
+          avatarUrl: person.avatarUrl,
+          initialConnectionStatus: 'pending',
           isConnectionRequest: true,
         ),
       ),
@@ -46,15 +48,22 @@ class _InvitationsScreenState extends State<InvitationsScreen> {
   }
 
   Future<void> _answer(NetworkPerson request, bool accept) async {
-    await AppScope.read(context).repositories.profiles.answerConnectionRequest(
+    final app = AppScope.read(context);
+    await app.repositories.profiles.answerConnectionRequest(
       requestId: request.id,
       accept: accept,
     );
     if (!mounted) {
       return;
     }
+    if (accept) {
+      await app.refreshSessionData();
+      if (!mounted) {
+        return;
+      }
+    }
     setState(() {
-      _requestsFuture = AppScope.read(context).repositories.profiles
+      _requestsFuture = app.repositories.profiles
           .fetchIncomingConnectionRequests(forceRefresh: true);
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +147,7 @@ class _InvitationsScreenState extends State<InvitationsScreen> {
                               name: request.name,
                               radius: 34,
                               color: request.color,
+                              imageUrl: request.avatarUrl,
                             ),
                           ),
                           title: GestureDetector(

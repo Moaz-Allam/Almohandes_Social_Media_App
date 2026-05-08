@@ -12,11 +12,13 @@ class NetworkCard extends StatelessWidget {
     required this.person,
     required this.onTap,
     required this.onAction,
+    this.loading = false,
   });
 
   final NetworkPerson person;
   final VoidCallback onTap;
-  final VoidCallback onAction;
+  final VoidCallback? onAction;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +54,7 @@ class NetworkCard extends StatelessWidget {
                       radius: 39,
                       color: person.color,
                       badge: person.badge,
+                      imageUrl: person.avatarUrl,
                     ),
                   ),
                 ),
@@ -124,18 +127,28 @@ class NetworkCard extends StatelessWidget {
                 width: double.infinity,
                 height: 34,
                 child: OutlinedButton(
-                  onPressed: onAction,
+                  onPressed: loading ? null : onAction,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.blue,
-                    side: const BorderSide(color: AppColors.blue),
+                    foregroundColor: loading
+                        ? AppColors.darkBlue
+                        : AppColors.blue,
+                    disabledForegroundColor: AppColors.darkBlue,
+                    side: BorderSide(
+                      color: loading ? AppColors.darkBlue : AppColors.blue,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
-                  child: Text(
-                    person.actionLabel,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
+                  child: loading
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          person.actionLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
                 ),
               ),
             ),

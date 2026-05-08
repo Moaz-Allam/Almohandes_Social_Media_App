@@ -7,6 +7,7 @@ String accountTypeToSupabaseRole(AccountType type) {
     AccountType.craftsman => 'craftsman',
     AccountType.worker => 'worker',
     AccountType.equipment => 'machinery',
+    AccountType.admin => 'admin',
   };
 }
 
@@ -17,6 +18,7 @@ AccountType accountTypeFromSupabaseRole(String? role) {
     'craftsman' => AccountType.craftsman,
     'worker' => AccountType.worker,
     'machinery' || 'equipment' => AccountType.equipment,
+    'admin' => AccountType.admin,
     _ => AccountType.engineer,
   };
 }

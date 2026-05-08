@@ -29,6 +29,10 @@ ProjectItem projectFromSupabase(
     postedBy:
         '${profile?['full_name'] ?? details?['company_name'] ?? 'جهة ناشرة'}',
     color: _colorForIndex(colorIndex),
+    profileId: row['profile_id'] == null ? null : '${row['profile_id']}',
+    creatorAvatarUrl: profile?['avatar_url'] == null
+        ? null
+        : '${profile?['avatar_url']}',
   );
 }
 

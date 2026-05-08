@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../models/comment_item.dart';
 import '../../state/app_scope.dart';
 import 'app_avatar.dart';
 
-Future<void> showLinkedCommentsSheet(BuildContext context) {
+Future<void> showLinkedCommentsSheet(
+  BuildContext context, {
+  required String targetType,
+  required String targetId,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -14,12 +19,87 @@ Future<void> showLinkedCommentsSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (_) => const LinkedCommentsSheet(),
+    builder: (_) =>
+        LinkedCommentsSheet(targetType: targetType, targetId: targetId),
   );
 }
 
-class LinkedCommentsSheet extends StatelessWidget {
-  const LinkedCommentsSheet({super.key});
+class LinkedCommentsSheet extends StatefulWidget {
+  const LinkedCommentsSheet({
+    super.key,
+    required this.targetType,
+    required this.targetId,
+  });
+
+  final String targetType;
+  final String targetId;
+
+  @override
+  State<LinkedCommentsSheet> createState() => _LinkedCommentsSheetState();
+}
+
+class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
+  final _commentController = TextEditingController();
+  late Future<List<CommentItem>> _commentsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentsFuture = Future.value(const <CommentItem>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _commentsFuture = AppScope.read(context).repositories.comments
+        .fetchComments(
+          targetType: widget.targetType,
+          targetId: widget.targetId,
+        );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _commentController.clear();
+    try {
+      final comments = AppScope.read(context).repositories.comments;
+      await comments.addComment(
+        targetType: widget.targetType,
+        targetId: widget.targetId,
+        content: text,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _commentsFuture = comments.fetchComments(
+          targetType: widget.targetType,
+          targetId: widget.targetId,
+          forceRefresh: true,
+        );
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تم إضافة التعليق')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _commentController.text = text;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,31 +149,46 @@ class LinkedCommentsSheet extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(24, 54, 24, 24),
-                  children: const [
-                    Icon(
-                      Icons.mode_comment_outlined,
-                      color: AppColors.muted,
-                      size: 44,
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'لا توجد تعليقات بعد',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      'ستظهر التعليقات هنا بعد إضافتها من Supabase.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppColors.muted, height: 1.45),
-                    ),
-                  ],
+                child: FutureBuilder<List<CommentItem>>(
+                  future: _commentsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting &&
+                        !snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final comments = snapshot.data ?? const <CommentItem>[];
+                    if (comments.isEmpty) {
+                      return const _EmptyCommentsState();
+                    }
+                    return ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                      itemCount: comments.length,
+                      itemBuilder: (context, index) {
+                        final comment = comments[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: AppAvatar(
+                            name: comment.authorName,
+                            radius: 18,
+                            color: comment.color,
+                            imageUrl: comment.avatarUrl,
+                          ),
+                          title: Text(
+                            comment.content,
+                            style: const TextStyle(height: 1.35),
+                          ),
+                          subtitle: Text(
+                            _exactDateTime(comment.createdAt),
+                            style: TextStyle(
+                              color: context.appMuted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
               Container(
@@ -108,11 +203,14 @@ class LinkedCommentsSheet extends StatelessWidget {
                       name: name,
                       radius: 20,
                       color: AppColors.darkBlue,
+                      imageUrl: profile?.avatarUrl,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
+                        controller: _commentController,
                         textDirection: TextDirection.rtl,
+                        onSubmitted: (_) => _submitComment(),
                         decoration: InputDecoration(
                           hintText: 'أضف تعليقا...',
                           filled: true,
@@ -129,6 +227,11 @@ class LinkedCommentsSheet extends StatelessWidget {
                             borderRadius: BorderRadius.circular(26),
                             borderSide: BorderSide(color: context.appBorder),
                           ),
+                          suffixIcon: IconButton(
+                            onPressed: () => _submitComment(),
+                            icon: const Icon(Icons.send, color: AppColors.blue),
+                            tooltip: 'إرسال التعليق',
+                          ),
                         ),
                       ),
                     ),
@@ -139,6 +242,42 @@ class LinkedCommentsSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  String _exactDateTime(DateTime value) {
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+  }
+}
+
+class _EmptyCommentsState extends StatelessWidget {
+  const _EmptyCommentsState();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 54, 24, 24),
+      children: [
+        const Icon(
+          Icons.mode_comment_outlined,
+          color: AppColors.muted,
+          size: 44,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'لا توجد تعليقات بعد',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'اكتب أول تعليق من الحقل بالأسفل.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.muted, height: 1.45),
+        ),
+      ],
     );
   }
 }

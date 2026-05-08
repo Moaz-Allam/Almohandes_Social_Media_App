@@ -2,6 +2,7 @@ final class ProfileForm {
   const ProfileForm({
     this.id,
     this.avatarUrl,
+    this.coverUrl,
     this.followersCount = 0,
     this.followingCount = 0,
     this.postsCount = 0,
@@ -25,6 +26,7 @@ final class ProfileForm {
 
   final String? id;
   final String? avatarUrl;
+  final String? coverUrl;
   final int followersCount;
   final int followingCount;
   final int postsCount;
@@ -46,4 +48,54 @@ final class ProfileForm {
   final bool jobAlerts;
 
   String get fullName => '$firstName $lastName'.trim();
+
+  ProfileForm copyWith({
+    String? id,
+    String? avatarUrl,
+    String? coverUrl,
+    int? followersCount,
+    int? followingCount,
+    int? postsCount,
+    int? projectsCount,
+    bool? isPremium,
+    String? email,
+    String? firstName,
+    String? lastName,
+    String? headline,
+    String? location,
+    String? industry,
+    String? company,
+    String? role,
+    String? about,
+    Set<String>? skills,
+    Set<String>? languages,
+    bool? openToWork,
+    bool? profilePublic,
+    bool? jobAlerts,
+  }) {
+    return ProfileForm(
+      id: id ?? this.id,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      coverUrl: coverUrl ?? this.coverUrl,
+      followersCount: followersCount ?? this.followersCount,
+      followingCount: followingCount ?? this.followingCount,
+      postsCount: postsCount ?? this.postsCount,
+      projectsCount: projectsCount ?? this.projectsCount,
+      isPremium: isPremium ?? this.isPremium,
+      email: email ?? this.email,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
+      headline: headline ?? this.headline,
+      location: location ?? this.location,
+      industry: industry ?? this.industry,
+      company: company ?? this.company,
+      role: role ?? this.role,
+      about: about ?? this.about,
+      skills: skills ?? this.skills,
+      languages: languages ?? this.languages,
+      openToWork: openToWork ?? this.openToWork,
+      profilePublic: profilePublic ?? this.profilePublic,
+      jobAlerts: jobAlerts ?? this.jobAlerts,
+    );
+  }
 }

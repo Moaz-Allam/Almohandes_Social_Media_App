@@ -1,9 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
+import '../../models/app_tab.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import 'project_form_screen.dart';
 import 'widgets/composer_top_bar.dart';
@@ -20,6 +25,9 @@ class ComposerScreen extends StatefulWidget {
 class _ComposerScreenState extends State<ComposerScreen> {
   final _contentController = TextEditingController();
   bool _isPublishing = false;
+  String _mediaUrl = '';
+  String _mediaType = 'text';
+  String _mediaName = '';
 
   static const _allOptions = [
     _ComposerOption(Icons.image_outlined, 'إضافة صورة', _ComposerAction.photo),
@@ -52,36 +60,107 @@ class _ComposerScreenState extends State<ComposerScreen> {
 
   Future<void> _publishPost() async {
     final content = _contentController.text.trim();
-    if (content.isEmpty || _isPublishing) {
+    if ((content.isEmpty && _mediaUrl.isEmpty) || _isPublishing) {
       return;
     }
     setState(() => _isPublishing = true);
-    await AppScope.read(context).repositories.feed.createPost(content: content);
+    final repositories = AppScope.read(context).repositories;
+    try {
+      if (_mediaType == 'reel') {
+        await repositories.reels.createReel(
+          caption: content,
+          videoUrl: _mediaUrl,
+        );
+      } else {
+        await repositories.feed.createPost(
+          content: content,
+          mediaUrl: _mediaUrl,
+          mediaType: _mediaType,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _mediaType == 'reel' ? 'تم نشر الريل' : 'تم النشر بنجاح',
+          ),
+        ),
+      );
+      if (_mediaType == 'reel') {
+        AppScope.read(context).selectTab(AppTab.reels);
+      } else {
+        widget.onClose();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+    } finally {
+      if (mounted) {
+        setState(() => _isPublishing = false);
+      }
+    }
+  }
+
+  Future<void> _pickMedia(_ComposerAction action) async {
+    final picker = ImagePicker();
+    final XFile? picked = action == _ComposerAction.photo
+        ? await picker.pickImage(
+            source: ImageSource.gallery,
+            maxWidth: 1400,
+            imageQuality: 82,
+          )
+        : await picker.pickVideo(source: ImageSource.gallery);
+    if (picked == null) {
+      return;
+    }
+    final bytes = await picked.readAsBytes();
+    final mimeType =
+        picked.mimeType ??
+        (action == _ComposerAction.photo ? 'image/jpeg' : 'video/mp4');
     if (!mounted) {
       return;
     }
-    setState(() => _isPublishing = false);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تم نشر المنشور')));
-    widget.onClose();
+    setState(() {
+      _mediaUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      _mediaType = action == _ComposerAction.photo ? 'image' : 'reel';
+      _mediaName = picked.name;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          action == _ComposerAction.photo
+              ? 'تمت إضافة الصورة'
+              : 'تمت إضافة الفيديو',
+        ),
+      ),
+    );
   }
 
-  void _handleOption(
+  void _removeMedia() {
+    setState(() {
+      _mediaUrl = '';
+      _mediaType = 'text';
+      _mediaName = '';
+    });
+  }
+
+  Future<void> _handleOption(
     BuildContext context,
     _ComposerOption option,
     AccountType accountType,
-  ) {
+  ) async {
     switch (option.action) {
       case _ComposerAction.photo:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('اختر صورة ثم اكتب وصفا للنشر')),
-        );
+        await _pickMedia(option.action);
         return;
       case _ComposerAction.reel:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('اختر فيديو ريل ثم اكتب وصفا للنشر')),
-        );
+        await _pickMedia(option.action);
         return;
       case _ComposerAction.project:
         if (!accountType.canPostProjects) {
@@ -92,9 +171,12 @@ class _ComposerScreenState extends State<ComposerScreen> {
           );
           return;
         }
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const ProjectFormScreen()));
+        final created = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => const ProjectFormScreen()),
+        );
+        if (created == true && mounted) {
+          widget.onClose();
+        }
         return;
     }
   }
@@ -116,7 +198,9 @@ class _ComposerScreenState extends State<ComposerScreen> {
           onClose: widget.onClose,
           onAction: _publishPost,
           actionEnabled:
-              _contentController.text.trim().isNotEmpty && !_isPublishing,
+              (_contentController.text.trim().isNotEmpty ||
+                  _mediaUrl.isNotEmpty) &&
+              !_isPublishing,
         ),
         Expanded(
           child: ListView(
@@ -130,6 +214,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
                     radius: 27,
                     color: AppColors.darkBlue,
                     badge: role,
+                    imageUrl: profile?.avatarUrl,
                   ),
                   const SizedBox(width: 12),
                   Column(
@@ -192,6 +277,60 @@ class _ComposerScreenState extends State<ComposerScreen> {
                   ),
                 ),
               ),
+              if (_mediaUrl.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Stack(
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1.55,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: MediaPreview(
+                          mediaUrl: _mediaUrl,
+                          mediaType: _mediaType,
+                          fallbackLabel: _mediaType == 'reel' ? 'ريل' : 'صورة',
+                        ),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      top: 8,
+                      end: 8,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.black.withValues(alpha: .55),
+                        child: IconButton(
+                          onPressed: _removeMedia,
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          tooltip: 'إزالة',
+                        ),
+                      ),
+                    ),
+                    if (_mediaName.isNotEmpty)
+                      PositionedDirectional(
+                        start: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: .55),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            _mediaName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

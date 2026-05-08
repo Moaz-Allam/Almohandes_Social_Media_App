@@ -8,15 +8,22 @@ FeedPostModel feedPostFromSupabase(
   final profile = _firstMap(row['profiles']);
   final likes = row['likes_count'] ?? row['reactions_count'] ?? 0;
   final comments = row['comments_count'] ?? 0;
-  final name = profile?['full_name'] ?? row['full_name'] ?? 'مستخدم المهندس';
+  final name = profile?['full_name'] ?? row['full_name'] ?? 'مستخدم';
   final role = profile?['role'] ?? row['role'] ?? 'مهندس';
+  final imageUrl = '${row['image_url'] ?? row['media_url'] ?? ''}';
+  final postType = '${row['post_type'] ?? row['media_type'] ?? ''}';
+  final mediaType = postType == 'reel' || postType == 'video'
+      ? 'reel'
+      : imageUrl.isNotEmpty
+      ? 'image'
+      : 'text';
 
   return FeedPostModel(
     id: '${row['post_id'] ?? row['id'] ?? ''}',
     profileId: row['profile_id'] == null ? null : '${row['profile_id']}',
     name: '$name',
     headline: _headlineForRole('$role'),
-    time: 'حديثا',
+    time: _exactDateTime(row['created_at']),
     body: '${row['content'] ?? ''}',
     reactions: '$likes',
     comments: '$comments تعليق',
@@ -25,7 +32,12 @@ FeedPostModel feedPostFromSupabase(
       1 => AppColors.blue,
       _ => AppColors.muted,
     },
-    showMedia: row['image_url'] != null,
+    showMedia: imageUrl.isNotEmpty,
+    mediaUrl: imageUrl,
+    mediaType: mediaType,
+    avatarUrl: profile?['avatar_url'] == null
+        ? null
+        : '${profile?['avatar_url']}',
   );
 }
 
@@ -43,11 +55,20 @@ Map<String, dynamic>? _firstMap(Object? value) {
 
 String _headlineForRole(String role) {
   return switch (role) {
-    'engineer' => 'مهندس · منصة المهندس',
+    'engineer' => 'مهندس',
     'contractor' => 'شركة مقاولات',
     'craftsman' => 'حرفي',
     'worker' => 'عامل بناء',
     'machinery' => 'مزود آليات',
-    _ => role,
+    _ => role.isEmpty ? 'مستخدم' : role,
   };
+}
+
+String _exactDateTime(Object? value) {
+  final date = DateTime.tryParse('$value')?.toLocal();
+  if (date == null) {
+    return '';
+  }
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${date.year}-${two(date.month)}-${two(date.day)} ${two(date.hour)}:${two(date.minute)}';
 }

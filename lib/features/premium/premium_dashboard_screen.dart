@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../state/app_scope.dart';
 import 'models/premium_course.dart';
+import 'premium_access_screen.dart';
 import 'premium_course_screen.dart';
 import 'widgets/course_progress_card.dart';
 import 'widgets/course_stats_strip.dart';
@@ -40,6 +41,9 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!AppScope.watch(context).hasPremiumLibrary) {
+      return const PremiumAccessScreen();
+    }
     return Scaffold(
       backgroundColor: context.appSoft,
       appBar: AppBar(
@@ -120,7 +124,7 @@ class _PremiumCoursesEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 6),
             Text(
-              'ستظهر الدورات هنا بعد إضافتها في جداول Supabase.',
+              'ستظهر الدورات هنا بعد إضافتها.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted, height: 1.45),
             ),

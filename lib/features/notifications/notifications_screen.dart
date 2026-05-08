@@ -119,7 +119,7 @@ class _NotificationsEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 6),
             Text(
-              'ستظهر إشعاراتك هنا عند وصولها من Supabase.',
+              'ستظهر إشعاراتك هنا عند وصولها.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted, height: 1.45),
             ),

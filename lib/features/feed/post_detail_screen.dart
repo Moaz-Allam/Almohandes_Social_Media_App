@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../models/comment_item.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/saved_content.dart';
-import '../../shared/painters/post_media_painter.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
 import '../../shared/widgets/like_burst.dart';
+import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import '../messages/share_contact_screen.dart';
 
@@ -121,9 +122,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
 
     if (confirmed == true && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تمت إعادة النشر')));
+      final feed = AppScope.read(context).repositories.feed;
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        await feed.repost(post.id);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        messenger.showSnackBar(SnackBar(content: Text('$error')));
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(const SnackBar(content: Text('تمت إعادة النشر')));
     }
   }
 
@@ -150,12 +163,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 reactionCount: _reactionCount,
                 isLiked: _isLiked,
                 onLike: _toggleLike,
-                onComment: () => showLinkedCommentsSheet(context),
+                onComment: () => showLinkedCommentsSheet(
+                  context,
+                  targetType: 'post',
+                  targetId: post.id,
+                ),
                 onRepost: _confirmRepost,
                 onSend: _openSendFlow,
                 onMenuSelected: _handleMenuSelection,
               ),
-              const _InlineCommentsSection(),
+              _InlineCommentsSection(postId: post.id),
             ],
           ),
           LikeBurst(visible: _showLike, color: AppColors.blue),
@@ -189,6 +206,11 @@ class _PostDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actionColor = isLiked ? AppColors.blue : AppColors.muted;
+    final profile = AppScope.watch(context).profile;
+    final effectiveAvatarUrl =
+        profile?.id != null && profile!.id == post.profileId
+        ? profile.avatarUrl
+        : post.avatarUrl;
     return Container(
       decoration: BoxDecoration(
         color: context.appSurface,
@@ -202,7 +224,12 @@ class _PostDetailCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AppAvatar(name: post.name, radius: 28, color: post.avatarColor),
+                AppAvatar(
+                  name: post.name,
+                  radius: 28,
+                  color: post.avatarColor,
+                  imageUrl: effectiveAvatarUrl,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -263,9 +290,13 @@ class _PostDetailCard extends StatelessWidget {
             ),
           ),
           if (post.showMedia)
-            const AspectRatio(
+            AspectRatio(
               aspectRatio: 1.55,
-              child: CustomPaint(painter: PostMediaPainter()),
+              child: MediaPreview(
+                mediaUrl: post.mediaUrl,
+                mediaType: post.mediaType,
+                fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+              ),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
@@ -319,8 +350,74 @@ class _PostDetailCard extends StatelessWidget {
   }
 }
 
-class _InlineCommentsSection extends StatelessWidget {
-  const _InlineCommentsSection();
+class _InlineCommentsSection extends StatefulWidget {
+  const _InlineCommentsSection({required this.postId});
+
+  final String postId;
+
+  @override
+  State<_InlineCommentsSection> createState() => _InlineCommentsSectionState();
+}
+
+class _InlineCommentsSectionState extends State<_InlineCommentsSection> {
+  final _commentController = TextEditingController();
+  late Future<List<CommentItem>> _commentsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _commentsFuture = Future.value(const <CommentItem>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _commentsFuture = AppScope.read(context).repositories.comments
+        .fetchComments(targetType: 'post', targetId: widget.postId);
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) {
+      return;
+    }
+    _commentController.clear();
+    try {
+      final comments = AppScope.read(context).repositories.comments;
+      await comments.addComment(
+        targetType: 'post',
+        targetId: widget.postId,
+        content: text,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _commentsFuture = comments.fetchComments(
+          targetType: 'post',
+          targetId: widget.postId,
+          forceRefresh: true,
+        );
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تم إضافة التعليق')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _commentController.text = text;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$error')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -341,13 +438,46 @@ class _InlineCommentsSection extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 26, 24, 26),
-            child: Text(
-              'لا توجد تعليقات بعد',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted, height: 1.35),
-            ),
+          FutureBuilder<List<CommentItem>>(
+            future: _commentsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.all(26),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final comments = snapshot.data ?? const <CommentItem>[];
+              if (comments.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 26, 24, 26),
+                  child: Text(
+                    'لا توجد تعليقات بعد',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.muted, height: 1.35),
+                  ),
+                );
+              }
+              return Column(
+                children: [
+                  for (final comment in comments)
+                    ListTile(
+                      leading: AppAvatar(
+                        name: comment.authorName,
+                        radius: 18,
+                        color: comment.color,
+                        imageUrl: comment.avatarUrl,
+                      ),
+                      title: Text(comment.content),
+                      subtitle: Text(
+                        _exactDateTime(comment.createdAt),
+                        style: TextStyle(color: context.appMuted, fontSize: 12),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           Container(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -357,11 +487,18 @@ class _InlineCommentsSection extends StatelessWidget {
             ),
             child: Row(
               children: [
-                AppAvatar(name: name, radius: 20, color: AppColors.darkBlue),
+                AppAvatar(
+                  name: name,
+                  radius: 20,
+                  color: AppColors.darkBlue,
+                  imageUrl: profile?.avatarUrl,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: TextField(
+                    controller: _commentController,
                     textDirection: TextDirection.rtl,
+                    onSubmitted: (_) => _submitComment(),
                     decoration: InputDecoration(
                       hintText: 'أضف تعليقا...',
                       filled: true,
@@ -378,6 +515,11 @@ class _InlineCommentsSection extends StatelessWidget {
                         borderRadius: BorderRadius.circular(26),
                         borderSide: BorderSide(color: context.appBorder),
                       ),
+                      suffixIcon: IconButton(
+                        onPressed: () => _submitComment(),
+                        icon: const Icon(Icons.send, color: AppColors.blue),
+                        tooltip: 'إرسال التعليق',
+                      ),
                     ),
                   ),
                 ),
@@ -387,6 +529,12 @@ class _InlineCommentsSection extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _exactDateTime(DateTime value) {
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 }
 

@@ -12,6 +12,9 @@ final class FeedPostModel {
     required this.comments,
     required this.avatarColor,
     required this.showMedia,
+    this.mediaUrl = '',
+    this.mediaType = 'text',
+    this.avatarUrl,
   });
 
   final String id;
@@ -24,4 +27,11 @@ final class FeedPostModel {
   final String comments;
   final Color avatarColor;
   final bool showMedia;
+  final String mediaUrl;
+  final String mediaType;
+  final String? avatarUrl;
+
+  bool get isReel => mediaType == 'reel' || mediaType == 'video';
+  bool get isImagePost => mediaType == 'image';
+  bool get isTextOnly => !showMedia && body.trim().isNotEmpty;
 }

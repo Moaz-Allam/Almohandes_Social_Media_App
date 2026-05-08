@@ -29,6 +29,10 @@ class NetworkScreen extends StatefulWidget {
 
 class _NetworkScreenState extends State<NetworkScreen> {
   _NetworkCategory _category = _NetworkCategory.people;
+  final Set<String> _pendingConnectionIds = {};
+  final Set<String> _connectingIds = {};
+  Future<List<NetworkPerson>>? _profilesFuture;
+  String? _profilesFutureKey;
 
   List<_NetworkCategory> _categoriesFor(AccountType accountType) {
     return switch (accountType) {
@@ -36,7 +40,14 @@ class _NetworkScreenState extends State<NetworkScreen> {
         _NetworkCategory.people,
         _NetworkCategory.companies,
       ],
-      AccountType.company => const [_NetworkCategory.people],
+      AccountType.company => const [
+        _NetworkCategory.people,
+        _NetworkCategory.companies,
+      ],
+      AccountType.admin => const [
+        _NetworkCategory.people,
+        _NetworkCategory.companies,
+      ],
       AccountType.craftsman ||
       AccountType.worker ||
       AccountType.equipment => const [],
@@ -67,6 +78,23 @@ class _NetworkScreenState extends State<NetworkScreen> {
     );
   }
 
+  Future<List<NetworkPerson>> _profilesFor(
+    BuildContext context, {
+    required AccountType accountType,
+    required _NetworkCategory category,
+  }) {
+    final key = '${accountType.name}:${category.name}';
+    if (_profilesFutureKey != key || _profilesFuture == null) {
+      _profilesFutureKey = key;
+      _profilesFuture = _fetchProfiles(
+        context,
+        accountType: accountType,
+        category: category,
+      );
+    }
+    return _profilesFuture!;
+  }
+
   void _openInvitations(BuildContext context) {
     Navigator.of(
       context,
@@ -81,6 +109,8 @@ class _NetworkScreenState extends State<NetworkScreen> {
           name: person.name,
           headline: person.title,
           color: person.color,
+          avatarUrl: person.avatarUrl,
+          initialConnectionStatus: _effectivePerson(person).connectionStatus,
         ),
       ),
     );
@@ -102,15 +132,45 @@ class _NetworkScreenState extends State<NetworkScreen> {
       ).showSnackBar(const SnackBar(content: Text('تمت المتابعة')));
       return;
     }
-    await AppScope.read(
-      context,
-    ).repositories.profiles.requestConnection(person.id);
+    if (_connectingIds.contains(person.id)) {
+      return;
+    }
+    setState(() => _connectingIds.add(person.id));
+    try {
+      await AppScope.read(
+        context,
+      ).repositories.profiles.requestConnection(person.id);
+    } finally {
+      if (context.mounted) {
+        setState(() => _connectingIds.remove(person.id));
+      }
+    }
     if (!context.mounted) {
       return;
     }
+    setState(() => _pendingConnectionIds.add(person.id));
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('تم إرسال طلب التواصل')));
+  }
+
+  NetworkPerson _effectivePerson(NetworkPerson person) {
+    if (!_pendingConnectionIds.contains(person.id)) {
+      return person;
+    }
+    return NetworkPerson(
+      id: person.id,
+      profileId: person.profileId,
+      name: person.name,
+      title: person.title,
+      color: person.color,
+      badge: person.badge,
+      contextLine: person.contextLine,
+      actionLabel: 'قيد الانتظار',
+      isCompany: person.isCompany,
+      avatarUrl: person.avatarUrl,
+      connectionStatus: 'pending',
+    );
   }
 
   @override
@@ -126,7 +186,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
           child: selectedCategory == null
               ? const _NetworkAccessEmptyState()
               : FutureBuilder<List<NetworkPerson>>(
-                  future: _fetchProfiles(
+                  future: _profilesFor(
                     context,
                     accountType: accountType,
                     category: selectedCategory,
@@ -139,12 +199,13 @@ class _NetworkScreenState extends State<NetworkScreen> {
 
                     return RefreshIndicator(
                       onRefresh: () async {
-                        await _fetchProfiles(
+                        _profilesFuture = _fetchProfiles(
                           context,
                           accountType: accountType,
                           category: selectedCategory,
                           forceRefresh: true,
                         );
+                        await _profilesFuture;
                         if (mounted) {
                           setState(() {});
                         }
@@ -181,7 +242,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
                             const Padding(
                               padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
                               child: Text(
-                                'مهندسون',
+                                'أشخاص',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
@@ -203,17 +264,27 @@ class _NetworkScreenState extends State<NetworkScreen> {
                                     crossAxisCount: 2,
                                     mainAxisSpacing: 10,
                                     crossAxisSpacing: 10,
-                                    childAspectRatio: .62,
+                                    childAspectRatio: .68,
                                   ),
-                              itemBuilder: (context, index) => NetworkCard(
-                                person: profiles[index],
-                                onTap: () =>
-                                    _openProfile(context, profiles[index]),
-                                onAction: () => _handleNetworkAction(
-                                  context,
+                              itemBuilder: (context, index) {
+                                final person = _effectivePerson(
                                   profiles[index],
-                                ),
-                              ),
+                                );
+                                final canAct =
+                                    !person.isPendingConnection &&
+                                    !person.isConnected;
+                                return NetworkCard(
+                                  person: person,
+                                  loading: _connectingIds.contains(person.id),
+                                  onTap: () => _openProfile(context, person),
+                                  onAction: canAct
+                                      ? () => _handleNetworkAction(
+                                          context,
+                                          person,
+                                        )
+                                      : null,
+                                );
+                              },
                             ),
                         ],
                       ),
@@ -238,7 +309,7 @@ class _NetworkAccessEmptyState extends StatelessWidget {
           Icon(Icons.lock_outline, color: AppColors.muted, size: 44),
           SizedBox(height: 14),
           Text(
-            'الشبكة متاحة للمهندسين والشركات فقط',
+            'لا تملك صلاحية مشاهدة شبكة المستخدمين',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
           ),
@@ -279,7 +350,7 @@ class _NetworkEmptyProfiles extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'ستظهر النتائج هنا بعد إضافة ملفات المستخدمين في Supabase.',
+            'ستظهر النتائج هنا بعد إضافة ملفات المستخدمين.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.muted, height: 1.45),
           ),
@@ -303,7 +374,7 @@ class _NetworkSkeletonGrid extends StatelessWidget {
         crossAxisCount: 2,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
-        childAspectRatio: .62,
+        childAspectRatio: .68,
       ),
       itemBuilder: (context, index) => const NetworkCardSkeleton(),
     );
@@ -327,7 +398,7 @@ class _NetworkCategoryTabs extends StatelessWidget {
       child: Row(
         children: [
           _NetworkCategoryTab(
-            label: 'مهندسون',
+            label: 'أشخاص',
             selected: selected == _NetworkCategory.people,
             onTap: () => onChanged(_NetworkCategory.people),
           ),

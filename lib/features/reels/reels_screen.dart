@@ -6,7 +6,7 @@ import '../../models/reel_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
 import '../../shared/widgets/like_burst.dart';
-import '../../shared/widgets/skeleton.dart';
+import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import '../messages/share_contact_screen.dart';
@@ -25,88 +25,37 @@ class ReelsScreen extends StatefulWidget {
   State<ReelsScreen> createState() => _ReelsScreenState();
 }
 
-class _ReelsScreenState extends State<ReelsScreen>
-    with SingleTickerProviderStateMixin {
-  static const _reelDuration = Duration(seconds: 7);
-
+class _ReelsScreenState extends State<ReelsScreen> {
   late final PageController _pageController;
-  late final AnimationController _progressController;
   late Future<List<ReelItem>> _reelsFuture;
   final Set<String> _likedReels = {};
   final Map<String, int> _localLikeCounts = {};
   int _index = 0;
   bool _showLike = false;
-  bool _isAutoAdvancing = false;
+  bool _didStartLoading = false;
 
   @override
   void initState() {
     super.initState();
     _reelsFuture = Future.value(const <ReelItem>[]);
     _pageController = PageController();
-    _progressController =
-        AnimationController(vsync: this, duration: _reelDuration)
-          ..addStatusListener((status) {
-            if (status == AnimationStatus.completed) {
-              _goToNextReel();
-            }
-          });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_didStartLoading) {
+      return;
+    }
+    _didStartLoading = true;
     _reelsFuture = AppScope.read(context).repositories.reels.fetchReels();
   }
 
   @override
   void dispose() {
-    _progressController.dispose();
     _pageController.dispose();
     super.dispose();
   }
-
-  void _restartProgress() {
-    _progressController.forward(from: 0);
-  }
-
-  void _goToNextReel() {
-    if (_isAutoAdvancing) {
-      return;
-    }
-    final reels = _currentReels;
-    if (reels.isEmpty) {
-      _progressController.stop();
-      return;
-    }
-    _isAutoAdvancing = true;
-    _progressController
-      ..stop()
-      ..value = 0;
-
-    final next = (_index + 1) % reels.length;
-    setState(() => _index = next);
-
-    if (!_pageController.hasClients) {
-      _isAutoAdvancing = false;
-      _restartProgress();
-      return;
-    }
-    _pageController
-        .animateToPage(
-          next,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        )
-        .whenComplete(() {
-          if (!mounted) {
-            return;
-          }
-          _isAutoAdvancing = false;
-          _restartProgress();
-        });
-  }
-
-  List<ReelItem> _currentReels = const [];
 
   void _triggerLike(ReelItem item) {
     final nextLiked = !_likedReels.contains(item.id);
@@ -138,12 +87,13 @@ class _ReelsScreenState extends State<ReelsScreen>
 
   void _onPageChanged(int value) {
     setState(() => _index = value);
-    if (!_isAutoAdvancing) {
-      _restartProgress();
-    }
   }
 
   void _openSendFlow(ReelItem item) {
+    final profile = AppScope.read(context).profile;
+    final avatarUrl = profile?.id != null && profile!.id == item.profileId
+        ? profile.avatarUrl
+        : item.avatarUrl;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ShareContactScreen(
@@ -157,7 +107,10 @@ class _ReelsScreenState extends State<ReelsScreen>
             reactions: item.likesLabel,
             comments: '${item.commentsLabel} تعليق',
             avatarColor: item.color,
+            avatarUrl: avatarUrl,
             showMedia: false,
+            mediaUrl: item.videoUrl ?? item.thumbnailUrl ?? '',
+            mediaType: 'reel',
           ),
         ),
       ),
@@ -181,21 +134,11 @@ class _ReelsScreenState extends State<ReelsScreen>
                   snapshot.connectionState == ConnectionState.waiting &&
                   !snapshot.hasData;
               if (isLoading) {
-                return const ReelSkeleton();
+                return const Center(child: CircularProgressIndicator());
               }
               final reels = snapshot.data ?? const <ReelItem>[];
-              _currentReels = reels;
               if (reels.isEmpty) {
-                _progressController.stop();
                 return const _ReelsEmptyState();
-              }
-              if (!_progressController.isAnimating &&
-                  _progressController.value == 0) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    _restartProgress();
-                  }
-                });
               }
               return Stack(
                 alignment: Alignment.center,
@@ -214,7 +157,6 @@ class _ReelsScreenState extends State<ReelsScreen>
                         likesCount: likes,
                         isLiked: _likedReels.contains(item.id),
                         isActive: index == _index,
-                        progress: _progressController,
                         onLike: () => _triggerLike(item),
                         onSend: () => _openSendFlow(item),
                       );
@@ -255,7 +197,7 @@ class _ReelsEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 6),
             Text(
-              'ستظهر الريلز هنا بعد نشرها في Supabase.',
+              'ستظهر الريلز هنا بعد نشرها.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted, height: 1.45),
             ),
@@ -272,7 +214,6 @@ class _ReelPage extends StatelessWidget {
     required this.likesCount,
     required this.isLiked,
     required this.isActive,
-    required this.progress,
     required this.onLike,
     required this.onSend,
   });
@@ -281,43 +222,40 @@ class _ReelPage extends StatelessWidget {
   final int likesCount;
   final bool isLiked;
   final bool isActive;
-  final Animation<double> progress;
   final VoidCallback onLike;
   final VoidCallback onSend;
 
   void _showComments(BuildContext context) {
-    showLinkedCommentsSheet(context);
+    showLinkedCommentsSheet(context, targetType: 'reel', targetId: item.id);
   }
 
   @override
   Widget build(BuildContext context) {
+    final profile = AppScope.watch(context).profile;
+    final effectiveAvatarUrl =
+        profile?.id != null && profile!.id == item.profileId
+        ? profile.avatarUrl
+        : item.avatarUrl;
     return Container(
       color: Colors.black,
       child: Stack(
         fit: StackFit.expand,
         children: [
           CustomPaint(painter: _ReelBackdropPainter(item.color)),
+          if ((item.videoUrl ?? item.thumbnailUrl ?? '').isNotEmpty)
+            Positioned.fill(
+              child: MediaPreview(
+                mediaUrl: item.videoUrl ?? item.thumbnailUrl ?? '',
+                mediaType: 'reel',
+                fallbackLabel: 'ريل',
+                autoplay: isActive,
+                showVideoControls: true,
+              ),
+            ),
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onDoubleTap: onLike,
-            ),
-          ),
-          IgnorePointer(
-            child: Center(
-              child: Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: .35),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
-                  size: 42,
-                ),
-              ),
             ),
           ),
           Positioned(
@@ -344,14 +282,24 @@ class _ReelPage extends StatelessWidget {
                 _ReelAction(
                   icon: Icons.repeat,
                   label: item.repostsLabel,
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'إعادة نشر الريلز ستظهر بعد تفعيل جدول المشاركات',
-                        ),
-                      ),
-                    );
+                  onPressed: () async {
+                    try {
+                      await AppScope.read(
+                        context,
+                      ).repositories.reels.repost(item.id);
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('$error')));
+                      }
+                      return;
+                    }
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('تمت إعادة نشر الريل')),
+                      );
+                    }
                   },
                 ),
                 const SizedBox(height: 14),
@@ -372,7 +320,12 @@ class _ReelPage extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    AppAvatar(name: item.name, radius: 25, color: item.color),
+                    AppAvatar(
+                      name: item.name,
+                      radius: 25,
+                      color: item.color,
+                      imageUrl: effectiveAvatarUrl,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -411,27 +364,6 @@ class _ReelPage extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 14,
-            child: AnimatedBuilder(
-              animation: progress,
-              builder: (context, _) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: isActive ? progress.value : 0,
-                    minHeight: 5,
-                    backgroundColor: Colors.white24,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Colors.white,
-                    ),
-                  ),
-                );
-              },
             ),
           ),
         ],

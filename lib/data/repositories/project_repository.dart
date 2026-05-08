@@ -1,5 +1,8 @@
+import 'package:flutter/material.dart' show Color;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../models/project_application_request.dart';
 import '../../models/project_draft.dart';
 import '../../models/project_item.dart';
 import '../cache/timed_memory_cache.dart';
@@ -23,6 +26,13 @@ abstract interface class ProjectRepository {
     required String message,
     required int attachmentsCount,
   });
+
+  Future<List<ProjectApplicationRequest>> fetchProjectApplications(
+    String projectId, {
+    bool forceRefresh = false,
+  });
+
+  Future<Set<String>> fetchAppliedProjectIds({bool forceRefresh = false});
 }
 
 final class SupabaseProjectRepository implements ProjectRepository {
@@ -33,6 +43,11 @@ final class SupabaseProjectRepository implements ProjectRepository {
     ttl: const Duration(minutes: 2),
   );
   final _profileCaches = <String, TimedMemoryCache<List<ProjectItem>>>{};
+  final _applicationCaches =
+      <String, TimedMemoryCache<List<ProjectApplicationRequest>>>{};
+  final _appliedProjectsCache = TimedMemoryCache<Set<String>>(
+    ttl: const Duration(minutes: 2),
+  );
 
   @override
   Future<List<ProjectItem>> fetchProjects({bool forceRefresh = false}) async {
@@ -59,7 +74,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
         final rows = await remote
             .from('projects')
             .select(
-              'id,title,description,governorate,budget_min,budget_max,status,start_date,end_date,image_url,profile_id,profiles(full_name)',
+              'id,title,description,governorate,budget_min,budget_max,status,start_date,end_date,image_url,profile_id,profiles(full_name,avatar_url)',
             )
             .order('created_at', ascending: false)
             .limit(50);
@@ -119,7 +134,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
         final rows = await remote
             .from('projects')
             .select(
-              'id,title,description,governorate,budget_min,budget_max,status,start_date,end_date,image_url,profile_id,profiles(full_name),project_details(*)',
+              'id,title,description,governorate,budget_min,budget_max,status,start_date,end_date,image_url,profile_id,profiles(full_name,avatar_url),project_details(*)',
             )
             .eq('profile_id', profileId)
             .order('created_at', ascending: false)
@@ -158,7 +173,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
         _prependProject(createdProject);
         return createdProject;
       } catch (error) {
-        throw RepositoryFailure('تعذر نشر المشروع في Supabase', error);
+        throw RepositoryFailure('تعذر نشر المشروع الآن', error);
       }
     }
   }
@@ -175,6 +190,18 @@ final class SupabaseProjectRepository implements ProjectRepository {
       return;
     }
 
+    final profileId = await _currentProfileId(remote);
+    if (profileId == null) {
+      throw const RepositoryFailure('سجل الدخول أولا للتقديم على المشروع');
+    }
+    if (project.profileId == profileId) {
+      throw const RepositoryFailure('لا يمكنك التقديم على مشروعك');
+    }
+    final appliedIds = await _fetchAppliedProjectIds();
+    if (appliedIds.contains(project.id)) {
+      throw const RepositoryFailure('لقد قدمت على هذا المشروع مسبقا');
+    }
+
     try {
       await remote.rpc(
         'apply_to_project_for_app',
@@ -188,16 +215,19 @@ final class SupabaseProjectRepository implements ProjectRepository {
           ],
         },
       );
+      _applicationCaches[project.id]?.clear();
+      _appliedProjectsCache.clear();
+      await _notifyProjectOwner(
+        remote,
+        project: project,
+        applicantProfileId: profileId,
+      );
       return;
     } catch (_) {
       // Fall through to the table write for projects before the bridge RPC.
     }
 
     try {
-      final profileId = await _currentProfileId(remote);
-      if (profileId == null) {
-        return;
-      }
       await remote.from('project_applications').insert({
         'project_id': project.id,
         'profile_id': profileId,
@@ -206,9 +236,147 @@ final class SupabaseProjectRepository implements ProjectRepository {
         'attachments_count': attachmentsCount,
         'status': 'pending',
       });
+      _applicationCaches[project.id]?.clear();
+      _appliedProjectsCache.clear();
+      await _notifyProjectOwner(
+        remote,
+        project: project,
+        applicantProfileId: profileId,
+      );
     } catch (error) {
-      throw RepositoryFailure('تعذر إرسال طلب المشروع إلى Supabase', error);
+      throw RepositoryFailure('تعذر إرسال طلب المشروع الآن', error);
     }
+  }
+
+  @override
+  Future<Set<String>> fetchAppliedProjectIds({bool forceRefresh = false}) {
+    return _appliedProjectsCache.read(
+      _fetchAppliedProjectIds,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<Set<String>> _fetchAppliedProjectIds() async {
+    final remote = client;
+    if (remote == null) {
+      return const <String>{};
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return const <String>{};
+      }
+      final rows = await remote
+          .from('project_applications')
+          .select('project_id')
+          .eq('profile_id', profileId);
+      return {
+        for (final raw in rows)
+          if ('${(raw as Map)['project_id'] ?? ''}'.isNotEmpty)
+            '${raw['project_id']}',
+      };
+    } catch (_) {
+      return const <String>{};
+    }
+  }
+
+  @override
+  Future<List<ProjectApplicationRequest>> fetchProjectApplications(
+    String projectId, {
+    bool forceRefresh = false,
+  }) {
+    final cache = _applicationCaches.putIfAbsent(
+      projectId,
+      () => TimedMemoryCache<List<ProjectApplicationRequest>>(
+        ttl: const Duration(seconds: 45),
+      ),
+    );
+    return cache.read(
+      () => _fetchProjectApplications(projectId),
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<List<ProjectApplicationRequest>> _fetchProjectApplications(
+    String projectId,
+  ) async {
+    final remote = client;
+    if (remote == null || projectId.isEmpty) {
+      return const [];
+    }
+
+    try {
+      final rows = await remote
+          .from('project_applications')
+          .select(
+            'id,subject,message,attachments_count,status,created_at,profiles!project_applications_profile_id_fkey(id,full_name,role,bio,avatar_url)',
+          )
+          .eq('project_id', projectId)
+          .order('created_at', ascending: false);
+      return [
+        for (var i = 0; i < rows.length; i++)
+          _applicationFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
+      ];
+    } catch (_) {
+      try {
+        final rows = await remote
+            .from('project_applications')
+            .select(
+              'id,subject,message,attachments_count,status,created_at,profiles(id,full_name,role,bio,avatar_url)',
+            )
+            .eq('project_id', projectId)
+            .order('created_at', ascending: false);
+        return [
+          for (var i = 0; i < rows.length; i++)
+            _applicationFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
+        ];
+      } catch (_) {
+        return const [];
+      }
+    }
+  }
+
+  ProjectApplicationRequest _applicationFromRow(
+    Map<String, dynamic> row,
+    int index,
+  ) {
+    final profile = row['profiles'] is Map
+        ? Map<String, dynamic>.from(row['profiles'] as Map)
+        : const <String, dynamic>{};
+    final name = '${profile['full_name'] ?? ''}'.trim();
+    final title = '${profile['bio'] ?? profile['role'] ?? ''}'.trim();
+    return ProjectApplicationRequest(
+      id: '${row['id']}',
+      profileId: '${profile['id'] ?? ''}',
+      name: name.isEmpty ? 'مستخدم' : name,
+      title: title.isEmpty ? 'طلب تقديم' : title,
+      message: '${row['message'] ?? ''}',
+      status: '${row['status'] ?? 'pending'}',
+      attachmentsCount: _intFrom(row['attachments_count']),
+      createdAt:
+          DateTime.tryParse('${row['created_at']}') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      color: _colorForIndex(index),
+      avatarUrl: profile['avatar_url'] == null
+          ? null
+          : '${profile['avatar_url']}',
+    );
+  }
+
+  int _intFrom(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse('$value') ?? 0;
+  }
+
+  Color _colorForIndex(int index) {
+    return switch (index % 4) {
+      0 => AppColors.blue,
+      1 => AppColors.darkBlue,
+      2 => AppColors.muted,
+      _ => AppColors.black,
+    };
   }
 
   Future<String?> _createProjectViaRpc(
@@ -361,6 +529,28 @@ final class SupabaseProjectRepository implements ProjectRepository {
         .eq('user_id', userId)
         .maybeSingle();
     return row == null ? null : '${row['id']}';
+  }
+
+  Future<void> _notifyProjectOwner(
+    SupabaseClient remote, {
+    required ProjectItem project,
+    required String applicantProfileId,
+  }) async {
+    try {
+      final owner = project.profileId;
+      if (owner == null || owner.isEmpty || owner == applicantProfileId) {
+        return;
+      }
+      await remote.from('notifications').insert({
+        'profile_id': owner,
+        'title': 'تقديم جديد على مشروعك',
+        'message': project.title,
+        'type': 'project_application',
+        'action_url': 'app://project/${project.id}',
+      });
+    } catch (_) {
+      // Notifications are best-effort.
+    }
   }
 
   void _prependProject(ProjectItem? project) {

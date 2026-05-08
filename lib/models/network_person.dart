@@ -11,6 +11,8 @@ final class NetworkPerson {
     this.contextLine = 'بغداد · العراق',
     this.actionLabel = 'تواصل',
     this.isCompany = false,
+    this.avatarUrl,
+    this.connectionStatus = 'none',
   });
 
   final String id;
@@ -22,4 +24,9 @@ final class NetworkPerson {
   final String contextLine;
   final String actionLabel;
   final bool isCompany;
+  final String? avatarUrl;
+  final String connectionStatus;
+
+  bool get isPendingConnection => connectionStatus == 'pending';
+  bool get isConnected => connectionStatus == 'accepted';
 }

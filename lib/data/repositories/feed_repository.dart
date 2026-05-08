@@ -13,9 +13,15 @@ abstract interface class FeedRepository {
     bool forceRefresh = false,
   });
 
-  Future<void> createPost({required String content});
+  Future<void> createPost({
+    required String content,
+    String mediaUrl = '',
+    String mediaType = 'text',
+  });
 
   Future<void> toggleLike({required String postId, required bool shouldLike});
+
+  Future<void> repost(String postId);
 
   Future<void> reportPost({required String postId, required String reason});
 }
@@ -50,31 +56,19 @@ final class SupabaseFeedRepository implements FeedRepository {
         'get_home_feed',
         params: params,
       );
-      return [
-        for (var i = 0; i < rows.length; i++)
-          feedPostFromSupabase(
-            Map<String, dynamic>.from(rows[i] as Map),
-            colorIndex: i,
-          ),
-      ];
+      return _postsFromRows(rows);
     } catch (_) {
       try {
         final rows = await remote
             .from('posts')
             .select(
-              'id,content,image_url,likes_count,comments_count,created_at,profiles(full_name,role)',
+              'id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
             )
             .eq('is_active', true)
             .eq('is_archived', false)
             .order('created_at', ascending: false)
             .limit(50);
-        return [
-          for (var i = 0; i < rows.length; i++)
-            feedPostFromSupabase(
-              Map<String, dynamic>.from(rows[i] as Map),
-              colorIndex: i,
-            ),
-        ];
+        return _postsFromRows(rows);
       } catch (_) {
         return const [];
       }
@@ -108,7 +102,7 @@ final class SupabaseFeedRepository implements FeedRepository {
       final rows = await remote
           .from('posts')
           .select(
-            'id,profile_id,content,image_url,likes_count,comments_count,created_at,profiles(full_name,role)',
+            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
           )
           .eq('profile_id', profileId)
           .eq('is_active', true)
@@ -128,28 +122,37 @@ final class SupabaseFeedRepository implements FeedRepository {
   }
 
   @override
-  Future<void> createPost({required String content}) async {
+  Future<void> createPost({
+    required String content,
+    String mediaUrl = '',
+    String mediaType = 'text',
+  }) async {
     final remote = client;
     final trimmed = content.trim();
-    if (remote == null || trimmed.isEmpty) {
+    if (remote == null || (trimmed.isEmpty && mediaUrl.trim().isEmpty)) {
       return;
     }
 
     try {
       final profileId = await _currentProfileId(remote);
       if (profileId == null) {
-        return;
+        throw const RepositoryFailure('سجل الدخول أولا لنشر المنشور');
       }
       await remote.from('posts').insert({
         'profile_id': profileId,
         'content': trimmed,
-        'post_type': 'general',
+        if (mediaUrl.trim().isNotEmpty) 'image_url': mediaUrl.trim(),
+        'post_type': mediaType == 'reel' || mediaType == 'video'
+            ? 'reel'
+            : mediaUrl.trim().isNotEmpty
+            ? 'image'
+            : 'general',
         'is_active': true,
       });
       _cache.clear();
       _profileCaches[profileId]?.clear();
     } catch (error) {
-      throw RepositoryFailure('تعذر نشر المنشور في Supabase', error);
+      throw RepositoryFailure('تعذر نشر المنشور الآن', error);
     }
   }
 
@@ -166,13 +169,21 @@ final class SupabaseFeedRepository implements FeedRepository {
     try {
       final profileId = await _currentProfileId(remote);
       if (profileId == null) {
-        return;
+        throw const RepositoryFailure('سجل الدخول أولا لإعادة النشر');
       }
       if (shouldLike) {
         await remote.from('post_likes').upsert({
           'post_id': postId,
           'profile_id': profileId,
         }, onConflict: 'post_id,profile_id');
+        await _notifyPostOwner(
+          remote,
+          postId: postId,
+          actorProfileId: profileId,
+          title: 'إعجاب جديد',
+          message: 'تلقى منشورك إعجابا جديدا',
+          type: 'like',
+        );
       } else {
         await remote
             .from('post_likes')
@@ -183,6 +194,31 @@ final class SupabaseFeedRepository implements FeedRepository {
       _cache.clear();
     } catch (_) {
       // The UI already applied the optimistic state.
+    }
+  }
+
+  @override
+  Future<void> repost(String postId) async {
+    final remote = client;
+    if (remote == null || postId.isEmpty) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        throw const RepositoryFailure('سجل الدخول أولا لإعادة النشر');
+      }
+      await remote.from('app_reposts').upsert({
+        'target_type': 'post',
+        'target_id': postId,
+        'profile_id': profileId,
+      }, onConflict: 'target_type,target_id,profile_id');
+      await _createRepostPost(remote, postId: postId, profileId: profileId);
+      _cache.clear();
+    } on RepositoryFailure {
+      rethrow;
+    } catch (error) {
+      throw RepositoryFailure('تعذر إعادة النشر الآن', error);
     }
   }
 
@@ -222,5 +258,85 @@ final class SupabaseFeedRepository implements FeedRepository {
         .eq('user_id', userId)
         .maybeSingle();
     return row == null ? null : '${row['id']}';
+  }
+
+  List<FeedPostModel> _postsFromRows(List<dynamic> rows) {
+    final posts = <FeedPostModel>[];
+    for (var i = 0; i < rows.length; i++) {
+      final post = feedPostFromSupabase(
+        Map<String, dynamic>.from(rows[i] as Map),
+        colorIndex: i,
+      );
+      if (!post.isReel) {
+        posts.add(post);
+      }
+    }
+    return posts;
+  }
+
+  Future<void> _createRepostPost(
+    SupabaseClient remote, {
+    required String postId,
+    required String profileId,
+  }) async {
+    try {
+      final original = await remote
+          .from('posts')
+          .select('content,image_url,post_type,profile_id')
+          .eq('id', postId)
+          .maybeSingle();
+      if (original == null) {
+        return;
+      }
+      await remote.from('posts').insert({
+        'profile_id': profileId,
+        'content': '${original['content'] ?? ''}',
+        if (original['image_url'] != null) 'image_url': original['image_url'],
+        'post_type': '${original['post_type'] ?? 'general'}',
+        'is_active': true,
+      });
+      final owner = '${original['profile_id'] ?? ''}';
+      if (owner.isNotEmpty && owner != profileId) {
+        await remote.from('notifications').insert({
+          'profile_id': owner,
+          'title': 'إعادة نشر',
+          'message': 'تمت إعادة نشر منشورك',
+          'type': 'repost',
+          'action_url': 'app://post/$postId',
+        });
+      }
+    } catch (_) {
+      // The repost row itself remains the source of truth if post cloning fails.
+    }
+  }
+
+  Future<void> _notifyPostOwner(
+    SupabaseClient remote, {
+    required String postId,
+    required String actorProfileId,
+    required String title,
+    required String message,
+    required String type,
+  }) async {
+    try {
+      final row = await remote
+          .from('posts')
+          .select('profile_id')
+          .eq('id', postId)
+          .maybeSingle();
+      final owner = row == null ? '' : '${row['profile_id'] ?? ''}';
+      if (owner.isEmpty || owner == actorProfileId) {
+        return;
+      }
+      await remote.from('notifications').insert({
+        'profile_id': owner,
+        'title': title,
+        'message': message,
+        'type': type,
+        'action_url': 'app://post/$postId',
+      });
+    } catch (_) {
+      // Notifications are best-effort.
+    }
   }
 }
