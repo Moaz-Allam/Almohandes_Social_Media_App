@@ -89,12 +89,21 @@ final class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
-      await remote.functions.invoke(
+      final response = await remote.functions.invoke(
         'send-otp',
         body: {'phone': _normalizePhone(phone)},
       );
-    } catch (_) {
-      // Keep local prototype usable when the Edge Function is not deployed yet.
+      final data = response.data;
+      if (data is Map && data['sent'] == false) {
+        throw RepositoryFailure(
+          '${data['message'] ?? 'تعذر إرسال رمز التحقق الآن'}',
+        );
+      }
+    } catch (error) {
+      if (error is RepositoryFailure) {
+        rethrow;
+      }
+      throw RepositoryFailure('تعذر إرسال رمز التحقق الآن', error);
     }
   }
 
@@ -106,6 +115,28 @@ final class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
+      final edgeResponse = await remote.functions.invoke(
+        'verify-otp',
+        body: {'phone': _normalizePhone(phone), 'code': code.trim()},
+      );
+      final edgeData = edgeResponse.data;
+      if (edgeData is Map) {
+        if (edgeData['verified'] == true) {
+          return true;
+        }
+        if (edgeData['message'] != null) {
+          throw RepositoryFailure('${edgeData['message']}');
+        }
+        return false;
+      }
+    } catch (error) {
+      if (error is RepositoryFailure) {
+        rethrow;
+      }
+      // Fall back to the database OTP verifier for self-hosted/dev setups.
+    }
+
+    try {
       final response = await remote.rpc<bool>(
         'verify_otp_token',
         params: {
@@ -113,9 +144,9 @@ final class SupabaseAuthRepository implements AuthRepository {
           'p_verification_code': code.trim(),
         },
       );
-      return response;
-    } catch (_) {
-      return code.trim() == '123456';
+      return response == true;
+    } catch (error) {
+      throw RepositoryFailure('تعذر التحقق من رمز الهاتف الآن', error);
     }
   }
 
@@ -133,17 +164,25 @@ final class SupabaseAuthRepository implements AuthRepository {
       return;
     }
 
+    final role = accountTypeToSupabaseRole(accountType);
+    final governorate = governorateToSupabase(profile.location);
     try {
+      final phoneVerified = await remote.rpc<bool>(
+        'has_verified_signup_phone',
+        params: {'p_phone': _normalizePhone(phone)},
+      );
+      if (phoneVerified != true) {
+        throw const RepositoryFailure('يرجى تأكيد رقم الهاتف أولاً');
+      }
       final authResponse = await remote.auth.signUp(
         email: profile.email.trim(),
         password: password,
         data: {
           'full_name': profile.fullName,
           'phone': _normalizePhone(phone),
-          // Keep auth triggers on legacy databases from failing on roles their
-          // enum or RLS policies do not know yet; the profile row is updated
-          // below after the authenticated session exists.
-          'role': 'engineer',
+          'role': role,
+          'governorate': governorate,
+          'bio': profile.about,
         },
       );
       if (remote.auth.currentSession == null && password.isNotEmpty) {
@@ -342,8 +381,17 @@ final class SupabaseAuthRepository implements AuthRepository {
     if (compact.startsWith('00964')) {
       return '+964${compact.substring(5)}';
     }
-    if (compact.startsWith('0')) {
+    if (RegExp(r'^07[3-9]\d{8}$').hasMatch(compact)) {
       return '+964${compact.substring(1)}';
+    }
+    if (compact.startsWith('+20')) {
+      return compact;
+    }
+    if (compact.startsWith('0020')) {
+      return '+20${compact.substring(4)}';
+    }
+    if (RegExp(r'^01[0125]\d{8}$').hasMatch(compact)) {
+      return '+20${compact.substring(1)}';
     }
     return compact;
   }
@@ -352,6 +400,9 @@ final class SupabaseAuthRepository implements AuthRepository {
     final normalized = _normalizePhone(phone);
     if (normalized.startsWith('+964')) {
       return '0${normalized.substring(4)}';
+    }
+    if (normalized.startsWith('+20')) {
+      return '0${normalized.substring(3)}';
     }
     return normalized;
   }

@@ -33,6 +33,7 @@ import 'package:tradeflow/models/reel_item.dart';
 import 'package:tradeflow/models/saved_content.dart';
 import 'package:tradeflow/models/story_item.dart';
 import 'package:tradeflow/shared/widgets/primary_button.dart';
+import 'package:tradeflow/state/signup_controller.dart';
 
 void main() {
   test('account type permissions match network and project rules', () {
@@ -42,6 +43,14 @@ void main() {
     expect(AccountType.worker.canPostProjects, isFalse);
     expect(AccountType.equipment.canPostProjects, isFalse);
     expect(accountTypeFromIndustry('company'), AccountType.company);
+  });
+
+  test('signup accepts Iraqi and Egyptian phone numbers', () {
+    expect(SignupController.isSupportedPhoneNumber('07712345678'), isTrue);
+    expect(SignupController.isSupportedPhoneNumber('+9647712345678'), isTrue);
+    expect(SignupController.isSupportedPhoneNumber('01012345678'), isTrue);
+    expect(SignupController.isSupportedPhoneNumber('+201012345678'), isTrue);
+    expect(SignupController.isSupportedPhoneNumber('05512345678'), isFalse);
   });
 
   testWidgets('registration shows success then opens the signed-in shell', (
@@ -447,6 +456,9 @@ final class _FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<String> connectionStatus(String otherProfileId) async => 'none';
+
+  @override
+  Future<bool> isFollowingProfile(String followingProfileId) async => false;
 
   @override
   Future<void> followProfile(String followingProfileId) async {}

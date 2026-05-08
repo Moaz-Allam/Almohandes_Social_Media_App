@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -9,6 +10,10 @@ import '../../state/app_scope.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
+
+  static final Uri _whatsAppSupportUri = Uri.parse(
+    'https://wa.me/9647800000000',
+  );
 
   static const _sections = [
     SettingsItem(
@@ -47,6 +52,13 @@ class SettingsScreen extends StatelessWidget {
           'للدعم، افتح تذكرة من لوحة الإدارة أو تواصل مع فريق الدعم.',
         ),
         actions: [
+          TextButton(
+            onPressed: () => launchUrl(
+              _whatsAppSupportUri,
+              mode: LaunchMode.externalApplication,
+            ),
+            child: const Text('واتساب +964 780 000 0000'),
+          ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('إغلاق'),

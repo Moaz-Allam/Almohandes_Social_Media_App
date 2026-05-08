@@ -45,6 +45,9 @@ class _ShareContactScreenState extends State<ShareContactScreen> {
         conversationId: contact.conversationId,
         content: '$link\n$preview',
       );
+      if (context.mounted) {
+        AppScope.read(context).notifyMessageStateChanged();
+      }
     } catch (error) {
       if (!context.mounted) {
         return;

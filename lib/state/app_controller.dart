@@ -24,6 +24,8 @@ final class AppController extends ChangeNotifier {
   AppTab _selectedTab = AppTab.feed;
   ProfileForm? _profile;
   final List<SavedContent> _savedItems = [];
+  int _messageStateVersion = 0;
+  int _notificationStateVersion = 0;
 
   bool get isBootstrapped => _isBootstrapped;
 
@@ -38,6 +40,10 @@ final class AppController extends ChangeNotifier {
   ProfileForm? get profile => _profile;
 
   List<SavedContent> get savedItems => List.unmodifiable(_savedItems);
+
+  int get messageStateVersion => _messageStateVersion;
+
+  int get notificationStateVersion => _notificationStateVersion;
 
   bool isSaved(String id) {
     return _savedItems.any((item) => item.id == id);
@@ -203,6 +209,16 @@ final class AppController extends ChangeNotifier {
       return;
     }
     _selectedTab = tab;
+    notifyListeners();
+  }
+
+  void notifyMessageStateChanged() {
+    _messageStateVersion += 1;
+    notifyListeners();
+  }
+
+  void notifyNotificationStateChanged() {
+    _notificationStateVersion += 1;
     notifyListeners();
   }
 

@@ -14,6 +14,8 @@ abstract interface class SavedContentRepository {
 final class SupabaseSavedContentRepository implements SavedContentRepository {
   SupabaseSavedContentRepository({required this.client});
 
+  static const _savedPageSize = 40;
+
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<SavedContent>>(
     ttl: const Duration(minutes: 1),
@@ -39,7 +41,8 @@ final class SupabaseSavedContentRepository implements SavedContentRepository {
           .from('saved_items')
           .select('item_type,item_id,title,subtitle,detail')
           .eq('profile_id', profileId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(_savedPageSize);
       return [
         for (final row in rows)
           _savedContentFromRow(Map<String, dynamic>.from(row as Map)),

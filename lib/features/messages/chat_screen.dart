@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
@@ -27,9 +30,14 @@ class _ChatScreenState extends State<ChatScreen> {
   late Future<List<ChatMessage>> _messagesFuture;
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  final List<ChatMessage> _optimisticMessages = [];
+  final _voiceRecorder = AudioRecorder();
+  StreamSubscription<Uint8List>? _voiceSubscription;
+  BytesBuilder? _voiceBytes;
   bool _didStartLoading = false;
   bool _isSendingText = false;
   bool _isSendingVoice = false;
+  bool _isRecordingVoice = false;
   bool _isSendingFile = false;
 
   @override
@@ -45,13 +53,20 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     _didStartLoading = true;
-    _messagesFuture = AppScope.read(
-      context,
-    ).repositories.messages.fetchMessages(widget.contact.conversationId);
+    _messagesFuture = AppScope.read(context).repositories.messages
+        .fetchMessages(widget.contact.conversationId)
+        .then((items) {
+          if (mounted) {
+            AppScope.read(context).notifyMessageStateChanged();
+          }
+          return items;
+        });
   }
 
   @override
   void dispose() {
+    _voiceSubscription?.cancel();
+    _voiceRecorder.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -76,7 +91,13 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     _messageController.clear();
-    setState(() => _isSendingText = true);
+    final optimistic = _optimisticMessage(text: text, type: 'text');
+    setState(() {
+      _isSendingText = true;
+      _optimisticMessages.add(optimistic);
+    });
+    AppScope.read(context).notifyMessageStateChanged();
+    _scrollToLatest();
     try {
       final messages = AppScope.read(context).repositories.messages;
       await messages.sendMessage(
@@ -86,17 +107,17 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _messagesFuture = messages.fetchMessages(
-          widget.contact.conversationId,
-          forceRefresh: true,
-        );
-      });
+      _refreshMessagesAfterSend();
       _scrollToLatest();
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _optimisticMessages.removeWhere(
+          (message) => message.id == optimistic.id,
+        );
+      });
       _messageController.text = text;
       _showError(error);
     } finally {
@@ -106,43 +127,105 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _sendVoiceMessage() async {
+  Future<void> _toggleVoiceRecording() async {
+    if (_isRecordingVoice) {
+      await _stopAndSendVoiceMessage();
+      return;
+    }
+    await _startVoiceRecording();
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (_isSendingVoice || _isRecordingVoice) {
+      return;
+    }
+    try {
+      final hasPermission = await _voiceRecorder.hasPermission();
+      if (!mounted) {
+        return;
+      }
+      if (!hasPermission) {
+        _showError('اسمح باستخدام الميكروفون لتسجيل رسالة صوتية');
+        return;
+      }
+      final stream = await _voiceRecorder.startStream(
+        const RecordConfig(
+          encoder: AudioEncoder.pcm16bits,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+      );
+      _voiceBytes = BytesBuilder(copy: false);
+      await _voiceSubscription?.cancel();
+      _voiceSubscription = stream.listen(
+        (chunk) => _voiceBytes?.add(chunk),
+        onError: (error) {
+          if (mounted) {
+            _showError(error);
+          }
+        },
+      );
+      if (mounted) {
+        setState(() => _isRecordingVoice = true);
+      }
+    } catch (error) {
+      if (mounted) {
+        _showError(error);
+      }
+    }
+  }
+
+  Future<void> _stopAndSendVoiceMessage() async {
     if (_isSendingVoice) {
       return;
     }
-    final messages = AppScope.read(context).repositories.messages;
-    final result = await FilePicker.pickFiles(
-      type: FileType.audio,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) {
-      return;
-    }
-    final file = result.files.first;
-    final voiceUrl = file.bytes == null
-        ? 'voice:${file.name}'
-        : 'data:audio/mpeg;base64,${base64Encode(file.bytes!)}';
-    setState(() => _isSendingVoice = true);
+    final app = AppScope.read(context);
+    final messages = app.repositories.messages;
+    setState(() {
+      _isRecordingVoice = false;
+      _isSendingVoice = true;
+    });
     try {
-      await messages.sendVoiceMessage(
-        conversationId: widget.contact.conversationId,
-        voiceUrl: voiceUrl,
-      );
-      if (!mounted) {
+      await _voiceRecorder.stop();
+      await _voiceSubscription?.cancel();
+      _voiceSubscription = null;
+      final pcmBytes = _voiceBytes?.takeBytes() ?? Uint8List(0);
+      _voiceBytes = null;
+      if (pcmBytes.isEmpty) {
+        _showError('لم يتم تسجيل صوت واضح');
         return;
       }
-      setState(() {
-        _messagesFuture = messages.fetchMessages(
-          widget.contact.conversationId,
-          forceRefresh: true,
-        );
-      });
+      final voiceUrl =
+          'data:audio/wav;base64,${base64Encode(_wavFromPcm16(pcmBytes))}';
+      final optimistic = _optimisticMessage(text: voiceUrl, type: 'voice');
+      setState(() => _optimisticMessages.add(optimistic));
+      app.notifyMessageStateChanged();
       _scrollToLatest();
-    } catch (error) {
-      if (!mounted) {
-        return;
+      try {
+        await messages.sendVoiceMessage(
+          conversationId: widget.contact.conversationId,
+          voiceUrl: voiceUrl,
+        );
+        if (!mounted) {
+          return;
+        }
+        _refreshMessagesAfterSend();
+        _scrollToLatest();
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _optimisticMessages.removeWhere(
+            (message) => message.id == optimistic.id,
+          );
+        });
+        _showError(error);
       }
-      _showError(error);
+    } catch (error) {
+      if (mounted) {
+        _showError(error);
+      }
     } finally {
       if (mounted) {
         setState(() => _isSendingVoice = false);
@@ -150,12 +233,52 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Uint8List _wavFromPcm16(Uint8List pcmBytes) {
+    const sampleRate = 16000;
+    const channels = 1;
+    const bitsPerSample = 16;
+    final byteRate = sampleRate * channels * bitsPerSample ~/ 8;
+    final blockAlign = channels * bitsPerSample ~/ 8;
+    final dataLength = pcmBytes.length;
+    final fileLength = 36 + dataLength;
+    final bytes = BytesBuilder(copy: false)
+      ..add(_ascii('RIFF'))
+      ..add(_uint32(fileLength))
+      ..add(_ascii('WAVE'))
+      ..add(_ascii('fmt '))
+      ..add(_uint32(16))
+      ..add(_uint16(1))
+      ..add(_uint16(channels))
+      ..add(_uint32(sampleRate))
+      ..add(_uint32(byteRate))
+      ..add(_uint16(blockAlign))
+      ..add(_uint16(bitsPerSample))
+      ..add(_ascii('data'))
+      ..add(_uint32(dataLength))
+      ..add(pcmBytes);
+    return bytes.toBytes();
+  }
+
+  Uint8List _ascii(String value) => Uint8List.fromList(value.codeUnits);
+
+  Uint8List _uint16(int value) {
+    return Uint8List(2)..buffer.asByteData().setUint16(0, value, Endian.little);
+  }
+
+  Uint8List _uint32(int value) {
+    return Uint8List(4)..buffer.asByteData().setUint32(0, value, Endian.little);
+  }
+
   Future<void> _sendFileMessage() async {
     if (_isSendingFile) {
       return;
     }
-    final messages = AppScope.read(context).repositories.messages;
+    final app = AppScope.read(context);
+    final messages = app.repositories.messages;
     final result = await FilePicker.pickFiles(withData: true);
+    if (!mounted) {
+      return;
+    }
     if (result == null || result.files.isEmpty) {
       return;
     }
@@ -163,7 +286,16 @@ class _ChatScreenState extends State<ChatScreen> {
     final fileUrl = file.bytes == null
         ? 'file:${file.name}'
         : 'data:${_mimeTypeForFile(file.name)};base64,${base64Encode(file.bytes!)}';
-    setState(() => _isSendingFile = true);
+    final optimistic = _optimisticMessage(
+      text: '${file.name}\n$fileUrl',
+      type: _messageTypeForAttachment(file.name, fileUrl),
+    );
+    setState(() {
+      _isSendingFile = true;
+      _optimisticMessages.add(optimistic);
+    });
+    app.notifyMessageStateChanged();
+    _scrollToLatest();
     try {
       await messages.sendFileMessage(
         conversationId: widget.contact.conversationId,
@@ -173,17 +305,17 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _messagesFuture = messages.fetchMessages(
-          widget.contact.conversationId,
-          forceRefresh: true,
-        );
-      });
+      _refreshMessagesAfterSend();
       _scrollToLatest();
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _optimisticMessages.removeWhere(
+          (message) => message.id == optimistic.id,
+        );
+      });
       _showError(error);
     } finally {
       if (mounted) {
@@ -198,6 +330,55 @@ class _ChatScreenState extends State<ChatScreen> {
           .fetchMessages(widget.contact.conversationId, forceRefresh: true);
     });
     await _messagesFuture;
+    if (mounted) {
+      AppScope.read(context).notifyMessageStateChanged();
+    }
+  }
+
+  ChatMessage _optimisticMessage({required String text, required String type}) {
+    return ChatMessage(
+      id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+      text: text,
+      incoming: false,
+      createdAt: DateTime.now(),
+      type: type,
+    );
+  }
+
+  void _refreshMessagesAfterSend() {
+    final messages = AppScope.read(context).repositories.messages;
+    final refreshed = messages
+        .fetchMessages(widget.contact.conversationId, forceRefresh: true)
+        .then((items) {
+          if (mounted) {
+            setState(() => _optimisticMessages.clear());
+            AppScope.read(context).notifyMessageStateChanged();
+          }
+          return items;
+        });
+    setState(() {
+      _messagesFuture = refreshed;
+    });
+  }
+
+  String _messageTypeForAttachment(String fileName, String url) {
+    final lower = '$fileName $url'.toLowerCase();
+    if (lower.startsWith('data:image/') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.gif')) {
+      return 'image';
+    }
+    if (lower.startsWith('data:video/') ||
+        lower.endsWith('.mp4') ||
+        lower.endsWith('.mov') ||
+        lower.endsWith('.webm') ||
+        lower.endsWith('.m4v')) {
+      return 'video';
+    }
+    return 'file';
   }
 
   Future<void> _handleMenuAction(String value) async {
@@ -331,10 +512,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 future: _messagesFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting &&
-                      !snapshot.hasData) {
+                      !snapshot.hasData &&
+                      _optimisticMessages.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  final messages = snapshot.data ?? const <ChatMessage>[];
+                  final messages = [
+                    ...(snapshot.data ?? const <ChatMessage>[]),
+                    ..._optimisticMessages,
+                  ];
                   if (messages.isEmpty) {
                     return const _EmptyChatState();
                   }
@@ -375,17 +560,23 @@ class _ChatScreenState extends State<ChatScreen> {
                     tooltip: 'إرسال ملف',
                   ),
                   IconButton(
-                    onPressed: _isSendingVoice ? null : _sendVoiceMessage,
+                    onPressed: _isSendingVoice ? null : _toggleVoiceRecording,
                     icon: _isSendingVoice
                         ? const SizedBox.square(
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(
-                            Icons.mic_none_outlined,
-                            color: AppColors.blue,
+                        : Icon(
+                            _isRecordingVoice
+                                ? Icons.stop_circle_outlined
+                                : Icons.mic_none_outlined,
+                            color: _isRecordingVoice
+                                ? Colors.redAccent
+                                : AppColors.blue,
                           ),
-                    tooltip: 'رسالة صوتية',
+                    tooltip: _isRecordingVoice
+                        ? 'إيقاف وإرسال التسجيل'
+                        : 'رسالة صوتية',
                   ),
                   Expanded(
                     child: TextField(

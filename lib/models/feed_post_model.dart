@@ -15,6 +15,9 @@ final class FeedPostModel {
     this.mediaUrl = '',
     this.mediaType = 'text',
     this.avatarUrl,
+    this.isRepost = false,
+    this.repostOriginalName,
+    this.repostOriginalProfileId,
   });
 
   final String id;
@@ -30,6 +33,9 @@ final class FeedPostModel {
   final String mediaUrl;
   final String mediaType;
   final String? avatarUrl;
+  final bool isRepost;
+  final String? repostOriginalName;
+  final String? repostOriginalProfileId;
 
   bool get isReel => mediaType == 'reel' || mediaType == 'video';
   bool get isImagePost => mediaType == 'image';

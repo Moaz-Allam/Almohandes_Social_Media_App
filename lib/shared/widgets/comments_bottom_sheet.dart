@@ -40,6 +40,7 @@ class LinkedCommentsSheet extends StatefulWidget {
 
 class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
   final _commentController = TextEditingController();
+  final List<CommentItem> _optimisticComments = [];
   late Future<List<CommentItem>> _commentsFuture;
 
   @override
@@ -69,7 +70,19 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
     if (text.isEmpty) {
       return;
     }
+    final profile = AppScope.read(context).profile;
+    final optimistic = CommentItem(
+      id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+      authorName: (profile?.fullName.isNotEmpty ?? false)
+          ? profile!.fullName
+          : nameForOptimisticComment,
+      content: text,
+      createdAt: DateTime.now(),
+      color: AppColors.darkBlue,
+      avatarUrl: profile?.avatarUrl,
+    );
     _commentController.clear();
+    setState(() => _optimisticComments.insert(0, optimistic));
     try {
       final comments = AppScope.read(context).repositories.comments;
       await comments.addComment(
@@ -80,12 +93,20 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
       if (!mounted) {
         return;
       }
+      final refreshed = comments
+          .fetchComments(
+            targetType: widget.targetType,
+            targetId: widget.targetId,
+            forceRefresh: true,
+          )
+          .then((items) {
+            if (mounted) {
+              setState(() => _optimisticComments.clear());
+            }
+            return items;
+          });
       setState(() {
-        _commentsFuture = comments.fetchComments(
-          targetType: widget.targetType,
-          targetId: widget.targetId,
-          forceRefresh: true,
-        );
+        _commentsFuture = refreshed;
       });
       ScaffoldMessenger.of(
         context,
@@ -94,6 +115,9 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _optimisticComments.removeWhere((item) => item.id == optimistic.id);
+      });
       _commentController.text = text;
       ScaffoldMessenger.of(
         context,
@@ -153,10 +177,14 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
                   future: _commentsFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting &&
-                        !snapshot.hasData) {
+                        !snapshot.hasData &&
+                        _optimisticComments.isEmpty) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    final comments = snapshot.data ?? const <CommentItem>[];
+                    final comments = [
+                      ..._optimisticComments,
+                      ...(snapshot.data ?? const <CommentItem>[]),
+                    ];
                     if (comments.isEmpty) {
                       return const _EmptyCommentsState();
                     }
@@ -251,6 +279,8 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
     return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 }
+
+const nameForOptimisticComment = 'المستخدم';
 
 class _EmptyCommentsState extends StatelessWidget {
   const _EmptyCommentsState();

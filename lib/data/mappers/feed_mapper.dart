@@ -12,6 +12,13 @@ FeedPostModel feedPostFromSupabase(
   final role = profile?['role'] ?? row['role'] ?? 'مهندس';
   final imageUrl = '${row['image_url'] ?? row['media_url'] ?? ''}';
   final postType = '${row['post_type'] ?? row['media_type'] ?? ''}';
+  final repostOriginalName =
+      '${row['repost_original_name'] ?? row['original_author_name'] ?? ''}'
+          .trim();
+  final repostOriginalProfileId =
+      row['repost_original_profile_id'] ??
+      row['original_author_profile_id'] ??
+      row['original_profile_id'];
   final mediaType = postType == 'reel' || postType == 'video'
       ? 'reel'
       : imageUrl.isNotEmpty
@@ -38,6 +45,14 @@ FeedPostModel feedPostFromSupabase(
     avatarUrl: profile?['avatar_url'] == null
         ? null
         : '${profile?['avatar_url']}',
+    isRepost:
+        row['repost_of_post_id'] != null ||
+        row['original_post_id'] != null ||
+        repostOriginalName.isNotEmpty,
+    repostOriginalName: repostOriginalName.isEmpty ? null : repostOriginalName,
+    repostOriginalProfileId: repostOriginalProfileId == null
+        ? null
+        : '$repostOriginalProfileId',
   );
 }
 

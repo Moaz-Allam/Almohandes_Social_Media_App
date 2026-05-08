@@ -79,9 +79,15 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+        ),
+      );
   }
 
   Future<void> _handlePrimary() async {
@@ -94,29 +100,64 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
         _showMessage('أكمل الاسم والبريد الإلكتروني أولا');
         return;
       }
-      if (!_form.hasValidIraqiPhone) {
-        _showMessage('رقم الهاتف يجب أن يكون رقم عراقي مثل 07xxxxxxxxx');
+      if (!_form.hasValidPhoneNumber) {
+        _showMessage(
+          'رقم الهاتف يجب أن يكون عراقيا أو مصريا مثل 07xxxxxxxxx أو 01xxxxxxxxx',
+        );
         return;
       }
       if (!_form.hasMatchingPasswords) {
         _showMessage('تأكد من كلمة المرور وتأكيدها');
         return;
       }
-      await AppScope.read(
-        context,
-      ).repositories.auth.sendOtp(phone: _form.phone.text);
-      _form.nextStep();
+      setState(() => _isSubmitting = true);
+      try {
+        await AppScope.read(
+          context,
+        ).repositories.auth.sendOtp(phone: _form.phone.text);
+        if (!mounted) {
+          return;
+        }
+        _showMessage('تم إرسال رمز التحقق إلى رقم هاتفك');
+        _form.nextStep();
+      } catch (error) {
+        if (mounted) {
+          _showMessage('$error');
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+        }
+      }
       return;
     }
 
     if (_form.step == 1) {
-      final isValidOtp = await AppScope.read(context).repositories.auth
-          .verifyOtp(phone: _form.phone.text, code: _form.otp.text);
-      if (!isValidOtp) {
-        _showMessage('رمز التحقق التجريبي هو 123456');
+      if (!_form.hasValidOtp) {
+        _showMessage('أدخل رمز تحقق مكون من 6 أرقام');
         return;
       }
-      _form.nextStep();
+      setState(() => _isSubmitting = true);
+      try {
+        final isValidOtp = await AppScope.read(context).repositories.auth
+            .verifyOtp(phone: _form.phone.text, code: _form.otp.text);
+        if (!mounted) {
+          return;
+        }
+        if (!isValidOtp) {
+          _showMessage('رمز التحقق غير صحيح أو انتهت صلاحيته');
+          return;
+        }
+        _form.nextStep();
+      } catch (error) {
+        if (mounted) {
+          _showMessage('$error');
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSubmitting = false);
+        }
+      }
       return;
     }
 
@@ -129,6 +170,13 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
 
   String _stepLabel(int step) =>
       'الخطوة ${step + 1} من ${SignupController.totalSteps}';
+
+  String get _primaryLabel {
+    if (_isSubmitting) {
+      return _form.isLastStep ? 'جاري الإنشاء...' : 'جاري التحقق...';
+    }
+    return _form.isLastStep ? 'إنهاء' : 'متابعة';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +230,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                         step: _stepLabel(0),
                         title: 'أساسيات الحساب',
                         subtitle:
-                            'أدخل بياناتك الأساسية. رقم الهاتف يجب أن يكون عراقيا لتأكيد الحساب.',
+                            'أدخل بياناتك الأساسية. رقم الهاتف يجب أن يكون عراقيا أو مصريا لتأكيد الحساب.',
                         children: [
                           LinkedTextField(
                             label: 'الاسم أو اسم الجهة',
@@ -198,7 +246,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                           const SizedBox(height: 14),
                           LinkedTextField(
                             label: 'رقم الهاتف',
-                            hint: '07',
+                            hint: '07 أو 01',
                             controller: _form.phone,
                             keyboardType: TextInputType.phone,
                           ),
@@ -220,22 +268,30 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                         step: _stepLabel(1),
                         title: 'تأكيد رقم الهاتف',
                         subtitle:
-                            'أدخل رمز التحقق المرسل إلى ${_form.phone.text.isEmpty ? 'رقمك العراقي' : _form.phone.text}. الرمز التجريبي هو 123456.',
+                            'أدخل رمز التحقق المرسل إلى ${_form.phone.text.isEmpty ? 'رقم هاتفك' : _form.phone.text}.',
                         children: [
                           LinkedTextField(
                             label: 'رمز التحقق OTP',
-                            hint: '123456',
+                            hint: '000000',
                             controller: _form.otp,
                             keyboardType: TextInputType.number,
                           ),
                           const SizedBox(height: 14),
                           OutlinedButton.icon(
                             onPressed: () async {
-                              await AppScope.read(context).repositories.auth
-                                  .sendOtp(phone: _form.phone.text);
-                              _showMessage(
-                                'تم إرسال رمز تحقق جديد إلى رقمك العراقي',
-                              );
+                              try {
+                                await AppScope.read(context).repositories.auth
+                                    .sendOtp(phone: _form.phone.text);
+                                if (context.mounted) {
+                                  _showMessage(
+                                    'تم إرسال رمز تحقق جديد إلى رقم هاتفك',
+                                  );
+                                }
+                              } catch (error) {
+                                if (context.mounted) {
+                                  _showMessage('$error');
+                                }
+                              }
                             },
                             icon: const Icon(Icons.sms_outlined),
                             label: const Text('إعادة إرسال الرمز'),
@@ -359,9 +415,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: PrimaryButton(
-                          label: _isSubmitting
-                              ? 'جاري الإنشاء...'
-                              : (_form.isLastStep ? 'إنهاء' : 'متابعة'),
+                          label: _primaryLabel,
                           onPressed: _handlePrimary,
                           isLoading: _isSubmitting,
                         ),

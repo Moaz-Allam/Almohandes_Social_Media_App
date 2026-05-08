@@ -187,12 +187,16 @@ class _ProfileHero extends StatefulWidget {
 
 class _ProfileHeroState extends State<_ProfileHero> {
   late String _connectionStatus;
+  bool _isFollowing = false;
+  bool _isSendingFollow = false;
+  bool _isSendingConnection = false;
 
   @override
   void initState() {
     super.initState();
     _connectionStatus = widget.initialConnectionStatus;
     _loadConnectionStatus();
+    _loadFollowStatus();
   }
 
   Future<void> _loadConnectionStatus() async {
@@ -208,11 +212,43 @@ class _ProfileHeroState extends State<_ProfileHero> {
     }
   }
 
-  Future<void> _requestConnection() async {
-    setState(() => _connectionStatus = 'pending');
+  Future<void> _loadFollowStatus() async {
     final id = widget.profileId;
-    if (id != null && id.isNotEmpty) {
-      await AppScope.read(context).repositories.profiles.requestConnection(id);
+    if (widget.isMe || id == null || id.isEmpty) {
+      return;
+    }
+    final isFollowing = await AppScope.read(
+      context,
+    ).repositories.profiles.isFollowingProfile(id);
+    if (mounted) {
+      setState(() => _isFollowing = isFollowing);
+    }
+  }
+
+  Future<void> _requestConnection() async {
+    if (_connectionStatus != 'none' || _isSendingConnection) {
+      return;
+    }
+    setState(() {
+      _connectionStatus = 'pending';
+      _isSendingConnection = true;
+    });
+    final id = widget.profileId;
+    try {
+      if (id != null && id.isNotEmpty) {
+        await AppScope.read(
+          context,
+        ).repositories.profiles.requestConnection(id);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _connectionStatus = 'none');
+      }
+      rethrow;
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingConnection = false);
+      }
     }
     if (!mounted) {
       return;
@@ -307,9 +343,27 @@ class _ProfileHeroState extends State<_ProfileHero> {
   }
 
   Future<void> _followProfile() async {
+    if (_isFollowing || _isSendingFollow) {
+      return;
+    }
+    setState(() {
+      _isFollowing = true;
+      _isSendingFollow = true;
+    });
     final id = widget.profileId;
-    if (id != null && id.isNotEmpty) {
-      await AppScope.read(context).repositories.profiles.followProfile(id);
+    try {
+      if (id != null && id.isNotEmpty) {
+        await AppScope.read(context).repositories.profiles.followProfile(id);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isFollowing = false);
+      }
+      rethrow;
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingFollow = false);
+      }
     }
     if (!mounted) {
       return;
@@ -457,7 +511,8 @@ class _ProfileHeroState extends State<_ProfileHero> {
                   children: [
                     Expanded(
                       child: FilledButton(
-                        onPressed: _connectionStatus == 'none'
+                        onPressed:
+                            _connectionStatus == 'none' && !_isSendingConnection
                             ? _requestConnection
                             : null,
                         style: FilledButton.styleFrom(
@@ -471,26 +526,41 @@ class _ProfileHeroState extends State<_ProfileHero> {
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        child: Text(switch (_connectionStatus) {
-                          'accepted' => 'متصل',
-                          'pending' => 'قيد الانتظار',
-                          _ => 'تواصل',
-                        }),
+                        child: _isSendingConnection
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(switch (_connectionStatus) {
+                                'accepted' => 'متصل',
+                                'pending' => 'قيد الانتظار',
+                                _ => 'تواصل',
+                              }),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _followProfile,
+                        onPressed: _isFollowing || _isSendingFollow
+                            ? null
+                            : _followProfile,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.blue,
+                          foregroundColor: _isFollowing
+                              ? context.appMuted
+                              : AppColors.blue,
                           minimumSize: const Size.fromHeight(46),
-                          side: const BorderSide(color: AppColors.blue),
+                          side: BorderSide(
+                            color: _isFollowing
+                                ? context.appBorder
+                                : AppColors.blue,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                        child: const Text('متابعة'),
+                        child: Text(_isFollowing ? 'متابَع' : 'متابعة'),
                       ),
                     ),
                   ],

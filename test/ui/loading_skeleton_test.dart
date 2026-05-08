@@ -550,6 +550,9 @@ final class _FakeProfileRepository implements ProfileRepository {
   Future<String> connectionStatus(String otherProfileId) async => 'none';
 
   @override
+  Future<bool> isFollowingProfile(String followingProfileId) async => false;
+
+  @override
   Future<void> followProfile(String followingProfileId) async {}
 
   @override

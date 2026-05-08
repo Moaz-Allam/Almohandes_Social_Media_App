@@ -220,6 +220,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   ],
                 ),
               ),
+              if (post.isRepost &&
+                  (post.repostOriginalName?.isNotEmpty ?? false))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  child: _RepostCredit(name: post.repostOriginalName!),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                 child: Text(
@@ -295,6 +301,38 @@ class _FeedPostCardState extends State<FeedPostCard> {
         ),
         LikeBurst(visible: _showLike, color: AppColors.blue),
       ],
+    );
+  }
+}
+
+class _RepostCredit extends StatelessWidget {
+  const _RepostCredit({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: context.appSurfaceAlt,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.repeat, color: AppColors.blue, size: 17),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              'إعادة نشر من $name',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

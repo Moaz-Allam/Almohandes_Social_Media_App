@@ -23,6 +23,8 @@ abstract interface class CommentRepository {
 final class SupabaseCommentRepository implements CommentRepository {
   SupabaseCommentRepository({required this.client});
 
+  static const _commentsPageSize = 30;
+
   final SupabaseClient? client;
   final _caches = <String, TimedMemoryCache<List<CommentItem>>>{};
 
@@ -59,7 +61,7 @@ final class SupabaseCommentRepository implements CommentRepository {
           .eq('target_type', targetType)
           .eq('target_id', targetId)
           .order('created_at', ascending: false)
-          .limit(100);
+          .limit(_commentsPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _commentFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
@@ -88,7 +90,7 @@ final class SupabaseCommentRepository implements CommentRepository {
             .select('id,content,created_at,profiles(full_name,avatar_url)')
             .eq(attempt.$2, targetId)
             .order('created_at', ascending: false)
-            .limit(100);
+            .limit(_commentsPageSize);
         return [
           for (var i = 0; i < rows.length; i++)
             _commentFromRow(Map<String, dynamic>.from(rows[i] as Map), i),

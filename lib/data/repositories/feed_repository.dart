@@ -29,6 +29,9 @@ abstract interface class FeedRepository {
 final class SupabaseFeedRepository implements FeedRepository {
   SupabaseFeedRepository({required this.client});
 
+  static const _feedPageSize = 20;
+  static const _profilePageSize = 24;
+
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<FeedPostModel>>(
     ttl: const Duration(minutes: 1),
@@ -48,7 +51,7 @@ final class SupabaseFeedRepository implements FeedRepository {
 
     try {
       final profileId = await _currentProfileId(remote);
-      final params = <String, dynamic>{'p_limit': 50};
+      final params = <String, dynamic>{'p_limit': _feedPageSize};
       if (profileId != null) {
         params['p_profile_id'] = profileId;
       }
@@ -62,12 +65,12 @@ final class SupabaseFeedRepository implements FeedRepository {
         final rows = await remote
             .from('posts')
             .select(
-              'id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
+              'id,content,image_url,post_type,likes_count,comments_count,created_at,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles(full_name,role,avatar_url)',
             )
             .eq('is_active', true)
             .eq('is_archived', false)
             .order('created_at', ascending: false)
-            .limit(50);
+            .limit(_feedPageSize);
         return _postsFromRows(rows);
       } catch (_) {
         return const [];
@@ -102,13 +105,13 @@ final class SupabaseFeedRepository implements FeedRepository {
       final rows = await remote
           .from('posts')
           .select(
-            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
+            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles(full_name,role,avatar_url)',
           )
           .eq('profile_id', profileId)
           .eq('is_active', true)
           .eq('is_archived', false)
           .order('created_at', ascending: false)
-          .limit(60);
+          .limit(_profilePageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           feedPostFromSupabase(
@@ -282,19 +285,38 @@ final class SupabaseFeedRepository implements FeedRepository {
     try {
       final original = await remote
           .from('posts')
-          .select('content,image_url,post_type,profile_id')
+          .select('content,image_url,post_type,profile_id,profiles(full_name)')
           .eq('id', postId)
           .maybeSingle();
       if (original == null) {
         return;
       }
-      await remote.from('posts').insert({
+      final originalProfile = original['profiles'] is Map
+          ? Map<String, dynamic>.from(original['profiles'] as Map)
+          : const <String, dynamic>{};
+      final originalName = '${originalProfile['full_name'] ?? 'مستخدم'}';
+      final repostPayload = {
         'profile_id': profileId,
         'content': '${original['content'] ?? ''}',
         if (original['image_url'] != null) 'image_url': original['image_url'],
         'post_type': '${original['post_type'] ?? 'general'}',
         'is_active': true,
-      });
+        'repost_of_post_id': postId,
+        'repost_original_profile_id': original['profile_id'],
+        'repost_original_name': originalName,
+      };
+      try {
+        await remote.from('posts').insert(repostPayload);
+      } catch (_) {
+        await remote.from('posts').insert({
+          'profile_id': profileId,
+          'content':
+              'إعادة نشر من $originalName\n\n${original['content'] ?? ''}',
+          if (original['image_url'] != null) 'image_url': original['image_url'],
+          'post_type': '${original['post_type'] ?? 'general'}',
+          'is_active': true,
+        });
+      }
       final owner = '${original['profile_id'] ?? ''}';
       if (owner.isNotEmpty && owner != profileId) {
         await remote.from('notifications').insert({

@@ -18,6 +18,8 @@ abstract interface class ReelRepository {
 final class SupabaseReelRepository implements ReelRepository {
   SupabaseReelRepository({required this.client});
 
+  static const _reelsPageSize = 12;
+
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<ReelItem>>(
     ttl: const Duration(minutes: 1),
@@ -42,7 +44,7 @@ final class SupabaseReelRepository implements ReelRepository {
           )
           .eq('is_active', true)
           .order('created_at', ascending: false)
-          .limit(40);
+          .limit(_reelsPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _reelFromRow(Map<String, dynamic>.from(rows[i] as Map), i),

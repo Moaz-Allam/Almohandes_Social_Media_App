@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../models/notification_item_model.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
+import 'notification_permission_stub.dart'
+    if (dart.library.html) 'notification_permission_web.dart';
 import 'widgets/notification_tile.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -22,6 +26,9 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   late Future<List<NotificationItemModel>> _itemsFuture;
+  final Set<String> _deletedNotificationIds = {};
+  final Set<String> _readNotificationIds = {};
+  bool _didAskForNotifications = false;
 
   @override
   void initState() {
@@ -35,6 +42,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _itemsFuture = AppScope.read(
       context,
     ).repositories.notifications.fetchNotifications();
+    if (!_didAskForNotifications) {
+      _didAskForNotifications = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_askForNotificationPermission());
+      });
+    }
   }
 
   Future<void> _refresh({bool forceRefresh = true}) async {
@@ -45,18 +58,83 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await _itemsFuture;
   }
 
-  Future<void> _markRead(NotificationItemModel item) async {
-    await AppScope.read(context).repositories.notifications.markRead(item.id);
-    if (mounted) {
-      await _refresh();
-    }
+  void _markRead(NotificationItemModel item) {
+    final app = AppScope.read(context);
+    setState(() {
+      _readNotificationIds.add(item.id);
+    });
+    app.notifyNotificationStateChanged();
+    unawaited(
+      app.repositories.notifications.markRead(item.id).then((_) {
+        if (mounted) {
+          return _refresh();
+        }
+      }),
+    );
   }
 
-  Future<void> _delete(NotificationItemModel item) async {
-    await AppScope.read(context).repositories.notifications.delete(item.id);
-    if (mounted) {
-      await _refresh();
+  void _delete(NotificationItemModel item) {
+    final app = AppScope.read(context);
+    setState(() {
+      _deletedNotificationIds.add(item.id);
+    });
+    app.notifyNotificationStateChanged();
+    unawaited(app.repositories.notifications.delete(item.id));
+  }
+
+  List<NotificationItemModel> _visibleItems(List<NotificationItemModel> items) {
+    return [
+      for (final item in items)
+        if (!_deletedNotificationIds.contains(item.id))
+          _readNotificationIds.contains(item.id)
+              ? item.copyWith(unread: false)
+              : item,
+    ];
+  }
+
+  Future<void> _askForNotificationPermission() async {
+    if (!mounted) {
+      return;
     }
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(
+          Icons.notifications_active_outlined,
+          color: AppColors.blue,
+        ),
+        title: const Text('تفعيل الإشعارات؟'),
+        content: const Text(
+          'اسمح للتطبيق بإرسال تنبيهات خارج التطبيق للرسائل والطلبات المهمة.',
+          textDirection: TextDirection.rtl,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('لاحقاً'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('تفعيل'),
+          ),
+        ],
+      ),
+    );
+    if (enable != true || !mounted) {
+      return;
+    }
+    final permission = supportsNativeNotificationPermission
+        ? await requestNotificationPermission()
+        : null;
+    if (!mounted) {
+      return;
+    }
+    final message = permission == 'denied'
+        ? 'الإشعارات محظورة من المتصفح.'
+        : 'تم تفعيل إشعارات الجهاز.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -72,7 +150,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   !snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-              final items = snapshot.data ?? const <NotificationItemModel>[];
+              final items = _visibleItems(
+                snapshot.data ?? const <NotificationItemModel>[],
+              );
               if (items.isEmpty) {
                 return const _NotificationsEmptyState();
               }

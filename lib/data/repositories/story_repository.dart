@@ -20,6 +20,8 @@ abstract interface class StoryRepository {
 final class SupabaseStoryRepository implements StoryRepository {
   SupabaseStoryRepository({required this.client});
 
+  static const _storiesPageSize = 16;
+
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<StoryItem>>(
     ttl: const Duration(seconds: 45),
@@ -45,7 +47,7 @@ final class SupabaseStoryRepository implements StoryRepository {
           .eq('is_archived', false)
           .gt('expires_at', DateTime.now().toIso8601String())
           .order('created_at', ascending: false)
-          .limit(30);
+          .limit(_storiesPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _storyFromRow(Map<String, dynamic>.from(rows[i] as Map), i),

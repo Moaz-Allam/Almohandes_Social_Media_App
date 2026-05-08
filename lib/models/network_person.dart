@@ -13,6 +13,7 @@ final class NetworkPerson {
     this.isCompany = false,
     this.avatarUrl,
     this.connectionStatus = 'none',
+    this.isFollowed = false,
   });
 
   final String id;
@@ -26,6 +27,7 @@ final class NetworkPerson {
   final bool isCompany;
   final String? avatarUrl;
   final String connectionStatus;
+  final bool isFollowed;
 
   bool get isPendingConnection => connectionStatus == 'pending';
   bool get isConnected => connectionStatus == 'accepted';

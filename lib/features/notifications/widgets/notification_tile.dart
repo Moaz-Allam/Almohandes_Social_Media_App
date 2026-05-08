@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/notification_item_model.dart';
-import '../../../shared/widgets/app_avatar.dart';
 
 class NotificationTile extends StatelessWidget {
   const NotificationTile({
@@ -37,7 +36,7 @@ class NotificationTile extends StatelessWidget {
             )
           else
             const SizedBox(width: 16),
-          AppAvatar(name: item.title, radius: 30, color: item.color),
+          _NotificationTypeLogo(item: item),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -99,5 +98,51 @@ class NotificationTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _NotificationTypeLogo extends StatelessWidget {
+  const _NotificationTypeLogo({required this.item});
+
+  final NotificationItemModel item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: item.color.withValues(alpha: .12),
+        shape: BoxShape.circle,
+        border: Border.all(color: item.color.withValues(alpha: .22)),
+      ),
+      child: Icon(_iconForType(item.type), color: item.color, size: 28),
+    );
+  }
+
+  IconData _iconForType(String type) {
+    final value = type.toLowerCase();
+    if (value.contains('message') || value.contains('chat')) {
+      return Icons.chat_bubble_outline;
+    }
+    if (value.contains('connection') || value.contains('connect')) {
+      return Icons.person_add_alt_1;
+    }
+    if (value.contains('project') || value.contains('proposal')) {
+      return Icons.assignment_turned_in_outlined;
+    }
+    if (value.contains('comment')) {
+      return Icons.mode_comment_outlined;
+    }
+    if (value.contains('like') || value.contains('reaction')) {
+      return Icons.thumb_up_alt_outlined;
+    }
+    if (value.contains('repost') || value.contains('share')) {
+      return Icons.repeat;
+    }
+    if (value.contains('follow')) {
+      return Icons.person_add_alt;
+    }
+    return Icons.notifications_none;
   }
 }

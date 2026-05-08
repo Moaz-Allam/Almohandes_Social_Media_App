@@ -461,6 +461,365 @@ $$;
 ALTER FUNCTION "public"."app_current_profile_id"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."app_normalize_conversation_participants"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_first uuid;
+begin
+  if new.participant_one is not null
+    and new.participant_two is not null
+    and new.participant_one::text > new.participant_two::text then
+    v_first := new.participant_one;
+    new.participant_one := new.participant_two;
+    new.participant_two := v_first;
+  end if;
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_normalize_conversation_participants"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_on_comment"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_owner uuid;
+begin
+  if new.target_type = 'reel' then
+    select r.profile_id into v_owner
+    from public.reels r
+    where r.id::text = new.target_id;
+  elsif new.target_type = 'project' then
+    select p.profile_id into v_owner
+    from public.projects p
+    where p.id::text = new.target_id;
+  else
+    select p.profile_id into v_owner
+    from public.posts p
+    where p.id::text = new.target_id;
+  end if;
+
+  if v_owner is not null and v_owner <> new.profile_id then
+    perform public.app_notify_once(
+      v_owner,
+      'New comment',
+      'Someone commented on your content.',
+      'comment',
+      'app://' || new.target_type || '/' || new.target_id
+    );
+  end if;
+
+  if new.target_type = 'post' then
+    update public.posts
+    set comments_count = coalesce(comments_count, 0) + 1
+    where id::text = new.target_id;
+  elsif new.target_type = 'reel' then
+    update public.reels
+    set comments_count = coalesce(comments_count, 0) + 1
+    where id::text = new.target_id;
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_on_comment"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_on_connection_request"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if tg_op = 'INSERT' and new.status = 'pending' then
+    perform public.app_notify_once(
+      new.receiver_profile_id,
+      'New connection request',
+      'You received a connection request.',
+      'connection',
+      'app://profile/' || new.requester_profile_id::text
+    );
+  elsif tg_op = 'UPDATE'
+    and new.status = 'accepted'
+    and old.status is distinct from 'accepted' then
+    perform public.app_notify_once(
+      new.requester_profile_id,
+      'Connection accepted',
+      'You can now message this connection.',
+      'connection',
+      'app://chat/' || new.receiver_profile_id::text
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_on_connection_request"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_on_message"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_recipient uuid;
+begin
+  select case
+      when c.participant_one = new.sender_id then c.participant_two
+      else c.participant_one
+    end
+  into v_recipient
+  from public.conversations c
+  where c.id = new.conversation_id;
+
+  if v_recipient is not null and v_recipient <> new.sender_id then
+    perform public.app_notify_once(
+      v_recipient,
+      'New message',
+      case new.message_type
+        when 'voice' then 'You received a voice message.'
+        when 'image' then 'You received an image.'
+        when 'video' then 'You received a video.'
+        when 'file' then 'You received a file.'
+        else left(coalesce(new.content, 'New message'), 160)
+      end,
+      'message',
+      'app://chat/' || new.conversation_id::text
+    );
+  end if;
+
+  update public.messages
+  set is_read = false
+  where id = new.id
+    and is_read is distinct from false;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_on_message"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_on_post_like"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_owner uuid;
+begin
+  select p.profile_id
+  into v_owner
+  from public.posts p
+  where p.id = new.post_id;
+
+  if v_owner is not null and v_owner <> new.profile_id then
+    perform public.app_notify_once(
+      v_owner,
+      'New like',
+      'Someone liked your post.',
+      'like',
+      'app://post/' || new.post_id::text
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_on_post_like"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_on_project_application"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_owner uuid;
+begin
+  select p.profile_id
+  into v_owner
+  from public.projects p
+  where p.id = new.project_id;
+
+  if v_owner is not null and v_owner <> new.profile_id then
+    perform public.app_notify_once(
+      v_owner,
+      'New project proposal',
+      'A user submitted a proposal to your project.',
+      'project',
+      'app://project/' || new.project_id::text
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_on_project_application"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_on_reel_like"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+declare
+  v_owner uuid;
+begin
+  select r.profile_id
+  into v_owner
+  from public.reels r
+  where r.id = new.reel_id;
+
+  if v_owner is not null and v_owner <> new.profile_id then
+    perform public.app_notify_once(
+      v_owner,
+      'New like',
+      'Someone liked your reel.',
+      'like',
+      'app://reel/' || new.reel_id::text
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_on_reel_like"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_notify_once"("p_profile_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_action_url" "text" DEFAULT NULL::"text") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if p_profile_id is null then
+    return;
+  end if;
+
+  if exists (
+    select 1
+    from public.notifications n
+    where n.profile_id = p_profile_id
+      and n.type = coalesce(nullif(trim(p_type), ''), 'general')
+      and n.action_url is not distinct from p_action_url
+      and n.created_at > now() - interval '30 seconds'
+  ) then
+    return;
+  end if;
+
+  insert into public.notifications (
+    profile_id,
+    title,
+    message,
+    type,
+    action_url
+  )
+  values (
+    p_profile_id,
+    coalesce(nullif(trim(p_title), ''), 'New notification'),
+    coalesce(p_message, ''),
+    coalesce(nullif(trim(p_type), ''), 'general'),
+    p_action_url
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_notify_once"("p_profile_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_action_url" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_safe_governorate"("p_governorate" "text") RETURNS "public"."governorate"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+  select case lower(coalesce(nullif(trim(p_governorate), ''), 'baghdad'))
+    when 'baghdad' then 'baghdad'::public.governorate
+    when 'basra' then 'basra'::public.governorate
+    when 'nineveh' then 'nineveh'::public.governorate
+    when 'erbil' then 'erbil'::public.governorate
+    when 'sulaymaniyah' then 'sulaymaniyah'::public.governorate
+    when 'duhok' then 'duhok'::public.governorate
+    when 'kirkuk' then 'kirkuk'::public.governorate
+    when 'diyala' then 'diyala'::public.governorate
+    when 'anbar' then 'anbar'::public.governorate
+    when 'babylon' then 'babylon'::public.governorate
+    when 'karbala' then 'karbala'::public.governorate
+    when 'najaf' then 'najaf'::public.governorate
+    when 'wasit' then 'wasit'::public.governorate
+    when 'saladin' then 'saladin'::public.governorate
+    when 'dhi_qar' then 'dhi_qar'::public.governorate
+    when 'maysan' then 'maysan'::public.governorate
+    when 'muthanna' then 'muthanna'::public.governorate
+    when 'qadisiyah' then 'qadisiyah'::public.governorate
+    else 'baghdad'::public.governorate
+  end
+$$;
+
+
+ALTER FUNCTION "public"."app_safe_governorate"("p_governorate" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_safe_user_role"("p_role" "text") RETURNS "public"."user_role"
+    LANGUAGE "sql" IMMUTABLE
+    SET "search_path" TO 'public'
+    AS $$
+  select case lower(coalesce(nullif(trim(p_role), ''), 'engineer'))
+    when 'engineer' then 'engineer'::public.user_role
+    when 'contractor' then 'contractor'::public.user_role
+    when 'company' then 'contractor'::public.user_role
+    when 'client' then 'client'::public.user_role
+    when 'craftsman' then 'craftsman'::public.user_role
+    when 'worker' then 'worker'::public.user_role
+    when 'machinery' then 'machinery'::public.user_role
+    when 'equipment' then 'machinery'::public.user_role
+    when 'admin' then 'admin'::public.user_role
+    else 'engineer'::public.user_role
+  end
+$$;
+
+
+ALTER FUNCTION "public"."app_safe_user_role"("p_role" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."app_sync_profile_cover_columns"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+begin
+  if new.cover_url is null and new.cover_photo_url is not null then
+    new.cover_url := new.cover_photo_url;
+  elsif new.cover_photo_url is null and new.cover_url is not null then
+    new.cover_photo_url := new.cover_url;
+  elsif tg_op = 'UPDATE'
+    and new.cover_url is distinct from old.cover_url
+    and new.cover_url is not null then
+    new.cover_photo_url := new.cover_url;
+  elsif tg_op = 'UPDATE'
+    and new.cover_photo_url is distinct from old.cover_photo_url
+    and new.cover_photo_url is not null then
+    new.cover_url := new.cover_photo_url;
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."app_sync_profile_cover_columns"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."app_touch_conversation"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
@@ -488,12 +847,29 @@ CREATE OR REPLACE FUNCTION "public"."app_update_connection_counts"() RETURNS "tr
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+declare
+  v_one uuid;
+  v_two uuid;
 begin
   if new.status = 'accepted' and old.status is distinct from 'accepted' then
     update public.profiles
     set following_count = coalesce(following_count, 0) + 1
     where id in (new.requester_profile_id, new.receiver_profile_id);
+
+    v_one := least(new.requester_profile_id, new.receiver_profile_id);
+    v_two := greatest(new.requester_profile_id, new.receiver_profile_id);
+
+    insert into public.conversations (
+      participant_one,
+      participant_two,
+      last_message,
+      last_message_at
+    )
+    values (v_one, v_two, '', now())
+    on conflict (participant_one, participant_two)
+    do nothing;
   end if;
+
   return new;
 end;
 $$;
@@ -770,34 +1146,45 @@ begin
     raise exception 'not_authenticated';
   end if;
 
-  insert into public.profiles (
-    user_id,
-    full_name,
-    email,
-    phone,
-    role,
-    governorate,
-    bio
-  )
-  values (
-    v_user_id,
-    nullif(trim(p_full_name), ''),
-    nullif(trim(p_email), ''),
-    nullif(trim(p_phone), ''),
-    p_role::user_role,
-    p_governorate::governorate,
-    nullif(trim(p_bio), '')
-  )
-  on conflict (user_id)
-  do update set
-    full_name = excluded.full_name,
-    email = excluded.email,
-    phone = excluded.phone,
-    role = excluded.role,
-    governorate = excluded.governorate,
-    bio = excluded.bio,
-    updated_at = now()
-  returning id into v_profile_id;
+  select p.id
+  into v_profile_id
+  from public.profiles p
+  where p.user_id = v_user_id
+  order by p.created_at desc nulls last, p.id
+  limit 1;
+
+  if v_profile_id is null then
+    insert into public.profiles (
+      user_id,
+      full_name,
+      email,
+      phone,
+      role,
+      governorate,
+      bio
+    )
+    values (
+      v_user_id,
+      coalesce(nullif(trim(p_full_name), ''), split_part(coalesce(p_email, ''), '@', 1), 'User'),
+      nullif(trim(p_email), ''),
+      nullif(trim(p_phone), ''),
+      public.app_safe_user_role(p_role),
+      public.app_safe_governorate(p_governorate),
+      nullif(trim(p_bio), '')
+    )
+    returning id into v_profile_id;
+  else
+    update public.profiles
+    set
+      full_name = coalesce(nullif(trim(p_full_name), ''), full_name),
+      email = coalesce(nullif(trim(p_email), ''), email),
+      phone = nullif(trim(p_phone), ''),
+      role = public.app_safe_user_role(p_role),
+      governorate = public.app_safe_governorate(p_governorate),
+      bio = nullif(trim(p_bio), ''),
+      updated_at = now()
+    where id = v_profile_id;
+  end if;
 
   return v_profile_id;
 end;
@@ -968,6 +1355,155 @@ $$;
 
 
 ALTER FUNCTION "public"."create_project_for_app"("p_title" "text", "p_description" "text", "p_governorate" "text", "p_tagline" "text", "p_category" "text", "p_project_type" "text", "p_work_mode" "text", "p_stage" "text", "p_problem" "text", "p_goals" "text", "p_target_users" "text", "p_existing_assets" "text"[], "p_required_skills" "text"[], "p_preferred_skills" "text"[], "p_tools_equipment" "text"[], "p_seniority_level" "text", "p_years_experience" integer, "p_certifications" "text"[], "p_engineers_needed" integer, "p_roles_needed" "text"[], "p_responsibilities" "jsonb", "p_current_team_size" "text", "p_collaboration_tools" "text"[], "p_estimated_duration" "text", "p_weekly_commitment" "text", "p_milestones" "jsonb", "p_deadline_urgency" "text", "p_payment_status" "text", "p_payment_model" "text", "p_currency" "text", "p_bonus_incentives" "text", "p_budget_min" numeric, "p_budget_max" numeric) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."delete_current_user_for_app"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'auth'
+    AS $_$
+declare
+  v_user_id uuid;
+  v_profile_id uuid;
+begin
+  v_user_id := auth.uid();
+
+  if v_user_id is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  select p.id
+  into v_profile_id
+  from public.profiles p
+  where p.user_id = v_user_id
+  limit 1;
+
+  if v_profile_id is not null then
+    if to_regclass('public.messages') is not null then
+      execute 'delete from public.messages where sender_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.conversations') is not null then
+      execute 'delete from public.conversations where participant_one = $1 or participant_two = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.notifications') is not null then
+      execute 'delete from public.notifications where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.saved_items') is not null then
+      execute 'delete from public.saved_items where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.project_applications') is not null then
+      if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'project_applications'
+          and column_name = 'reviewed_by'
+      ) then
+        execute 'delete from public.project_applications where profile_id = $1 or reviewed_by = $1'
+          using v_profile_id;
+      else
+        execute 'delete from public.project_applications where profile_id = $1'
+          using v_profile_id;
+      end if;
+    end if;
+
+    if to_regclass('public.app_comments') is not null then
+      execute 'delete from public.app_comments where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.app_reposts') is not null then
+      execute 'delete from public.app_reposts where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.followers') is not null then
+      execute 'delete from public.followers where follower_id = $1 or following_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.connection_requests') is not null then
+      execute 'delete from public.connection_requests where requester_profile_id = $1 or receiver_profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.blocked_profiles') is not null then
+      execute 'delete from public.blocked_profiles where blocker_profile_id = $1 or blocked_profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.stories') is not null then
+      execute 'delete from public.stories where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.reels') is not null then
+      execute 'delete from public.reels where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.posts') is not null then
+      execute 'delete from public.posts where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.project_details') is not null
+      and to_regclass('public.projects') is not null then
+      execute 'delete from public.project_details where project_id in (select id from public.projects where profile_id = $1)'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.projects') is not null then
+      execute 'delete from public.projects where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.engineer_details') is not null then
+      execute 'delete from public.engineer_details where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.contractor_details') is not null then
+      execute 'delete from public.contractor_details where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.craftsman_details') is not null then
+      execute 'delete from public.craftsman_details where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.machinery_details') is not null then
+      execute 'delete from public.machinery_details where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    if to_regclass('public.subscriptions') is not null then
+      execute 'delete from public.subscriptions where profile_id = $1'
+        using v_profile_id;
+    end if;
+
+    delete from public.profiles
+    where id = v_profile_id;
+  end if;
+
+  delete from public.profiles
+  where user_id = v_user_id;
+
+  delete from auth.users
+  where id = v_user_id;
+end;
+$_$;
+
+
+ALTER FUNCTION "public"."delete_current_user_for_app"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_admin_chat_monitor"("p_limit" integer DEFAULT 20) RETURNS TABLE("id" "uuid", "updated_at" timestamp with time zone, "participant_one_name" "text", "participant_one_avatar" "text", "participant_two_name" "text", "participant_two_avatar" "text", "last_message_content" "text", "last_message_at" timestamp with time zone)
@@ -1179,7 +1715,7 @@ CREATE OR REPLACE FUNCTION "public"."get_network_profiles_for_app"("p_audience" 
     AS $$
 declare
   v_profile_id uuid;
-  v_viewer_role user_role;
+  v_viewer_role public.user_role;
 begin
   v_profile_id := public.app_current_profile_id();
 
@@ -1193,82 +1729,59 @@ begin
     return;
   end if;
 
-  if p_audience = 'companies' then
-    if v_viewer_role <> 'engineer'::user_role then
-      return;
-    end if;
-
-    return query
-    select
-      p.id,
-      p.full_name,
-      p.username,
-      p.role::text,
-      p.governorate::text,
-      p.bio,
-      p.experience_years,
-      p.projects_count,
-      p.followers_count,
-      p.avatar_url,
-      p.is_verified
-    from public.profiles p
-    where p.id <> v_profile_id
-      and p.role in ('contractor'::user_role, 'client'::user_role)
-    order by p.is_verified desc, p.projects_count desc, p.created_at desc
-    limit least(greatest(p_limit, 1), 100);
-
+  if v_viewer_role not in ('engineer'::public.user_role, 'contractor'::public.user_role, 'client'::public.user_role, 'admin'::public.user_role) then
     return;
   end if;
 
-  if v_viewer_role = 'engineer'::user_role then
-    return query
-    select
-      p.id,
-      p.full_name,
-      p.username,
-      p.role::text,
-      p.governorate::text,
-      p.bio,
-      p.experience_years,
-      p.projects_count,
-      p.followers_count,
-      p.avatar_url,
-      p.is_verified
-    from public.profiles p
-    where p.id <> v_profile_id
-      and p.role in (
-        'engineer'::user_role,
-        'craftsman'::user_role,
-        'worker'::user_role,
-        'machinery'::user_role
+  return query
+  select
+    p.id,
+    p.full_name,
+    p.username,
+    p.role::text,
+    p.governorate::text,
+    p.bio,
+    p.experience_years,
+    p.projects_count,
+    p.followers_count,
+    p.avatar_url,
+    p.is_verified
+  from public.profiles p
+  where p.id <> v_profile_id
+    and not exists (
+      select 1
+      from public.connection_requests cr
+      where cr.status = 'accepted'
+        and (
+          (cr.requester_profile_id = v_profile_id and cr.receiver_profile_id = p.id)
+          or (cr.requester_profile_id = p.id and cr.receiver_profile_id = v_profile_id)
+        )
+    )
+    and (
+      v_viewer_role = 'admin'::public.user_role
+      or (
+        p_audience = 'companies'
+        and v_viewer_role in ('engineer'::public.user_role, 'contractor'::public.user_role, 'client'::public.user_role)
+        and p.role in ('contractor'::public.user_role, 'client'::public.user_role)
       )
-    order by p.is_verified desc, p.projects_count desc, p.created_at desc
-    limit least(greatest(p_limit, 1), 100);
-
-    return;
-  end if;
-
-  if v_viewer_role = 'contractor'::user_role
-      or v_viewer_role = 'client'::user_role then
-    return query
-    select
-      p.id,
-      p.full_name,
-      p.username,
-      p.role::text,
-      p.governorate::text,
-      p.bio,
-      p.experience_years,
-      p.projects_count,
-      p.followers_count,
-      p.avatar_url,
-      p.is_verified
-    from public.profiles p
-    where p.id <> v_profile_id
-      and p.role = 'engineer'::user_role
-    order by p.is_verified desc, p.projects_count desc, p.created_at desc
-    limit least(greatest(p_limit, 1), 100);
-  end if;
+      or (
+        p_audience <> 'companies'
+        and v_viewer_role = 'engineer'::public.user_role
+        and p.role in (
+          'engineer'::public.user_role,
+          'craftsman'::public.user_role,
+          'worker'::public.user_role,
+          'machinery'::public.user_role
+        )
+      )
+      or (
+        p_audience <> 'companies'
+        and v_viewer_role in ('contractor'::public.user_role, 'client'::public.user_role)
+        and p.role = 'engineer'::public.user_role
+      )
+    )
+  order by p.is_verified desc, p.projects_count desc, p.created_at desc
+  limit least(greatest(coalesce(p_limit, 40), 1), 100);
 end;
 $$;
 
@@ -1593,29 +2106,34 @@ $$;
 ALTER FUNCTION "public"."get_unread_messages_count"("p_profile_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."get_user_conversations"("p_profile_id" "uuid") RETURNS TABLE("conversation_id" "uuid", "recipient_id" "uuid", "recipient_name" "text", "recipient_avatar" "text", "last_message" "text", "last_message_at" timestamp with time zone, "unread_count" bigint, "is_muted" boolean)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."get_user_conversations"("p_profile_id" "uuid") RETURNS TABLE("conversation_id" "uuid", "recipient_profile_id" "uuid", "recipient_name" "text", "recipient_avatar_url" "text", "last_message" "text", "last_message_at" timestamp with time zone, "unread_count" bigint)
+    LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
+  select
     c.id as conversation_id,
-    CASE WHEN c.participant_one = p_profile_id THEN c.participant_two ELSE c.participant_one END as recipient_id,
-    rp.full_name as recipient_name,
-    rp.avatar_url as recipient_avatar,
-    c.last_message,
+    other_profile.id as recipient_profile_id,
+    other_profile.full_name as recipient_name,
+    other_profile.avatar_url as recipient_avatar_url,
+    coalesce(c.last_message, '') as last_message,
     c.last_message_at,
-    (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.sender_id != p_profile_id AND m.is_read = false)::bigint as unread_count,
-    EXISTS(SELECT 1 FROM muted_conversations mc WHERE mc.conversation_id = c.id AND mc.profile_id = p_profile_id) as is_muted
-  FROM conversations c
-  JOIN profiles rp ON rp.id = (CASE WHEN c.participant_one = p_profile_id THEN c.participant_two ELSE c.participant_one END)
-  LEFT JOIN blocked_users bu ON (bu.blocker_id = p_profile_id AND bu.blocked_id = rp.id)
-  WHERE (c.participant_one = p_profile_id OR c.participant_two = p_profile_id)
-    AND c.last_message IS NOT NULL
-    AND bu.id IS NULL
-  ORDER BY c.last_message_at DESC NULLS LAST;
-END;
+    count(m.id) filter (
+      where m.sender_id <> p_profile_id
+        and coalesce(m.read_at is null, true)
+        and coalesce(m.is_read, false) = false
+    ) as unread_count
+  from public.conversations c
+  join public.profiles other_profile
+    on other_profile.id = case
+      when c.participant_one = p_profile_id then c.participant_two
+      else c.participant_one
+    end
+  left join public.messages m
+    on m.conversation_id = c.id
+  where p_profile_id in (c.participant_one, c.participant_two)
+  group by c.id, other_profile.id, other_profile.full_name, other_profile.avatar_url, c.last_message, c.last_message_at
+  order by c.last_message_at desc nulls last, c.created_at desc
+  limit 50
 $$;
 
 
@@ -1657,66 +2175,55 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_auth_user_for_app"() RETURNS "tr
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
+declare
+  v_profile_id uuid;
 begin
-  insert into public.profiles (
-    user_id,
-    full_name,
-    email,
-    phone,
-    role,
-    governorate,
-    bio
-  )
-  values (
-    new.id,
-    coalesce(
-      nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
-      split_part(coalesce(new.email, ''), '@', 1),
-      'مستخدم'
-    ),
-    nullif(trim(coalesce(new.email, new.raw_user_meta_data->>'email', '')), ''),
-    nullif(trim(coalesce(new.raw_user_meta_data->>'phone', '')), ''),
-    case coalesce(new.raw_user_meta_data->>'role', '')
-      when 'engineer' then 'engineer'
-      when 'contractor' then 'contractor'
-      when 'client' then 'client'
-      when 'craftsman' then 'craftsman'
-      when 'worker' then 'worker'
-      when 'machinery' then 'machinery'
-      else 'engineer'
-    end::user_role,
-    case coalesce(new.raw_user_meta_data->>'governorate', '')
-      when 'baghdad' then 'baghdad'
-      when 'basra' then 'basra'
-      when 'nineveh' then 'nineveh'
-      when 'erbil' then 'erbil'
-      when 'sulaymaniyah' then 'sulaymaniyah'
-      when 'duhok' then 'duhok'
-      when 'kirkuk' then 'kirkuk'
-      when 'diyala' then 'diyala'
-      when 'anbar' then 'anbar'
-      when 'babylon' then 'babylon'
-      when 'karbala' then 'karbala'
-      when 'najaf' then 'najaf'
-      when 'wasit' then 'wasit'
-      when 'saladin' then 'saladin'
-      when 'dhi_qar' then 'dhi_qar'
-      when 'maysan' then 'maysan'
-      when 'muthanna' then 'muthanna'
-      when 'qadisiyah' then 'qadisiyah'
-      else 'baghdad'
-    end::governorate,
-    nullif(trim(coalesce(new.raw_user_meta_data->>'bio', '')), '')
-  )
-  on conflict (user_id)
-  do update set
-    full_name = excluded.full_name,
-    email = excluded.email,
-    phone = excluded.phone,
-    role = excluded.role,
-    governorate = excluded.governorate,
-    bio = coalesce(excluded.bio, public.profiles.bio),
-    updated_at = now();
+  select p.id
+  into v_profile_id
+  from public.profiles p
+  where p.user_id = new.id
+  order by p.created_at desc nulls last, p.id
+  limit 1;
+
+  if v_profile_id is null then
+    insert into public.profiles (
+      user_id,
+      full_name,
+      email,
+      phone,
+      role,
+      governorate,
+      bio
+    )
+    values (
+      new.id,
+      coalesce(
+        nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+        split_part(coalesce(new.email, ''), '@', 1),
+        'User'
+      ),
+      nullif(trim(coalesce(new.email, new.raw_user_meta_data->>'email', '')), ''),
+      nullif(trim(coalesce(new.raw_user_meta_data->>'phone', '')), ''),
+      public.app_safe_user_role(new.raw_user_meta_data->>'role'),
+      public.app_safe_governorate(new.raw_user_meta_data->>'governorate'),
+      nullif(trim(coalesce(new.raw_user_meta_data->>'bio', '')), '')
+    );
+  else
+    update public.profiles
+    set
+      full_name = coalesce(
+        nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+        split_part(coalesce(new.email, ''), '@', 1),
+        full_name
+      ),
+      email = coalesce(nullif(trim(coalesce(new.email, new.raw_user_meta_data->>'email', '')), ''), email),
+      phone = coalesce(nullif(trim(coalesce(new.raw_user_meta_data->>'phone', '')), ''), phone),
+      role = public.app_safe_user_role(coalesce(new.raw_user_meta_data->>'role', role::text)),
+      governorate = public.app_safe_governorate(coalesce(new.raw_user_meta_data->>'governorate', governorate::text)),
+      bio = coalesce(nullif(trim(coalesce(new.raw_user_meta_data->>'bio', '')), ''), bio),
+      updated_at = now()
+    where id = v_profile_id;
+  end if;
 
   return new;
 end;
@@ -1730,20 +2237,35 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public'
     AS $$
-BEGIN
-  INSERT INTO public.profiles (
+begin
+  insert into public.profiles (
     user_id,
     email,
-    full_name
+    full_name,
+    role,
+    governorate
   )
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(split_part(NEW.email, '@', 1), 'User')
-  );
+  values (
+    new.id,
+    nullif(trim(coalesce(new.email, new.raw_user_meta_data->>'email', '')), ''),
+    coalesce(
+      nullif(trim(new.raw_user_meta_data->>'full_name'), ''),
+      split_part(coalesce(new.email, ''), '@', 1),
+      'User'
+    ),
+    public.app_safe_user_role(new.raw_user_meta_data->>'role'),
+    public.app_safe_governorate(new.raw_user_meta_data->>'governorate')
+  )
+  on conflict (user_id)
+  do update set
+    email = coalesce(excluded.email, public.profiles.email),
+    full_name = coalesce(excluded.full_name, public.profiles.full_name),
+    role = coalesce(public.profiles.role, excluded.role),
+    governorate = coalesce(public.profiles.governorate, excluded.governorate),
+    updated_at = now();
 
-  RETURN NEW;
-END;
+  return new;
+end;
 $$;
 
 
@@ -2123,6 +2645,7 @@ CREATE OR REPLACE FUNCTION "public"."request_connection_for_app"("p_receiver_pro
 declare
   v_profile_id uuid;
   v_request_id uuid;
+  v_status text;
 begin
   v_profile_id := public.app_current_profile_id();
 
@@ -2130,18 +2653,50 @@ begin
     raise exception 'profile_not_found';
   end if;
 
-  insert into public.connection_requests (
-    requester_profile_id,
-    receiver_profile_id,
-    message
-  )
-  values (v_profile_id, p_receiver_profile_id, p_message)
-  on conflict (requester_profile_id, receiver_profile_id)
-  do update set
-    status = 'pending',
-    message = excluded.message,
-    updated_at = now()
-  returning id into v_request_id;
+  if p_receiver_profile_id is null or p_receiver_profile_id = v_profile_id then
+    raise exception 'invalid_receiver';
+  end if;
+
+  select id, status
+  into v_request_id, v_status
+  from public.connection_requests
+  where (
+      requester_profile_id = v_profile_id
+      and receiver_profile_id = p_receiver_profile_id
+    )
+    or (
+      requester_profile_id = p_receiver_profile_id
+      and receiver_profile_id = v_profile_id
+    )
+  order by
+    case status when 'accepted' then 0 when 'pending' then 1 else 2 end,
+    updated_at desc nulls last,
+    created_at desc nulls last
+  limit 1;
+
+  if v_status in ('pending', 'accepted') then
+    return v_request_id;
+  end if;
+
+  if v_request_id is not null then
+    update public.connection_requests
+    set requester_profile_id = v_profile_id,
+        receiver_profile_id = p_receiver_profile_id,
+        status = 'pending',
+        message = p_message,
+        responded_at = null,
+        updated_at = now()
+    where id = v_request_id
+    returning id into v_request_id;
+  else
+    insert into public.connection_requests (
+      requester_profile_id,
+      receiver_profile_id,
+      message
+    )
+    values (v_profile_id, p_receiver_profile_id, p_message)
+    returning id into v_request_id;
+  end if;
 
   return v_request_id;
 end;
@@ -4428,7 +4983,7 @@ CREATE TABLE IF NOT EXISTS "public"."conversations" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "participant_one" "uuid" NOT NULL,
     "participant_two" "uuid" NOT NULL,
-    "last_message" "text",
+    "last_message" "text" DEFAULT ''::"text",
     "last_message_at" timestamp with time zone DEFAULT "now"(),
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL
@@ -4767,6 +5322,7 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "date_of_birth" "date",
     "verification_rejection_reason" "text",
     "has_pro_badge" boolean DEFAULT false,
+    "cover_url" "text",
     CONSTRAINT "profiles_verification_status_check" CHECK (("verification_status" = ANY (ARRAY['unverified'::"text", 'pending'::"text", 'verified'::"text", 'rejected'::"text"])))
 );
 
@@ -5702,6 +6258,11 @@ ALTER TABLE ONLY "public"."contractor_details"
 
 
 ALTER TABLE ONLY "public"."conversations"
+    ADD CONSTRAINT "conversations_participant_pair_key" UNIQUE ("participant_one", "participant_two");
+
+
+
+ALTER TABLE ONLY "public"."conversations"
     ADD CONSTRAINT "conversations_pkey" PRIMARY KEY ("id");
 
 
@@ -5858,11 +6419,6 @@ ALTER TABLE ONLY "public"."processed_transactions"
 
 ALTER TABLE ONLY "public"."processed_transactions"
     ADD CONSTRAINT "processed_transactions_transaction_id_key" UNIQUE ("transaction_id");
-
-
-
-ALTER TABLE ONLY "public"."profiles"
-    ADD CONSTRAINT "profiles_phone_key" UNIQUE ("phone");
 
 
 
@@ -6342,6 +6898,10 @@ CREATE UNIQUE INDEX "webauthn_credentials_credential_id_key" ON "auth"."webauthn
 
 
 CREATE INDEX "webauthn_credentials_user_id_idx" ON "auth"."webauthn_credentials" USING "btree" ("user_id");
+
+
+
+CREATE UNIQUE INDEX "connection_requests_active_pair_unique_idx" ON "public"."connection_requests" USING "btree" (LEAST("requester_profile_id", "receiver_profile_id"), GREATEST("requester_profile_id", "receiver_profile_id")) WHERE ("status" = ANY (ARRAY['pending'::"text", 'accepted'::"text"]));
 
 
 
@@ -6829,7 +7389,39 @@ CREATE OR REPLACE TRIGGER "notify_craftsman_on_new_message" AFTER INSERT ON "pub
 
 
 
+CREATE OR REPLACE TRIGGER "on_app_comment_notify" AFTER INSERT ON "public"."app_comments" FOR EACH ROW EXECUTE FUNCTION "public"."app_notify_on_comment"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_connection_request_notify" AFTER INSERT OR UPDATE ON "public"."connection_requests" FOR EACH ROW EXECUTE FUNCTION "public"."app_notify_on_connection_request"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_message_notify" AFTER INSERT ON "public"."messages" FOR EACH ROW EXECUTE FUNCTION "public"."app_notify_on_message"();
+
+
+
 CREATE OR REPLACE TRIGGER "on_app_message_touch_conversation" AFTER INSERT ON "public"."messages" FOR EACH ROW EXECUTE FUNCTION "public"."app_touch_conversation"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_normalize_conversation_participants" BEFORE INSERT OR UPDATE ON "public"."conversations" FOR EACH ROW EXECUTE FUNCTION "public"."app_normalize_conversation_participants"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_post_like_notify" AFTER INSERT ON "public"."post_likes" FOR EACH ROW EXECUTE FUNCTION "public"."app_notify_on_post_like"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_project_application_notify" AFTER INSERT ON "public"."project_applications" FOR EACH ROW EXECUTE FUNCTION "public"."app_notify_on_project_application"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_reel_like_notify" AFTER INSERT ON "public"."reel_likes" FOR EACH ROW EXECUTE FUNCTION "public"."app_notify_on_reel_like"();
+
+
+
+CREATE OR REPLACE TRIGGER "on_app_sync_profile_cover_columns" BEFORE INSERT OR UPDATE ON "public"."profiles" FOR EACH ROW EXECUTE FUNCTION "public"."app_sync_profile_cover_columns"();
 
 
 
@@ -8777,6 +9369,10 @@ CREATE POLICY "Users delete own notifications" ON "public"."notifications" FOR D
 
 
 
+CREATE POLICY "Users delete their own profile" ON "public"."profiles" FOR DELETE TO "authenticated" USING (("user_id" = "auth"."uid"()));
+
+
+
 CREATE POLICY "Users manage own blocks" ON "public"."blocked_profiles" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."profiles" "p"
   WHERE (("p"."id" = "blocked_profiles"."blocker_profile_id") AND ("p"."user_id" = "auth"."uid"()))))) WITH CHECK ((EXISTS ( SELECT 1
@@ -9527,6 +10123,72 @@ GRANT ALL ON FUNCTION "public"."app_current_profile_id"() TO "service_role";
 
 
 
+GRANT ALL ON FUNCTION "public"."app_normalize_conversation_participants"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_normalize_conversation_participants"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_normalize_conversation_participants"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_on_comment"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_on_comment"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_on_comment"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_on_connection_request"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_on_connection_request"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_on_connection_request"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_on_message"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_on_message"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_on_message"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_on_post_like"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_on_post_like"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_on_post_like"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_on_project_application"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_on_project_application"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_on_project_application"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_on_reel_like"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_on_reel_like"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_on_reel_like"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_notify_once"("p_profile_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_action_url" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."app_notify_once"("p_profile_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_action_url" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_notify_once"("p_profile_id" "uuid", "p_title" "text", "p_message" "text", "p_type" "text", "p_action_url" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_safe_governorate"("p_governorate" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."app_safe_governorate"("p_governorate" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_safe_governorate"("p_governorate" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_safe_user_role"("p_role" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."app_safe_user_role"("p_role" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_safe_user_role"("p_role" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."app_sync_profile_cover_columns"() TO "anon";
+GRANT ALL ON FUNCTION "public"."app_sync_profile_cover_columns"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."app_sync_profile_cover_columns"() TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."app_touch_conversation"() TO "anon";
 GRANT ALL ON FUNCTION "public"."app_touch_conversation"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."app_touch_conversation"() TO "service_role";
@@ -9597,6 +10259,12 @@ GRANT ALL ON FUNCTION "public"."create_notification"("p_profile_id" "uuid", "p_t
 GRANT ALL ON FUNCTION "public"."create_project_for_app"("p_title" "text", "p_description" "text", "p_governorate" "text", "p_tagline" "text", "p_category" "text", "p_project_type" "text", "p_work_mode" "text", "p_stage" "text", "p_problem" "text", "p_goals" "text", "p_target_users" "text", "p_existing_assets" "text"[], "p_required_skills" "text"[], "p_preferred_skills" "text"[], "p_tools_equipment" "text"[], "p_seniority_level" "text", "p_years_experience" integer, "p_certifications" "text"[], "p_engineers_needed" integer, "p_roles_needed" "text"[], "p_responsibilities" "jsonb", "p_current_team_size" "text", "p_collaboration_tools" "text"[], "p_estimated_duration" "text", "p_weekly_commitment" "text", "p_milestones" "jsonb", "p_deadline_urgency" "text", "p_payment_status" "text", "p_payment_model" "text", "p_currency" "text", "p_bonus_incentives" "text", "p_budget_min" numeric, "p_budget_max" numeric) TO "anon";
 GRANT ALL ON FUNCTION "public"."create_project_for_app"("p_title" "text", "p_description" "text", "p_governorate" "text", "p_tagline" "text", "p_category" "text", "p_project_type" "text", "p_work_mode" "text", "p_stage" "text", "p_problem" "text", "p_goals" "text", "p_target_users" "text", "p_existing_assets" "text"[], "p_required_skills" "text"[], "p_preferred_skills" "text"[], "p_tools_equipment" "text"[], "p_seniority_level" "text", "p_years_experience" integer, "p_certifications" "text"[], "p_engineers_needed" integer, "p_roles_needed" "text"[], "p_responsibilities" "jsonb", "p_current_team_size" "text", "p_collaboration_tools" "text"[], "p_estimated_duration" "text", "p_weekly_commitment" "text", "p_milestones" "jsonb", "p_deadline_urgency" "text", "p_payment_status" "text", "p_payment_model" "text", "p_currency" "text", "p_bonus_incentives" "text", "p_budget_min" numeric, "p_budget_max" numeric) TO "authenticated";
 GRANT ALL ON FUNCTION "public"."create_project_for_app"("p_title" "text", "p_description" "text", "p_governorate" "text", "p_tagline" "text", "p_category" "text", "p_project_type" "text", "p_work_mode" "text", "p_stage" "text", "p_problem" "text", "p_goals" "text", "p_target_users" "text", "p_existing_assets" "text"[], "p_required_skills" "text"[], "p_preferred_skills" "text"[], "p_tools_equipment" "text"[], "p_seniority_level" "text", "p_years_experience" integer, "p_certifications" "text"[], "p_engineers_needed" integer, "p_roles_needed" "text"[], "p_responsibilities" "jsonb", "p_current_team_size" "text", "p_collaboration_tools" "text"[], "p_estimated_duration" "text", "p_weekly_commitment" "text", "p_milestones" "jsonb", "p_deadline_urgency" "text", "p_payment_status" "text", "p_payment_model" "text", "p_currency" "text", "p_bonus_incentives" "text", "p_budget_min" numeric, "p_budget_max" numeric) TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."delete_current_user_for_app"() TO "anon";
+GRANT ALL ON FUNCTION "public"."delete_current_user_for_app"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."delete_current_user_for_app"() TO "service_role";
 
 
 
@@ -10607,7 +11275,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TA
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "storage" GRANT ALL ON TABLES TO "service_role";
-
 
 
 

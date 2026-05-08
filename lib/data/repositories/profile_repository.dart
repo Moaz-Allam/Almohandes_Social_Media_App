@@ -36,6 +36,8 @@ abstract interface class ProfileRepository {
 
   Future<void> followProfile(String followingProfileId);
 
+  Future<bool> isFollowingProfile(String followingProfileId);
+
   Future<void> answerConnectionRequest({
     required String requestId,
     required bool accept,
@@ -44,6 +46,9 @@ abstract interface class ProfileRepository {
 
 final class SupabaseProfileRepository implements ProfileRepository {
   SupabaseProfileRepository({required this.client});
+
+  static const _networkPageSize = 30;
+  static const _incomingRequestsPageSize = 30;
 
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<ProfileForm?>(
@@ -184,7 +189,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
         'get_network_profiles_for_app',
         params: {
           'p_audience': companies ? 'companies' : 'people',
-          'p_limit': 60,
+          'p_limit': _networkPageSize,
         },
       );
       final people = [
@@ -197,7 +202,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       if (people.isEmpty) {
         throw const FormatException('Fallback to direct network query');
       }
-      return _withConnectionStatuses(people);
+      return _withRelationshipStatuses(people);
     } catch (_) {
       try {
         var query = remote
@@ -241,7 +246,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
         final rows = await query
             .order('is_verified', ascending: false)
             .order('projects_count', ascending: false)
-            .limit(60);
+            .limit(_networkPageSize);
         final people = [
           for (var i = 0; i < rows.length; i++)
             if ('${(rows[i] as Map)['id'] ?? ''}' != currentProfileId)
@@ -250,7 +255,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
                 colorIndex: i,
               ),
         ];
-        return _withConnectionStatuses(people);
+        return _withRelationshipStatuses(people);
       } catch (_) {
         return const [];
       }
@@ -347,7 +352,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
           .eq('receiver_profile_id', profileId)
           .eq('status', 'pending')
           .order('created_at', ascending: false)
-          .limit(50);
+          .limit(_incomingRequestsPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _requestPersonFromRow(
@@ -441,6 +446,30 @@ final class SupabaseProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<bool> isFollowingProfile(String followingProfileId) async {
+    final remote = client;
+    if (remote == null || followingProfileId.isEmpty) {
+      return false;
+    }
+
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null || profileId == followingProfileId) {
+        return false;
+      }
+      final row = await remote
+          .from('followers')
+          .select('id')
+          .eq('follower_id', profileId)
+          .eq('following_id', followingProfileId)
+          .maybeSingle();
+      return row != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
   Future<void> answerConnectionRequest({
     required String requestId,
     required bool accept,
@@ -489,6 +518,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       isCompany: person.isCompany,
       avatarUrl: person.avatarUrl,
       connectionStatus: person.connectionStatus,
+      isFollowed: person.isFollowed,
     );
   }
 
@@ -572,7 +602,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
     }
   }
 
-  Future<List<NetworkPerson>> _withConnectionStatuses(
+  Future<List<NetworkPerson>> _withRelationshipStatuses(
     List<NetworkPerson> people,
   ) async {
     final remote = client;
@@ -585,14 +615,14 @@ final class SupabaseProfileRepository implements ProfileRepository {
         return people;
       }
       final ids = people.map((person) => person.id).toSet();
-      final rows = await remote
+      final connectionRows = await remote
           .from('connection_requests')
           .select('requester_profile_id,receiver_profile_id,status')
           .or(
             'requester_profile_id.eq.$profileId,receiver_profile_id.eq.$profileId',
           );
       final statuses = <String, String>{};
-      for (final raw in rows) {
+      for (final raw in connectionRows) {
         final row = Map<String, dynamic>.from(raw as Map);
         final requester = '${row['requester_profile_id'] ?? ''}';
         final receiver = '${row['receiver_profile_id'] ?? ''}';
@@ -601,12 +631,21 @@ final class SupabaseProfileRepository implements ProfileRepository {
           statuses[other] = '${row['status'] ?? 'none'}';
         }
       }
+      final followRows = await remote
+          .from('followers')
+          .select('following_id')
+          .eq('follower_id', profileId)
+          .inFilter('following_id', ids.toList());
+      final followedIds = {
+        for (final raw in followRows) '${(raw as Map)['following_id'] ?? ''}',
+      }..remove('');
       return [
         for (final person in people)
           if ((statuses[person.id] ?? person.connectionStatus) != 'accepted')
-            _personWithConnection(
+            _personWithRelationship(
               person,
               statuses[person.id] ?? person.connectionStatus,
+              followedIds.contains(person.id),
             ),
       ];
     } catch (_) {
@@ -667,7 +706,11 @@ final class SupabaseProfileRepository implements ProfileRepository {
     }
   }
 
-  NetworkPerson _personWithConnection(NetworkPerson person, String status) {
+  NetworkPerson _personWithRelationship(
+    NetworkPerson person,
+    String status,
+    bool isFollowed,
+  ) {
     final normalized = status == 'accepted' || status == 'pending'
         ? status
         : 'none';
@@ -682,11 +725,13 @@ final class SupabaseProfileRepository implements ProfileRepository {
       actionLabel: switch (normalized) {
         'accepted' => 'متصل',
         'pending' => 'قيد الانتظار',
+        _ when isFollowed => 'متابَع',
         _ => person.actionLabel,
       },
       isCompany: person.isCompany,
       avatarUrl: person.avatarUrl,
       connectionStatus: normalized,
+      isFollowed: isFollowed,
     );
   }
 

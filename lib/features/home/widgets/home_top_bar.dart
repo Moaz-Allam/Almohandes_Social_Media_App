@@ -28,7 +28,8 @@ class HomeTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = AppScope.watch(context).profile;
+    final controller = AppScope.watch(context);
+    final profile = controller.profile;
     final name = (profile?.fullName.isNotEmpty ?? false)
         ? profile!.fullName
         : 'المستخدم';

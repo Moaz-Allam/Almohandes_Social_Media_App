@@ -38,6 +38,10 @@ abstract interface class ProjectRepository {
 final class SupabaseProjectRepository implements ProjectRepository {
   SupabaseProjectRepository({required this.client});
 
+  static const _projectsPageSize = 24;
+  static const _profileProjectsPageSize = 24;
+  static const _applicationsPageSize = 30;
+
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<ProjectItem>>(
     ttl: const Duration(minutes: 2),
@@ -61,7 +65,10 @@ final class SupabaseProjectRepository implements ProjectRepository {
     }
 
     try {
-      final rows = await remote.rpc<List<dynamic>>('get_projects_for_app');
+      final rows = await remote.rpc<List<dynamic>>(
+        'get_projects_for_app',
+        params: {'p_limit': _projectsPageSize},
+      );
       return [
         for (var i = 0; i < rows.length; i++)
           projectFromSupabase(
@@ -77,7 +84,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
               'id,title,description,governorate,budget_min,budget_max,status,start_date,end_date,image_url,profile_id,profiles(full_name,avatar_url)',
             )
             .order('created_at', ascending: false)
-            .limit(50);
+            .limit(_projectsPageSize);
         return [
           for (var i = 0; i < rows.length; i++)
             projectFromSupabase(
@@ -116,7 +123,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
     try {
       final rows = await remote.rpc<List<dynamic>>(
         'get_projects_for_app',
-        params: {'p_limit': 100},
+        params: {'p_limit': _profileProjectsPageSize},
       );
       final filtered = rows.where((row) {
         final map = Map<String, dynamic>.from(row as Map);
@@ -138,7 +145,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
             )
             .eq('profile_id', profileId)
             .order('created_at', ascending: false)
-            .limit(60);
+            .limit(_profileProjectsPageSize);
         return [
           for (var i = 0; i < rows.length; i++)
             projectFromSupabase(
@@ -312,7 +319,8 @@ final class SupabaseProjectRepository implements ProjectRepository {
             'id,subject,message,attachments_count,status,created_at,profiles!project_applications_profile_id_fkey(id,full_name,role,bio,avatar_url)',
           )
           .eq('project_id', projectId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .limit(_applicationsPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _applicationFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
@@ -325,7 +333,8 @@ final class SupabaseProjectRepository implements ProjectRepository {
               'id,subject,message,attachments_count,status,created_at,profiles(id,full_name,role,bio,avatar_url)',
             )
             .eq('project_id', projectId)
-            .order('created_at', ascending: false);
+            .order('created_at', ascending: false)
+            .limit(_applicationsPageSize);
         return [
           for (var i = 0; i < rows.length; i++)
             _applicationFromRow(Map<String, dynamic>.from(rows[i] as Map), i),

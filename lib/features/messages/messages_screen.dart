@@ -45,6 +45,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
       ).repositories.messages.fetchConversations(forceRefresh: true);
     });
     await _contactsFuture;
+    if (mounted) {
+      AppScope.read(context).notifyMessageStateChanged();
+    }
   }
 
   Future<void> _openChat(BuildContext context, MessageItem contact) async {

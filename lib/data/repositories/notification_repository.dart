@@ -17,6 +17,8 @@ abstract interface class NotificationRepository {
 final class SupabaseNotificationRepository implements NotificationRepository {
   SupabaseNotificationRepository({required this.client});
 
+  static const _notificationPageSize = 30;
+
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<NotificationItemModel>>(
     ttl: const Duration(seconds: 30),
@@ -35,6 +37,7 @@ final class SupabaseNotificationRepository implements NotificationRepository {
     if (remote == null || notificationId.isEmpty) {
       return;
     }
+    _cache.clear();
     try {
       await remote
           .from('notifications')
@@ -52,6 +55,7 @@ final class SupabaseNotificationRepository implements NotificationRepository {
     if (remote == null || notificationId.isEmpty) {
       return;
     }
+    _cache.clear();
     try {
       await remote.from('notifications').delete().eq('id', notificationId);
       _cache.clear();
@@ -76,7 +80,7 @@ final class SupabaseNotificationRepository implements NotificationRepository {
           .select('id,title,message,type,is_read,action_url,created_at')
           .eq('profile_id', profileId)
           .order('created_at', ascending: false)
-          .limit(50);
+          .limit(_notificationPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _notificationFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
@@ -95,6 +99,7 @@ final class SupabaseNotificationRepository implements NotificationRepository {
       title: '${row['title'] ?? ''}',
       preview: '${row['message'] ?? ''}',
       time: _timeLabel(row['created_at']),
+      type: '${row['type'] ?? 'general'}',
       unread: row['is_read'] != true,
       actionUrl: row['action_url'] == null ? null : '${row['action_url']}',
       color: switch (index % 4) {

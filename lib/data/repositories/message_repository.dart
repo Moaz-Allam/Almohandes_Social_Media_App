@@ -42,6 +42,9 @@ abstract interface class MessageRepository {
 final class SupabaseMessageRepository implements MessageRepository {
   SupabaseMessageRepository({required this.client});
 
+  static const _conversationPageSize = 30;
+  static const _messagePageSize = 50;
+
   final SupabaseClient? client;
   final _conversationCache = TimedMemoryCache<List<MessageItem>>(
     ttl: const Duration(seconds: 30),
@@ -120,7 +123,7 @@ final class SupabaseMessageRepository implements MessageRepository {
         .select()
         .or('participant_one.eq.$profileId,participant_two.eq.$profileId')
         .order('last_message_at', ascending: false)
-        .limit(50);
+        .limit(_conversationPageSize);
     final conversations = [
       for (var i = 0; i < rows.length; i++)
         _conversationFromTable(
@@ -171,10 +174,12 @@ final class SupabaseMessageRepository implements MessageRepository {
           .from('messages')
           .select('id,sender_id,content,message_type,created_at')
           .eq('conversation_id', actualConversationId)
-          .order('created_at');
+          .order('created_at', ascending: false)
+          .limit(_messagePageSize);
+      _conversationCache.clear();
       unawaited(_markConversationRead(remote, actualConversationId, profileId));
       return [
-        for (final row in rows)
+        for (final row in rows.reversed)
           _messageFromRow(
             Map<String, dynamic>.from(row as Map),
             currentProfileId: profileId,
@@ -468,6 +473,12 @@ final class SupabaseMessageRepository implements MessageRepository {
           .eq('conversation_id', conversationId)
           .neq('sender_id', profileId)
           .filter('read_at', 'is', null);
+      await remote
+          .from('messages')
+          .update({'is_read': true})
+          .eq('conversation_id', conversationId)
+          .neq('sender_id', profileId)
+          .eq('is_read', false);
       _conversationCache.clear();
     } catch (_) {
       // Older databases without read tracking still show messages normally.

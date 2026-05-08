@@ -30,6 +30,7 @@ class NetworkScreen extends StatefulWidget {
 class _NetworkScreenState extends State<NetworkScreen> {
   _NetworkCategory _category = _NetworkCategory.people;
   final Set<String> _pendingConnectionIds = {};
+  final Set<String> _followingCompanyIds = {};
   final Set<String> _connectingIds = {};
   Future<List<NetworkPerson>>? _profilesFuture;
   String? _profilesFutureKey;
@@ -101,8 +102,11 @@ class _NetworkScreenState extends State<NetworkScreen> {
     ).push(MaterialPageRoute(builder: (_) => const InvitationsScreen()));
   }
 
-  void _openProfile(BuildContext context, NetworkPerson person) {
-    Navigator.of(context).push(
+  Future<void> _openProfile(BuildContext context, NetworkPerson person) async {
+    final controller = AppScope.read(context);
+    final accountType = accountTypeFromProfile(controller.profile);
+    final category = _effectiveCategory(accountType);
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProfileScreen(
           profileId: person.id,
@@ -114,6 +118,19 @@ class _NetworkScreenState extends State<NetworkScreen> {
         ),
       ),
     );
+    if (!mounted) {
+      return;
+    }
+    if (category == null) {
+      return;
+    }
+    setState(() {
+      _profilesFuture = controller.repositories.profiles.fetchNetworkProfiles(
+        viewerType: accountType,
+        companies: category == _NetworkCategory.companies,
+        forceRefresh: true,
+      );
+    });
   }
 
   Future<void> _handleNetworkAction(
@@ -121,9 +138,23 @@ class _NetworkScreenState extends State<NetworkScreen> {
     NetworkPerson person,
   ) async {
     if (person.isCompany) {
-      await AppScope.read(
-        context,
-      ).repositories.profiles.followProfile(person.id);
+      if (_followingCompanyIds.contains(person.id) ||
+          _connectingIds.contains(person.id)) {
+        return;
+      }
+      setState(() {
+        _followingCompanyIds.add(person.id);
+        _connectingIds.add(person.id);
+      });
+      try {
+        await AppScope.read(
+          context,
+        ).repositories.profiles.followProfile(person.id);
+      } finally {
+        if (context.mounted) {
+          setState(() => _connectingIds.remove(person.id));
+        }
+      }
       if (!context.mounted) {
         return;
       }
@@ -135,7 +166,10 @@ class _NetworkScreenState extends State<NetworkScreen> {
     if (_connectingIds.contains(person.id)) {
       return;
     }
-    setState(() => _connectingIds.add(person.id));
+    setState(() {
+      _connectingIds.add(person.id);
+      _pendingConnectionIds.add(person.id);
+    });
     try {
       await AppScope.read(
         context,
@@ -148,13 +182,28 @@ class _NetworkScreenState extends State<NetworkScreen> {
     if (!context.mounted) {
       return;
     }
-    setState(() => _pendingConnectionIds.add(person.id));
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('تم إرسال طلب التواصل')));
   }
 
   NetworkPerson _effectivePerson(NetworkPerson person) {
+    if (_followingCompanyIds.contains(person.id) || person.isFollowed) {
+      return NetworkPerson(
+        id: person.id,
+        profileId: person.profileId,
+        name: person.name,
+        title: person.title,
+        color: person.color,
+        badge: person.badge,
+        contextLine: person.contextLine,
+        actionLabel: 'متابَع',
+        isCompany: person.isCompany,
+        avatarUrl: person.avatarUrl,
+        connectionStatus: person.connectionStatus,
+        isFollowed: true,
+      );
+    }
     if (!_pendingConnectionIds.contains(person.id)) {
       return person;
     }
@@ -170,6 +219,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       isCompany: person.isCompany,
       avatarUrl: person.avatarUrl,
       connectionStatus: 'pending',
+      isFollowed: person.isFollowed,
     );
   }
 
@@ -272,7 +322,9 @@ class _NetworkScreenState extends State<NetworkScreen> {
                                 );
                                 final canAct =
                                     !person.isPendingConnection &&
-                                    !person.isConnected;
+                                    !person.isConnected &&
+                                    !person.isFollowed &&
+                                    !_followingCompanyIds.contains(person.id);
                                 return NetworkCard(
                                   person: person,
                                   loading: _connectingIds.contains(person.id),

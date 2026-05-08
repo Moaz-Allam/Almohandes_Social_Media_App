@@ -82,17 +82,20 @@ final class SignupController extends ChangeNotifier {
     };
   }
 
-  bool get hasValidIraqiPhone => isValidIraqiPhone(phone.text);
+  bool get hasValidPhoneNumber => isSupportedPhoneNumber(phone.text);
 
-  bool get hasValidOtp => otp.text.trim() == '123456';
+  bool get hasValidIraqiPhone => hasValidPhoneNumber;
+
+  bool get hasValidOtp => RegExp(r'^\d{6}$').hasMatch(otp.text.trim());
 
   bool get hasMatchingPasswords {
     return password.text.isNotEmpty && password.text == confirmPassword.text;
   }
 
-  static bool isValidIraqiPhone(String value) {
+  static bool isSupportedPhoneNumber(String value) {
     final normalized = value.trim().replaceAll(' ', '').replaceAll('-', '');
-    return RegExp(r'^(?:\+964|00964|0)7[3-9]\d{8}$').hasMatch(normalized);
+    return RegExp(r'^(?:\+964|00964|0)7[3-9]\d{8}$').hasMatch(normalized) ||
+        RegExp(r'^(?:\+20|0020|0)1[0125]\d{8}$').hasMatch(normalized);
   }
 
   void setUserType(AccountType value) {
