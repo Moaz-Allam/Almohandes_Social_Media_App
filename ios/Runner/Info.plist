@@ -85,5 +85,7 @@
 	<string>نحتاج لصلاحية حفظ الصور إلى معرض الصور الخاص بك.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>نحتاج للوصول إلى الميكروفون لتسجيل المقاطع الصوتية ومشاركتها.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
