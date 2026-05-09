@@ -8,8 +8,6 @@ abstract interface class SubscriptionRepository {
   Future<PremiumCheckout> createPremiumCheckout({num amount = 120000});
 
   Future<void> verifyPremiumCheckout(PremiumCheckout checkout);
-
-  Future<String> activateTestSubscription();
 }
 
 final class PremiumCheckout {
@@ -204,50 +202,6 @@ final class SupabaseSubscriptionRepository implements SubscriptionRepository {
         throw RepositoryFailure(message, error);
       }
       throw RepositoryFailure('تعذر تأكيد الدفع الآن', error);
-    }
-  }
-
-  @override
-  Future<String> activateTestSubscription() async {
-    final remote = client;
-    if (remote == null) {
-      throw const RepositoryFailure('بوابة الدفع غير مهيأة الآن');
-    }
-
-    try {
-      final accessToken = await _currentAccessToken(remote);
-      if (accessToken == null || accessToken.isEmpty) {
-        throw const RepositoryFailure(
-          'انتهت جلسة الدخول. سجل الدخول مرة أخرى.',
-        );
-      }
-      final response = await remote.functions.invoke(
-        'switch-payment',
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'x-customer-auth': 'Bearer $accessToken',
-        },
-        body: {'action': 'activate-test-subscription'},
-      );
-      final data = response.data;
-      if (data is Map &&
-          data['success'] == true &&
-          data['checkoutId'] != null) {
-        return '${data['checkoutId']}';
-      }
-      if (data is Map && (data['error'] != null || data['message'] != null)) {
-        throw RepositoryFailure('${data['error'] ?? data['message']}');
-      }
-      throw const RepositoryFailure('تعذر تفعيل الدفع التجريبي الآن');
-    } catch (error) {
-      if (error is RepositoryFailure) {
-        rethrow;
-      }
-      final message = _functionErrorMessage(error);
-      if (message != null) {
-        throw RepositoryFailure(message, error);
-      }
-      throw RepositoryFailure('تعذر تفعيل الدفع التجريبي الآن', error);
     }
   }
 

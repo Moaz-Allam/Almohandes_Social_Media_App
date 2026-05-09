@@ -222,7 +222,11 @@ Deno.serve(async (request) => {
 
 async function completeWithOpenRouter(messages: Array<Record<string, string>>) {
   const apiKey = envSecret("OPENROUTER_API_KEY");
-  const model = envSecret("ENGINEER_AI_MODEL") || "openrouter/free";
+  const configuredModel = envSecret("ENGINEER_AI_MODEL") || "openrouter/free";
+  const model =
+    configuredModel === "openrouter/free" || configuredModel.endsWith(":free")
+      ? configuredModel
+      : "openrouter/free";
   if (!apiKey) {
     return "إنجي جاهزة داخل التطبيق، لكن مفتاح نموذج الذكاء الاصطناعي غير مضاف في إعدادات الخادم بعد. أضف OPENROUTER_API_KEY في Supabase لتفعيل الردود الذكية المجانية.";
   }

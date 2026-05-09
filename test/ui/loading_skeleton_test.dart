@@ -676,11 +676,6 @@ final class _FakeStoryRepository implements StoryRepository {
 
 final class _FakeSubscriptionRepository implements SubscriptionRepository {
   @override
-  Future<String> activateTestSubscription() async {
-    return 'test-payment';
-  }
-
-  @override
   Future<PremiumCheckout> createPremiumCheckout({num amount = 120000}) async {
     return PremiumCheckout(
       checkoutId: 'test-checkout',

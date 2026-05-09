@@ -20,11 +20,6 @@ function envSecret(name: string): string {
   return (Deno.env.get(name) ?? "").trim().replace(/^['"]|['"]$/g, "");
 }
 
-function envEnabled(name: string): boolean {
-  const value = envSecret(name).toLowerCase();
-  return value === "true" || value === "1" || value === "yes";
-}
-
 function html(body: string, status = 200): Response {
   return new Response(body, {
     status,
@@ -306,40 +301,7 @@ serve(async (req: Request) => {
 
     // ================= TEST PAYMENT =================
     if (action === "activate-test-subscription") {
-      if (!envEnabled("PAYMENT_TEST_MODE")) {
-        return json(
-          { error: "وضع الدفع التجريبي غير مفعل على الخادم." },
-          403,
-        );
-      }
-
-      const profileId = await currentProfileId();
-      await activateSubscription(profileId);
-
-      try {
-        const { data: subscription } = await adminClient
-          .from("subscriptions")
-          .select("id")
-          .eq("profile_id", profileId)
-          .maybeSingle();
-        await adminClient.from("payment_history").insert({
-          profile_id: profileId,
-          subscription_id: subscription?.id ?? null,
-          amount: 0,
-          currency: "IQD",
-          payment_method: "test_mode",
-          status: "completed",
-          transaction_id: `test_${profileId}_${Date.now()}`,
-        });
-      } catch (historyError) {
-        console.warn("Unable to write test payment history:", historyError);
-      }
-
-      return json({
-        success: true,
-        testMode: true,
-        checkoutId: `test_${Date.now()}`,
-      });
+      return json({ error: "Test payment is disabled in production." }, 403);
     }
 
     // ================= CREATE CHECKOUT =================

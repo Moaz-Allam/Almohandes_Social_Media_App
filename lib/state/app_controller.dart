@@ -133,13 +133,6 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> activateTestPremium() async {
-    await repositories.subscriptions.activateTestSubscription();
-    _hasPremiumLibrary = true;
-    notifyListeners();
-    await refreshSessionData();
-  }
-
   Future<void> updateMyAbout(String about) async {
     final current = _profile;
     if (current == null) {

@@ -25,7 +25,6 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
   ];
 
   bool _isStartingPayment = false;
-  bool _isStartingTestPayment = false;
 
   Future<void> _startPayment() async {
     if (_isStartingPayment) {
@@ -73,48 +72,6 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
     }
   }
 
-  Future<void> _startTestPayment() async {
-    if (_isStartingTestPayment) {
-      return;
-    }
-    setState(() => _isStartingTestPayment = true);
-    final app = AppScope.read(context);
-    try {
-      await app.activateTestPremium();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(content: Text('تم تفعيل Premium تجريبيا')),
-        );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PremiumDashboardScreen()),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              userErrorMessage(
-                error,
-                fallback: 'تعذر تفعيل الدفع التجريبي الآن',
-              ),
-            ),
-          ),
-        );
-    } finally {
-      if (mounted) {
-        setState(() => _isStartingTestPayment = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -139,9 +96,7 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
               child: Column(
                 children: [
                   FilledButton.icon(
-                    onPressed: (_isStartingPayment || _isStartingTestPayment)
-                        ? null
-                        : _startPayment,
+                    onPressed: _isStartingPayment ? null : _startPayment,
                     icon: _isStartingPayment
                         ? const SizedBox(
                             width: 18,
@@ -162,29 +117,6 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
                           ? AppColors.muted
                           : AppColors.blue,
                       minimumSize: const Size.fromHeight(52),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: (_isStartingPayment || _isStartingTestPayment)
-                        ? null
-                        : _startTestPayment,
-                    icon: _isStartingTestPayment
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.science_outlined),
-                    label: Text(
-                      _isStartingTestPayment
-                          ? 'جاري التفعيل التجريبي...'
-                          : 'تفعيل تجريبي بدون دفع',
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.blue,
-                      minimumSize: const Size.fromHeight(52),
-                      side: const BorderSide(color: AppColors.blue),
                     ),
                   ),
                 ],
