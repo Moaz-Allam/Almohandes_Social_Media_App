@@ -6,8 +6,6 @@ import '../../core/constants/app_colors.dart';
 import '../../models/notification_item_model.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
-import 'notification_permission_stub.dart'
-    if (dart.library.html) 'notification_permission_web.dart';
 import 'widgets/notification_tile.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -28,7 +26,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   late Future<List<NotificationItemModel>> _itemsFuture;
   final Set<String> _deletedNotificationIds = {};
   final Set<String> _readNotificationIds = {};
-  bool _didAskForNotifications = false;
 
   @override
   void initState() {
@@ -42,12 +39,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _itemsFuture = AppScope.read(
       context,
     ).repositories.notifications.fetchNotifications();
-    if (!_didAskForNotifications) {
-      _didAskForNotifications = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_askForNotificationPermission());
-      });
-    }
   }
 
   Future<void> _refresh({bool forceRefresh = true}) async {
@@ -90,51 +81,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ? item.copyWith(unread: false)
               : item,
     ];
-  }
-
-  Future<void> _askForNotificationPermission() async {
-    if (!mounted) {
-      return;
-    }
-    final enable = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(
-          Icons.notifications_active_outlined,
-          color: AppColors.blue,
-        ),
-        title: const Text('تفعيل الإشعارات؟'),
-        content: const Text(
-          'اسمح للتطبيق بإرسال تنبيهات خارج التطبيق للرسائل والطلبات المهمة.',
-          textDirection: TextDirection.rtl,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('لاحقاً'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('تفعيل'),
-          ),
-        ],
-      ),
-    );
-    if (enable != true || !mounted) {
-      return;
-    }
-    final permission = supportsNativeNotificationPermission
-        ? await requestNotificationPermission()
-        : null;
-    if (!mounted) {
-      return;
-    }
-    final message = permission == 'denied'
-        ? 'الإشعارات محظورة من المتصفح.'
-        : 'تم تفعيل إشعارات الجهاز.';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

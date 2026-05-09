@@ -40,6 +40,20 @@ function normalizeSupportedPhone(phone: string): string | null {
   return null;
 }
 
+function isDevOtpMode(): boolean {
+  const value = Deno.env.get('OTP_DEV_MODE')?.trim().toLowerCase();
+  return value === 'true' || value === '1' || value === 'yes';
+}
+
+function envSecret(name: string): string {
+  return (Deno.env.get(name) ?? '').trim().replace(/^['"]|['"]$/g, '');
+}
+
+function envEnabled(name: string): boolean {
+  const value = envSecret(name).toLowerCase();
+  return value === 'true' || value === '1' || value === 'yes';
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -64,8 +78,8 @@ Deno.serve(async (request) => {
       return json({ verified: false, message: 'رقم الهاتف غير صحيح.' }, 400);
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = envSecret('SUPABASE_URL');
+    const serviceRoleKey = envSecret('SUPABASE_SERVICE_ROLE_KEY');
     if (!supabaseUrl || !serviceRoleKey) {
       return json(
         { verified: false, message: 'خدمة التحقق غير مهيأة الآن.' },
@@ -77,9 +91,31 @@ Deno.serve(async (request) => {
       auth: { persistSession: false },
     });
 
-    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
-    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN');
-    const verifyServiceSid = Deno.env.get('TWILIO_VERIFY_SERVICE_SID');
+    const accountSid = envSecret('TWILIO_ACCOUNT_SID');
+    const authToken = envSecret('TWILIO_AUTH_TOKEN');
+    const verifyServiceSid = envSecret('TWILIO_VERIFY_SERVICE_SID');
+
+    if (
+      isDevOtpMode() ||
+      envEnabled('OTP_PROVIDER_FALLBACK_TO_DEBUG') ||
+      envEnabled('OTP_DEBUG_DELIVERY')
+    ) {
+      const { data, error } = await supabase.rpc('verify_otp_token', {
+        p_phone_local10: normalizedPhone,
+        p_verification_code: code.trim(),
+      });
+
+      if (error) {
+        return json(
+          { verified: false, message: 'تعذر التحقق من الرمز الآن.' },
+          500,
+        );
+      }
+
+      if (data === true || isDevOtpMode()) {
+        return json({ verified: data === true });
+      }
+    }
 
     if (accountSid && authToken && verifyServiceSid) {
       const params = new URLSearchParams();
@@ -99,6 +135,12 @@ Deno.serve(async (request) => {
       );
 
       if (!verifyResponse.ok) {
+        if (
+          envEnabled('OTP_PROVIDER_FALLBACK_TO_DEBUG') ||
+          envEnabled('OTP_DEBUG_DELIVERY')
+        ) {
+          return json({ verified: false });
+        }
         return json(
           { verified: false, message: 'تعذر التحقق من الرمز الآن.' },
           502,

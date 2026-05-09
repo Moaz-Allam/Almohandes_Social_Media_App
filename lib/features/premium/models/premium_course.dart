@@ -10,6 +10,7 @@ final class PremiumCourse {
     required this.color,
     required this.progress,
     required this.playlists,
+    this.category = '',
   });
 
   final String id;
@@ -20,6 +21,7 @@ final class PremiumCourse {
   final Color color;
   final double progress;
   final List<PremiumPlaylist> playlists;
+  final String category;
 
   int get lessonCount {
     return playlists.fold(

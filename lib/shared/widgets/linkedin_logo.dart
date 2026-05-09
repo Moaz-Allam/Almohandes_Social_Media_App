@@ -14,17 +14,13 @@ class LinkedInLogo extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 28 * scale,
-            height: 28 * scale,
-            decoration: BoxDecoration(
-              color: AppColors.blue,
-              borderRadius: BorderRadius.circular(7 * scale),
-            ),
-            child: Icon(
-              Icons.engineering,
-              color: Colors.white,
-              size: 18 * scale,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8 * scale),
+            child: Image.asset(
+              'assets/branding/app_logo.png',
+              width: 34 * scale,
+              height: 34 * scale,
+              fit: BoxFit.cover,
             ),
           ),
           SizedBox(width: 7 * scale),

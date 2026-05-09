@@ -96,15 +96,16 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
       return;
     }
     if (_form.step == 0) {
-      if (_form.displayName.text.trim().isEmpty ||
-          _form.email.text.trim().isEmpty) {
-        _showMessage('أكمل الاسم والبريد الإلكتروني أولا');
+      if (_form.displayName.text.trim().isEmpty) {
+        _showMessage('أكمل الاسم أولا');
+        return;
+      }
+      if (!_form.hasValidEmail) {
+        _showMessage('أدخل بريدك الإلكتروني بشكل صحيح');
         return;
       }
       if (!_form.hasValidPhoneNumber) {
-        _showMessage(
-          'رقم الهاتف يجب أن يكون عراقيا أو مصريا مثل 07xxxxxxxxx أو 01xxxxxxxxx',
-        );
+        _showMessage('أدخل رقمك بشكل صحيح');
         return;
       }
       if (!_form.hasMatchingPasswords) {
@@ -113,13 +114,13 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
       }
       setState(() => _isSubmitting = true);
       try {
-        await AppScope.read(
+        final otpMessage = await AppScope.read(
           context,
         ).repositories.auth.sendOtp(phone: _form.phone.text);
         if (!mounted) {
           return;
         }
-        _showMessage('تم إرسال رمز التحقق إلى رقم هاتفك');
+        _showMessage(otpMessage ?? 'تم إرسال رمز التحقق إلى رقم هاتفك');
         _form.nextStep();
       } catch (error) {
         if (mounted) {
@@ -235,7 +236,7 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                         step: _stepLabel(0),
                         title: 'أساسيات الحساب',
                         subtitle:
-                            'أدخل بياناتك الأساسية. رقم الهاتف يجب أن يكون عراقيا أو مصريا لتأكيد الحساب.',
+                            'أدخل بريدك ورقمك لتأكيد الحساب.',
                         children: [
                           LinkedTextField(
                             label: 'الاسم أو اسم الجهة',
@@ -285,11 +286,14 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                           OutlinedButton.icon(
                             onPressed: () async {
                               try {
-                                await AppScope.read(context).repositories.auth
+                                final otpMessage = await AppScope.read(context)
+                                    .repositories
+                                    .auth
                                     .sendOtp(phone: _form.phone.text);
                                 if (context.mounted) {
                                   _showMessage(
-                                    'تم إرسال رمز تحقق جديد إلى رقم هاتفك',
+                                    otpMessage ??
+                                        'تم إرسال رمز تحقق جديد إلى رقم هاتفك',
                                   );
                                 }
                               } catch (error) {

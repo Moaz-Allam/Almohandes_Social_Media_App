@@ -113,28 +113,47 @@ class _ComposerScreenState extends State<ComposerScreen> {
   }
 
   Future<void> _pickMedia(_ComposerAction action) async {
-    final picker = ImagePicker();
-    final XFile? picked = action == _ComposerAction.photo
-        ? await picker.pickImage(
-            source: ImageSource.gallery,
-            maxWidth: 1400,
-            imageQuality: 82,
-          )
-        : await picker.pickVideo(source: ImageSource.gallery);
-    if (picked == null) {
+    final XFile? picked;
+    final List<int> bytes;
+    final String mimeType;
+    final String mediaName;
+    try {
+      final picker = ImagePicker();
+      picked = action == _ComposerAction.photo
+          ? await picker.pickImage(
+              source: ImageSource.gallery,
+              maxWidth: 1400,
+              imageQuality: 82,
+            )
+          : await picker.pickVideo(source: ImageSource.gallery);
+      if (picked == null) {
+        return;
+      }
+      bytes = await picked.readAsBytes();
+      mimeType =
+          picked.mimeType ??
+          (action == _ComposerAction.photo ? 'image/jpeg' : 'video/mp4');
+      mediaName = picked.name;
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر اختيار الملف الآن'),
+          ),
+        ),
+      );
       return;
     }
-    final bytes = await picked.readAsBytes();
-    final mimeType =
-        picked.mimeType ??
-        (action == _ComposerAction.photo ? 'image/jpeg' : 'video/mp4');
     if (!mounted) {
       return;
     }
     setState(() {
       _mediaUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
       _mediaType = action == _ComposerAction.photo ? 'image' : 'reel';
-      _mediaName = picked.name;
+      _mediaName = mediaName;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

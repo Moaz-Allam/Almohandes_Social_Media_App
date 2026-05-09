@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/feed_post_model.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/feed_mapper.dart';
+import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class FeedRepository {
@@ -319,7 +320,7 @@ final class SupabaseFeedRepository implements FeedRepository {
       }
       final owner = '${original['profile_id'] ?? ''}';
       if (owner.isNotEmpty && owner != profileId) {
-        await remote.from('notifications').insert({
+        await NotificationPushDispatcher.create(remote, {
           'profile_id': owner,
           'title': 'إعادة نشر',
           'message': 'تمت إعادة نشر منشورك',
@@ -350,7 +351,7 @@ final class SupabaseFeedRepository implements FeedRepository {
       if (owner.isEmpty || owner == actorProfileId) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': owner,
         'title': title,
         'message': message,

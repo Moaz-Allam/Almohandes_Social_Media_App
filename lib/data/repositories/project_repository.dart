@@ -8,6 +8,7 @@ import '../../models/project_item.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/project_mapper.dart';
 import '../mappers/supabase_enum_mapper.dart';
+import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class ProjectRepository {
@@ -550,11 +551,11 @@ final class SupabaseProjectRepository implements ProjectRepository {
       if (owner == null || owner.isEmpty || owner == applicantProfileId) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': owner,
         'title': 'تقديم جديد على مشروعك',
         'message': project.title,
-        'type': 'project_application',
+        'type': 'project',
         'action_url': 'app://project/${project.id}',
       });
     } catch (_) {

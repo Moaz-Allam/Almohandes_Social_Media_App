@@ -9,6 +9,7 @@ import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
+import 'forgot_password_screen.dart';
 import 'sign_up_flow_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -71,29 +72,12 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 
-  Future<void> _resetPassword(BuildContext context) async {
-    try {
-      await AppScope.read(
-        context,
-      ).repositories.auth.sendPasswordReset(email: _login.text);
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال رابط استعادة كلمة المرور')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر إرسال الرابط الآن'),
-          ),
-        ),
-      );
-    }
+  void _openForgotPassword(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(initialEmail: _login.text),
+      ),
+    );
   }
 
   void _join(BuildContext context) {
@@ -160,7 +144,7 @@ class _SignInScreenState extends State<SignInScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => _resetPassword(context),
+                onPressed: () => _openForgotPassword(context),
                 child: const Text(
                   'هل نسيت كلمة المرور؟',
                   style: TextStyle(

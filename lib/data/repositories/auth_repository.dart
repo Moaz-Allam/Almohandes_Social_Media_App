@@ -16,7 +16,9 @@ abstract interface class AuthRepository {
 
   Future<void> sendPasswordReset({required String email});
 
-  Future<void> sendOtp({required String phone});
+  Future<void> updatePassword({required String password});
+
+  Future<String?> sendOtp({required String phone});
 
   Future<bool> verifyOtp({required String phone, required String code});
 
@@ -51,11 +53,26 @@ final class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
-      await remote.auth.signInWithPassword(
-        email: login.contains('@') ? login.trim() : null,
-        phone: login.contains('@') ? null : _normalizePhone(login),
-        password: password,
-      );
+      final trimmedLogin = login.trim();
+      if (trimmedLogin.contains('@')) {
+        await remote.auth.signInWithPassword(
+          email: trimmedLogin,
+          password: password,
+        );
+      } else {
+        final normalizedPhone = _normalizePhone(trimmedLogin);
+        try {
+          await remote.auth.signInWithPassword(
+            phone: normalizedPhone,
+            password: password,
+          );
+        } catch (_) {
+          await remote.auth.signInWithPassword(
+            email: _phoneOnlyAuthEmail(normalizedPhone),
+            password: password,
+          );
+        }
+      }
       await sessionStore.saveSignedIn();
     } catch (error) {
       throw RepositoryFailure('تعذر تسجيل الدخول الآن', error);
@@ -75,17 +92,38 @@ final class SupabaseAuthRepository implements AuthRepository {
     }
 
     try {
-      await remote.auth.resetPasswordForEmail(email.trim());
+      await remote.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: 'com.almohandes.app://reset-password',
+      );
     } catch (error) {
       throw RepositoryFailure('تعذر إرسال رابط استعادة كلمة المرور', error);
     }
   }
 
   @override
-  Future<void> sendOtp({required String phone}) async {
+  Future<void> updatePassword({required String password}) async {
     final remote = client;
     if (remote == null) {
-      return;
+      throw const RepositoryFailure('خدمة تغيير كلمة المرور غير مهيأة الآن');
+    }
+    final value = password.trim();
+    if (value.length < 6) {
+      throw const RepositoryFailure('كلمة المرور يجب ألا تقل عن 6 أحرف');
+    }
+
+    try {
+      await remote.auth.updateUser(UserAttributes(password: value));
+    } catch (error) {
+      throw RepositoryFailure('تعذر تغيير كلمة المرور الآن', error);
+    }
+  }
+
+  @override
+  Future<String?> sendOtp({required String phone}) async {
+    final remote = client;
+    if (remote == null) {
+      return null;
     }
 
     try {
@@ -99,9 +137,20 @@ final class SupabaseAuthRepository implements AuthRepository {
           '${data['message'] ?? 'تعذر إرسال رمز التحقق الآن'}',
         );
       }
+      if (data is Map) {
+        final message = data['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+      }
+      return null;
     } catch (error) {
       if (error is RepositoryFailure) {
         rethrow;
+      }
+      final message = _functionErrorMessage(error);
+      if (message != null) {
+        throw RepositoryFailure(message, error);
       }
       throw RepositoryFailure('تعذر إرسال رمز التحقق الآن', error);
     }
@@ -132,6 +181,10 @@ final class SupabaseAuthRepository implements AuthRepository {
     } catch (error) {
       if (error is RepositoryFailure) {
         rethrow;
+      }
+      final message = _functionErrorMessage(error);
+      if (message != null) {
+        throw RepositoryFailure(message, error);
       }
       // Fall back to the database OTP verifier for self-hosted/dev setups.
     }
@@ -166,20 +219,27 @@ final class SupabaseAuthRepository implements AuthRepository {
 
     final role = accountTypeToSupabaseRole(accountType);
     final governorate = governorateToSupabase(profile.location);
+    final normalizedPhone = _normalizePhone(phone);
+    final profileEmail = profile.email.trim();
+    if (!_isValidEmail(profileEmail)) {
+      throw const RepositoryFailure('أدخل بريدك الإلكتروني بشكل صحيح');
+    }
+    final authEmail = profileEmail;
     try {
       final phoneVerified = await remote.rpc<bool>(
         'has_verified_signup_phone',
-        params: {'p_phone': _normalizePhone(phone)},
+        params: {'p_phone': normalizedPhone},
       );
       if (phoneVerified != true) {
         throw const RepositoryFailure('يرجى تأكيد رقم الهاتف أولاً');
       }
       final authResponse = await remote.auth.signUp(
-        email: profile.email.trim(),
+        email: authEmail,
         password: password,
         data: {
           'full_name': profile.fullName,
-          'phone': _normalizePhone(phone),
+          'phone': normalizedPhone,
+          'email': profileEmail,
           'role': role,
           'governorate': governorate,
           'bio': profile.about,
@@ -188,22 +248,23 @@ final class SupabaseAuthRepository implements AuthRepository {
       if (remote.auth.currentSession == null && password.isNotEmpty) {
         try {
           await remote.auth.signInWithPassword(
-            email: profile.email.trim(),
+            email: authEmail,
             password: password,
           );
         } catch (_) {
-          // Some projects require email confirmation before a Supabase session.
+          // Some projects require confirmation before a Supabase session.
         }
       }
       if (remote.auth.currentSession == null) {
         throw const RepositoryFailure(
-          'تم إنشاء الحساب. سجل الدخول بعد تأكيد البريد الإلكتروني.',
+          'تم إنشاء الحساب. سجل الدخول برقم الهاتف وكلمة المرور.',
         );
       }
       final userId = authResponse.user?.id ?? remote.auth.currentUser?.id;
       if (userId == null) {
         throw const RepositoryFailure('تعذر تأكيد جلسة الحساب الجديدة');
       }
+      await _syncAuthPhone(remote, normalizedPhone);
 
       final profileId = await _upsertProfile(
         remote,
@@ -244,6 +305,33 @@ final class SupabaseAuthRepository implements AuthRepository {
     }
   }
 
+  Future<void> _syncAuthPhone(
+    SupabaseClient remote,
+    String normalizedPhone,
+  ) async {
+    try {
+      final response = await remote.functions.invoke(
+        'sync-auth-phone',
+        body: {'phone': normalizedPhone},
+      );
+      final data = response.data;
+      if (data is Map && data['success'] == false) {
+        throw RepositoryFailure(
+          '${data['message'] ?? 'تعذر ربط رقم الهاتف بالحساب الآن'}',
+        );
+      }
+    } catch (error) {
+      if (error is RepositoryFailure) {
+        rethrow;
+      }
+      final message = _functionErrorMessage(error);
+      if (message != null) {
+        throw RepositoryFailure(message, error);
+      }
+      throw RepositoryFailure('تعذر ربط رقم الهاتف بالحساب الآن', error);
+    }
+  }
+
   Future<String> _upsertProfile(
     SupabaseClient remote, {
     required String userId,
@@ -268,6 +356,7 @@ final class SupabaseAuthRepository implements AuthRepository {
         },
       );
       if (profileId.trim().isNotEmpty) {
+        await _updateProfileSkills(remote, profileId.trim(), profile.skills);
         return profileId;
       }
     } catch (_) {
@@ -297,7 +386,31 @@ final class SupabaseAuthRepository implements AuthRepository {
       );
     }
 
-    return '${profileRow['id']}';
+    final profileId = '${profileRow['id']}';
+    await _updateProfileSkills(remote, profileId, profile.skills);
+    return profileId;
+  }
+
+  Future<void> _updateProfileSkills(
+    SupabaseClient remote,
+    String profileId,
+    Set<String> skills,
+  ) async {
+    final values = [
+      for (final skill in skills)
+        if (skill.trim().isNotEmpty) skill.trim(),
+    ];
+    if (profileId.isEmpty || values.isEmpty) {
+      return;
+    }
+    try {
+      await remote
+          .from('profiles')
+          .update({'skills': values})
+          .eq('id', profileId);
+    } catch (_) {
+      // Older schemas may not have a skills column yet.
+    }
   }
 
   Future<Map<String, dynamic>> _writeProfileWithTables(
@@ -316,7 +429,7 @@ final class SupabaseAuthRepository implements AuthRepository {
         .maybeSingle();
     final values = {
       'full_name': profile.fullName,
-      'email': profile.email.trim(),
+      'email': profile.email.trim().isEmpty ? null : profile.email.trim(),
       'phone': normalizedPhone,
       if (includeRole) 'role': role,
       'governorate': governorate,
@@ -397,6 +510,29 @@ final class SupabaseAuthRepository implements AuthRepository {
       return '+20${compact.substring(1)}';
     }
     return compact;
+  }
+
+  String _phoneOnlyAuthEmail(String normalizedPhone) {
+    final digits = normalizedPhone.replaceAll(RegExp(r'\D'), '');
+    return 'phone-$digits@phone.engineer.local';
+  }
+
+  bool _isValidEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
+  }
+
+  String? _functionErrorMessage(Object error) {
+    if (error is! FunctionException) {
+      return null;
+    }
+    final details = error.details;
+    if (details is Map) {
+      final message = details['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message.trim();
+      }
+    }
+    return null;
   }
 
   String _phoneLocal10(String phone) {

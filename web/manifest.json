@@ -1,11 +1,11 @@
 {
-    "name": "tradeflow",
-    "short_name": "tradeflow",
+    "name": "المهندس",
+    "short_name": "المهندس",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0764FD",
+    "theme_color": "#0764FD",
+    "description": "منصة المهندس للتواصل والمشاريع والمحتوى الهندسي.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

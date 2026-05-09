@@ -102,7 +102,11 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
           )
           .then((items) {
             if (mounted) {
-              setState(() => _optimisticComments.clear());
+              setState(() {
+                _optimisticComments.removeWhere(
+                  (item) => item.id == optimistic.id,
+                );
+              });
             }
             return items;
           });

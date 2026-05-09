@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/reel_item.dart';
 import '../cache/timed_memory_cache.dart';
+import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class ReelRepository {
@@ -236,7 +237,7 @@ final class SupabaseReelRepository implements ReelRepository {
       if (owner.isEmpty || owner == actorProfileId) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': owner,
         'title': title,
         'message': message,

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/onboarding_slide.dart';
-import '../../shared/painters/onboarding_scene_painter.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -26,16 +26,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       title: 'انضم إلى مشاريع هندسية حقيقية',
       subtitle:
           'اكتشف مشاريع تنفيذ وتصميم وتشطيبات من شركات ومقاولين وفرق هندسية داخل العراق.',
+      assetPath: 'assets/onboarding/engineering_team.svg',
     ),
     OnboardingSlide(
       title: 'ابنوا معا',
       subtitle:
           'اعمل مع مهندسين وحرفيين ومشغلي آليات، تابع التقدم، ونسق الأعمال حتى التسليم.',
+      assetPath: 'assets/onboarding/building_blocks.svg',
     ),
     OnboardingSlide(
       title: 'ابن محفظتك الهندسية',
       subtitle:
           'حوّل مساهماتك في المشاريع إلى سجل موثق يثبت مهاراتك من خلال عمل حقيقي.',
+      assetPath: 'assets/onboarding/online_community.svg',
     ),
   ];
 
@@ -76,7 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   itemCount: _slides.length,
                   onPageChanged: (value) => setState(() => _page = value),
                   itemBuilder: (context, index) {
-                    return _OnboardingSlide(copy: _slides[index], scene: index);
+                    return _OnboardingSlide(copy: _slides[index]);
                   },
                 ),
               ),
@@ -116,10 +119,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _OnboardingSlide extends StatelessWidget {
-  const _OnboardingSlide({required this.copy, required this.scene});
+  const _OnboardingSlide({required this.copy});
 
   final OnboardingSlide copy;
-  final int scene;
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +138,7 @@ class _OnboardingSlide extends StatelessWidget {
             SizedBox(
               height: illustrationHeight,
               width: double.infinity,
-              child: CustomPaint(painter: OnboardingScenePainter(scene)),
+              child: SvgPicture.asset(copy.assetPath, fit: BoxFit.contain),
             ),
             SizedBox(height: compact ? 12 : 28),
             Text(

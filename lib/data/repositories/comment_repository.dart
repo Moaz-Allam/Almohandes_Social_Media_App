@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/comment_item.dart';
 import '../cache/timed_memory_cache.dart';
+import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class CommentRepository {
@@ -258,7 +259,7 @@ final class SupabaseCommentRepository implements CommentRepository {
       if (owner.isEmpty || owner == actorProfileId) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': owner,
         'title': 'تعليق جديد',
         'message': 'تمت إضافة تعليق جديد',

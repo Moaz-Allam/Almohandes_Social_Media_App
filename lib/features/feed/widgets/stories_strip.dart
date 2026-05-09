@@ -208,18 +208,34 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
   }
 
   Future<void> _pickMedia(bool video) async {
-    final picker = ImagePicker();
-    final picked = video
-        ? await picker.pickVideo(source: ImageSource.gallery)
-        : await picker.pickImage(
-            source: ImageSource.gallery,
-            maxWidth: 1200,
-            imageQuality: 82,
-          );
-    if (picked == null || !mounted) {
+    final XFile? picked;
+    final List<int> bytes;
+    try {
+      final picker = ImagePicker();
+      picked = video
+          ? await picker.pickVideo(source: ImageSource.gallery)
+          : await picker.pickImage(
+              source: ImageSource.gallery,
+              maxWidth: 1200,
+              imageQuality: 82,
+            );
+      if (picked == null) {
+        return;
+      }
+      bytes = await picked.readAsBytes();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر اختيار القصة الآن'),
+          ),
+        ),
+      );
       return;
     }
-    final bytes = await picked.readAsBytes();
     if (!mounted) {
       return;
     }

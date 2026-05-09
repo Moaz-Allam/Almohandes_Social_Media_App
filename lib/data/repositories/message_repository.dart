@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/message_item.dart';
 import '../cache/timed_memory_cache.dart';
+import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class MessageRepository {
@@ -758,7 +759,7 @@ final class SupabaseMessageRepository implements MessageRepository {
       if (recipient.isEmpty || recipient == senderProfileId) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': recipient,
         'title': 'رسالة جديدة',
         'message': switch (messageType) {

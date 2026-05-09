@@ -133,6 +133,13 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> activateTestPremium() async {
+    await repositories.subscriptions.activateTestSubscription();
+    _hasPremiumLibrary = true;
+    notifyListeners();
+    await refreshSessionData();
+  }
+
   Future<void> updateMyAbout(String about) async {
     final current = _profile;
     if (current == null) {
@@ -184,15 +191,6 @@ final class AppController extends ChangeNotifier {
     _savedItems.clear();
     await _sessionStore.clear();
     notifyListeners();
-  }
-
-  Future<void> unlockPremiumLibrary() async {
-    if (_hasPremiumLibrary) {
-      return;
-    }
-    _hasPremiumLibrary = true;
-    notifyListeners();
-    await repositories.subscriptions.activateCurrentUser();
   }
 
   Future<void> setDarkMode(bool enabled) async {

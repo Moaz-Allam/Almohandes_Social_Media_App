@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:record/record.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -276,7 +277,15 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     final app = AppScope.read(context);
     final messages = app.repositories.messages;
-    final result = await FilePicker.pickFiles(withData: true);
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(withData: true);
+    } catch (error) {
+      if (mounted) {
+        _showError(error);
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
@@ -284,9 +293,13 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     final file = result.files.first;
-    final fileUrl = file.bytes == null
-        ? 'file:${file.name}'
-        : 'data:${_mimeTypeForFile(file.name)};base64,${base64Encode(file.bytes!)}';
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      _showError('تعذر قراءة الملف المحدد الآن');
+      return;
+    }
+    final fileUrl =
+        'data:${_mimeTypeForFile(file.name)};base64,${base64Encode(bytes)}';
     final optimistic = _optimisticMessage(
       text: '${file.name}\n$fileUrl',
       type: _messageTypeForAttachment(file.name, fileUrl),
@@ -735,21 +748,7 @@ class _MessageBubble extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             type == 'voice'
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.play_arrow, color: accent),
-                      const SizedBox(width: 8),
-                      Text(
-                        'رسالة صوتية',
-                        style: TextStyle(
-                          color: foreground,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ],
-                  )
+                ? _VoiceBubble(text: text, incoming: incoming)
                 : type == 'image'
                 ? _ChatMediaBubble(text: text, type: 'image')
                 : type == 'video'
@@ -795,6 +794,219 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _VoiceBubble extends StatefulWidget {
+  const _VoiceBubble({required this.text, required this.incoming});
+
+  final String text;
+  final bool incoming;
+
+  @override
+  State<_VoiceBubble> createState() => _VoiceBubbleState();
+}
+
+class _VoiceBubbleState extends State<_VoiceBubble> {
+  late final AudioPlayer _player;
+  StreamSubscription<PlayerState>? _stateSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<void>? _completeSubscription;
+  bool _isPlaying = false;
+  bool _isLoading = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _stateSubscription = _player.onPlayerStateChanged.listen((state) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _isPlaying = state == PlayerState.playing);
+    });
+    _durationSubscription = _player.onDurationChanged.listen((duration) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _duration = duration);
+    });
+    _positionSubscription = _player.onPositionChanged.listen((position) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _position = position);
+    });
+    _completeSubscription = _player.onPlayerComplete.listen((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isPlaying = false;
+        _position = Duration.zero;
+      });
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _VoiceBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text) {
+      _player.stop();
+      _position = Duration.zero;
+      _duration = Duration.zero;
+      _isPlaying = false;
+      _isLoading = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _stateSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _completeSubscription?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_isLoading) {
+      return;
+    }
+    if (_isPlaying) {
+      await _player.pause();
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      if (_duration > Duration.zero && _position >= _duration) {
+        await _player.seek(Duration.zero);
+      }
+      await _player.play(_sourceFrom(widget.text));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر تشغيل الرسالة الصوتية الآن')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Source _sourceFrom(String value) {
+    final trimmed = value.trim();
+    if (trimmed.startsWith('data:')) {
+      final comma = trimmed.indexOf(',');
+      if (comma == -1) {
+        throw const FormatException('Invalid audio data URL');
+      }
+      final header = trimmed.substring(5, comma);
+      final mimeType = header.split(';').first;
+      return BytesSource(
+        base64Decode(trimmed.substring(comma + 1)),
+        mimeType: mimeType.isEmpty ? 'audio/wav' : mimeType,
+      );
+    }
+    return UrlSource(trimmed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = widget.incoming ? context.appText : Colors.white;
+    final accent = widget.incoming ? AppColors.blue : Colors.white;
+    final progress = _duration.inMilliseconds <= 0
+        ? 0.0
+        : (_position.inMilliseconds / _duration.inMilliseconds).clamp(0.0, 1.0);
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: _togglePlayback,
+      child: SizedBox(
+        width: 220,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _togglePlayback,
+                    icon: _isLoading
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: accent,
+                            ),
+                          )
+                        : Icon(
+                            _isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: accent,
+                          ),
+                    tooltip: _isPlaying
+                        ? 'إيقاف الرسالة الصوتية'
+                        : 'تشغيل الرسالة الصوتية',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'رسالة صوتية',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _duration == Duration.zero
+                      ? _formatDuration(_position)
+                      : '${_formatDuration(_position)} / ${_formatDuration(_duration)}',
+                  style: TextStyle(
+                    color: foreground.withValues(alpha: .82),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                minHeight: 4,
+                value: progress,
+                backgroundColor: accent.withValues(alpha: .20),
+                valueColor: AlwaysStoppedAnimation<Color>(accent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes.remainder(60).toString();
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }
 

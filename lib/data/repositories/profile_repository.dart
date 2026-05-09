@@ -7,6 +7,7 @@ import '../../models/network_person.dart';
 import '../../models/profile_form.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/supabase_enum_mapper.dart';
+import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class ProfileRepository {
@@ -662,7 +663,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       if (sender == null || sender == receiverProfileId) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': receiverProfileId,
         'title': 'طلب تواصل جديد',
         'message': 'لديك طلب تواصل جديد',
@@ -694,7 +695,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       if (current == null || recipient.isEmpty || recipient == current) {
         return;
       }
-      await remote.from('notifications').insert({
+      await NotificationPushDispatcher.create(remote, {
         'profile_id': recipient,
         'title': 'تم قبول طلب التواصل',
         'message': 'أصبح بإمكانكما المراسلة الآن',

@@ -109,6 +109,7 @@ final class SupabaseCourseRepository implements CourseRepository {
       icon: _iconFor('${row['category'] ?? ''}'),
       color: _colorFor(index),
       progress: (progress?.percentage ?? 0) / 100,
+      category: '${row['category'] ?? ''}',
       playlists: [
         PremiumPlaylist(
           id: '$id-lessons',
@@ -147,6 +148,7 @@ final class SupabaseCourseRepository implements CourseRepository {
       progress: videos.isEmpty
           ? 0
           : videos.where((video) => video.completed).length / videos.length,
+      category: 'training',
       playlists: [
         PremiumPlaylist(
           id: '$id-playlist',

@@ -8,6 +8,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/project_item.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../shared/widgets/skeleton.dart';
@@ -76,6 +77,10 @@ class ProfileScreen extends StatelessWidget {
     final effectiveSkills = isMe
         ? (currentProfile?.skills.toList(growable: false) ?? const <String>[])
         : const <String>[];
+    final effectivePrograms = _programsForProfile(
+      headline: effectiveHeadline,
+      skills: effectiveSkills,
+    );
     final effectiveAvatarUrl = isMe ? currentProfile?.avatarUrl : avatarUrl;
     final effectiveCoverUrl = isMe ? currentProfile?.coverUrl : null;
     final effectiveProfileId = isMe ? currentProfile?.id : profileId;
@@ -127,6 +132,7 @@ class ProfileScreen extends StatelessWidget {
                     about: effectiveAbout,
                     location: effectiveLocation,
                     skills: effectiveSkills,
+                    programs: effectivePrograms,
                   ),
                   const SizedBox(height: 28),
                 ],
@@ -149,6 +155,39 @@ class ProfileScreen extends StatelessWidget {
       return profile.role;
     }
     return 'ملفك الشخصي';
+  }
+
+  List<String> _programsForProfile({
+    required String headline,
+    required List<String> skills,
+  }) {
+    final source = '$headline ${skills.join(' ')}'.toLowerCase();
+    final programs = <String>{};
+
+    void add(Iterable<String> values) => programs.addAll(values);
+
+    if (source.contains('مدني') || source.contains('civil')) {
+      add(const ['AutoCAD', 'Civil 3D', 'ETABS', 'SAFE', 'Microsoft Excel']);
+    }
+    if (source.contains('معماري') || source.contains('architect')) {
+      add(const ['Revit', 'AutoCAD', 'SketchUp', '3ds Max']);
+    }
+    if (source.contains('كهرب') || source.contains('electrical')) {
+      add(const ['AutoCAD Electrical', 'DIALux', 'ETAP', 'Revit MEP']);
+    }
+    if (source.contains('ميكاني') || source.contains('mechanic')) {
+      add(const ['SolidWorks', 'Revit MEP', 'HAP', 'AutoCAD']);
+    }
+    if (source.contains('مساح') || source.contains('survey')) {
+      add(const ['Civil 3D', 'ArcGIS', 'QGIS', 'Total Station']);
+    }
+    if (source.contains('حاسوب') || source.contains('برمجة')) {
+      add(const ['VS Code', 'Git', 'Figma', 'Postman']);
+    }
+    if (programs.isEmpty) {
+      add(const ['AutoCAD', 'Microsoft Excel', 'Revit']);
+    }
+    return programs.toList(growable: false);
   }
 }
 
@@ -586,6 +625,7 @@ class _ProfileWorkspace extends StatefulWidget {
     required this.about,
     required this.location,
     required this.skills,
+    required this.programs,
   });
 
   final String? profileId;
@@ -594,6 +634,7 @@ class _ProfileWorkspace extends StatefulWidget {
   final String about;
   final String location;
   final List<String> skills;
+  final List<String> programs;
 
   @override
   State<_ProfileWorkspace> createState() => _ProfileWorkspaceState();
@@ -635,6 +676,7 @@ class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
               about: widget.about,
               location: widget.location,
               skills: widget.skills,
+              programs: widget.programs,
             ),
           ),
         ],
@@ -847,6 +889,7 @@ class _ProfileTabBody extends StatelessWidget {
     required this.about,
     required this.location,
     required this.skills,
+    required this.programs,
   });
 
   final String? profileId;
@@ -857,6 +900,7 @@ class _ProfileTabBody extends StatelessWidget {
   final String about;
   final String location;
   final List<String> skills;
+  final List<String> programs;
 
   @override
   Widget build(BuildContext context) {
@@ -867,6 +911,7 @@ class _ProfileTabBody extends StatelessWidget {
         about: about,
         location: location,
         skills: skills,
+        programs: programs,
       ),
       _ProfileTab.savedOrProjects => _ProfileProjects(
         profileId: profileId,
@@ -1164,12 +1209,14 @@ class _ProfileAboutPanel extends StatelessWidget {
     required this.about,
     required this.location,
     required this.skills,
+    required this.programs,
   });
 
   final String headline;
   final String about;
   final String location;
   final List<String> skills;
+  final List<String> programs;
 
   @override
   Widget build(BuildContext context) {
@@ -1192,19 +1239,37 @@ class _ProfileAboutPanel extends StatelessWidget {
           title: 'الموقع',
           subtitle: location,
         ),
-        if (skills.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          _ProfileSkillsCard(skills: skills),
-        ],
+        const SizedBox(height: 10),
+        _ProfileChipCard(
+          icon: Icons.lightbulb_outline,
+          title: 'المهارات',
+          emptyLabel: 'لم تتم إضافة مهارات بعد',
+          values: skills,
+        ),
+        const SizedBox(height: 10),
+        _ProfileChipCard(
+          icon: Icons.apps_outlined,
+          title: 'البرامج',
+          emptyLabel: 'لم تتم إضافة برامج بعد',
+          values: programs,
+        ),
       ],
     );
   }
 }
 
-class _ProfileSkillsCard extends StatelessWidget {
-  const _ProfileSkillsCard({required this.skills});
+class _ProfileChipCard extends StatelessWidget {
+  const _ProfileChipCard({
+    required this.icon,
+    required this.title,
+    required this.emptyLabel,
+    required this.values,
+  });
 
-  final List<String> skills;
+  final IconData icon;
+  final String title;
+  final String emptyLabel;
+  final List<String> values;
 
   @override
   Widget build(BuildContext context) {
@@ -1220,36 +1285,45 @@ class _ProfileSkillsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.lightbulb_outline, color: AppColors.blue),
+              Icon(icon, color: AppColors.blue),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'المهارات',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final skill in skills)
-                Chip(
-                  label: Text(skill),
-                  backgroundColor: context.appSurfaceAlt,
-                  side: BorderSide(color: context.appBorder),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+          if (values.isEmpty)
+            Text(
+              emptyLabel,
+              style: TextStyle(
+                color: context.appMuted,
+                fontWeight: FontWeight.w800,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final value in values)
+                  Chip(
+                    label: Text(value),
+                    backgroundColor: context.appSurfaceAlt,
+                    side: BorderSide(color: context.appBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    labelStyle: TextStyle(
+                      color: context.appText,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                  labelStyle: TextStyle(
-                    color: context.appText,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -1523,6 +1597,17 @@ class _ProfileMediaViewerState extends State<_ProfileMediaViewer> {
       } else {
         await app.updateMyCover(dataUrl);
       }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر تغيير الصورة الآن'),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isPicking = false);

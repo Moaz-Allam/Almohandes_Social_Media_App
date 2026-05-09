@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../../state/app_scope.dart';
+import 'payment_webview_screen.dart';
+import 'premium_dashboard_screen.dart';
 
-class PremiumAccessScreen extends StatelessWidget {
+class PremiumAccessScreen extends StatefulWidget {
   const PremiumAccessScreen({super.key});
 
+  @override
+  State<PremiumAccessScreen> createState() => _PremiumAccessScreenState();
+}
+
+class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
   static const _items = [
     (Icons.engineering_outlined, 'بوت الهندسة الذكي'),
     (Icons.menu_book_outlined, 'محاضرات نظرية'),
@@ -15,6 +23,97 @@ class PremiumAccessScreen extends StatelessWidget {
     (Icons.description_outlined, 'ملاحظات عامة'),
     (Icons.library_books_outlined, 'المكتبة الهندسية (قريبا)'),
   ];
+
+  bool _isStartingPayment = false;
+  bool _isStartingTestPayment = false;
+
+  Future<void> _startPayment() async {
+    if (_isStartingPayment) {
+      return;
+    }
+    setState(() => _isStartingPayment = true);
+    final app = AppScope.read(context);
+    try {
+      final checkout = await app.repositories.subscriptions
+          .createPremiumCheckout();
+      if (!mounted) {
+        return;
+      }
+      final verified = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => PaymentWebViewScreen(checkout: checkout),
+        ),
+      );
+      if (verified != true || !mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(content: Text('تم تفعيل Premium بنجاح')));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const PremiumDashboardScreen()),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              userErrorMessage(error, fallback: 'تعذر تجهيز الدفع الآن'),
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isStartingPayment = false);
+      }
+    }
+  }
+
+  Future<void> _startTestPayment() async {
+    if (_isStartingTestPayment) {
+      return;
+    }
+    setState(() => _isStartingTestPayment = true);
+    final app = AppScope.read(context);
+    try {
+      await app.activateTestPremium();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(content: Text('تم تفعيل Premium تجريبيا')),
+        );
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const PremiumDashboardScreen()),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              userErrorMessage(
+                error,
+                fallback: 'تعذر تفعيل الدفع التجريبي الآن',
+              ),
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isStartingTestPayment = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,22 +136,58 @@ class PremiumAccessScreen extends StatelessWidget {
           if (index == _items.length) {
             return Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: FilledButton.icon(
-                onPressed: () async {
-                  await AppScope.read(context).unlockPremiumLibrary();
-                  if (!context.mounted) {
-                    return;
-                  }
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('تم تفعيل Premium')),
-                  );
-                },
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('الدفع وتفعيل Premium'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.blue,
-                  minimumSize: const Size.fromHeight(52),
-                ),
+              child: Column(
+                children: [
+                  FilledButton.icon(
+                    onPressed: (_isStartingPayment || _isStartingTestPayment)
+                        ? null
+                        : _startPayment,
+                    icon: _isStartingPayment
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.payments_outlined),
+                    label: Text(
+                      _isStartingPayment
+                          ? 'جاري تجهيز الدفع...'
+                          : 'الدفع وتفعيل Premium',
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _isStartingPayment
+                          ? AppColors.muted
+                          : AppColors.blue,
+                      minimumSize: const Size.fromHeight(52),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: (_isStartingPayment || _isStartingTestPayment)
+                        ? null
+                        : _startTestPayment,
+                    icon: _isStartingTestPayment
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.science_outlined),
+                    label: Text(
+                      _isStartingTestPayment
+                          ? 'جاري التفعيل التجريبي...'
+                          : 'تفعيل تجريبي بدون دفع',
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.blue,
+                      minimumSize: const Size.fromHeight(52),
+                      side: const BorderSide(color: AppColors.blue),
+                    ),
+                  ),
+                ],
               ),
             );
           }

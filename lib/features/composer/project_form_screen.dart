@@ -67,13 +67,29 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   }
 
   Future<void> _addAttachment() async {
-    final result = await FilePicker.pickFiles(
-      allowMultiple: true,
-      type: FileType.any,
-    );
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        allowMultiple: true,
+        type: FileType.any,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر اختيار المرفقات الآن'),
+          ),
+        ),
+      );
+      return;
+    }
     if (result == null || result.files.isEmpty) {
       return;
     }
+    final files = result.files;
     if (!mounted) {
       return;
     }
@@ -81,9 +97,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       _attachmentNames
         ..clear()
         ..addAll(
-          result.files.map(
-            (file) => file.name.isEmpty ? 'مرفق بدون اسم' : file.name,
-          ),
+          files.map((file) => file.name.isEmpty ? 'مرفق بدون اسم' : file.name),
         );
       _attachments = _attachmentNames.length;
     });
@@ -470,7 +484,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                 ),
                 _ProjectStepView(
                   formKey: _formKeys[6],
-                  title: '9. المعاينة والنشر',
+                  title: '7. المعاينة والنشر',
                   subtitle: 'هذه المعاينة هي ما سيراه المهندسون قبل التقديم.',
                   children: [
                     _ProjectPreview(draft: _draft, attachments: _attachments),

@@ -8,6 +8,7 @@ import 'package:tradeflow/data/repositories/app_repositories.dart';
 import 'package:tradeflow/data/repositories/auth_repository.dart';
 import 'package:tradeflow/data/repositories/comment_repository.dart';
 import 'package:tradeflow/data/repositories/course_repository.dart';
+import 'package:tradeflow/data/repositories/engineer_ai_repository.dart';
 import 'package:tradeflow/data/repositories/feed_repository.dart';
 import 'package:tradeflow/data/repositories/message_repository.dart';
 import 'package:tradeflow/data/repositories/notification_repository.dart';
@@ -24,6 +25,7 @@ import 'package:tradeflow/features/projects/projects_screen.dart';
 import 'package:tradeflow/features/reels/reels_screen.dart';
 import 'package:tradeflow/models/account_type.dart';
 import 'package:tradeflow/models/comment_item.dart';
+import 'package:tradeflow/models/engineer_ai_message.dart';
 import 'package:tradeflow/models/feed_post_model.dart';
 import 'package:tradeflow/models/message_item.dart';
 import 'package:tradeflow/models/network_person.dart';
@@ -125,6 +127,7 @@ AppController _controller({
       auth: _FakeAuthRepository(),
       comments: _FakeCommentRepository(),
       courses: _FakeCourseRepository(),
+      engineerAi: _FakeEngineerAiRepository(),
       feed: feed ?? _ImmediateFeedRepository(),
       messages: _FakeMessageRepository(),
       notifications: _FakeNotificationRepository(),
@@ -244,7 +247,10 @@ final class _FakeAuthRepository implements AuthRepository {
   Future<void> sendPasswordReset({required String email}) async {}
 
   @override
-  Future<void> sendOtp({required String phone}) async {}
+  Future<void> updatePassword({required String password}) async {}
+
+  @override
+  Future<String?> sendOtp({required String phone}) async => null;
 
   @override
   Future<void> signInWithPassword({
@@ -267,6 +273,25 @@ final class _FakeCourseRepository implements CourseRepository {
     bool forceRefresh = false,
   }) async {
     return const [];
+  }
+}
+
+final class _FakeEngineerAiRepository implements EngineerAiRepository {
+  @override
+  Future<List<EngineerAiMessage>> fetchMessages({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<EngineerAiMessage> sendMessage(String content) async {
+    return EngineerAiMessage(
+      id: 'ai-1',
+      role: EngineerAiRole.assistant,
+      content: 'تم',
+      createdAt: DateTime(2026),
+    );
   }
 }
 
@@ -651,8 +676,24 @@ final class _FakeStoryRepository implements StoryRepository {
 
 final class _FakeSubscriptionRepository implements SubscriptionRepository {
   @override
-  Future<void> activateCurrentUser() async {}
+  Future<String> activateTestSubscription() async {
+    return 'test-payment';
+  }
+
+  @override
+  Future<PremiumCheckout> createPremiumCheckout({num amount = 120000}) async {
+    return PremiumCheckout(
+      checkoutId: 'test-checkout',
+      paymentUrl: Uri.parse('https://example.com/pay'),
+      paymentWidgetUrl: Uri.parse('https://example.com/widget.js'),
+      paymentResultUrl: Uri.parse('https://example.com/result'),
+      profileId: 'profile-current',
+    );
+  }
 
   @override
   Future<bool> hasActiveSubscription() async => false;
+
+  @override
+  Future<void> verifyPremiumCheckout(PremiumCheckout checkout) async {}
 }

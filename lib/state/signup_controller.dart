@@ -86,6 +86,11 @@ final class SignupController extends ChangeNotifier {
 
   bool get hasValidIraqiPhone => hasValidPhoneNumber;
 
+  bool get hasValidEmail {
+    final value = email.text.trim();
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
+  }
+
   bool get hasValidOtp => RegExp(r'^\d{6}$').hasMatch(otp.text.trim());
 
   bool get hasMatchingPasswords {
@@ -174,7 +179,7 @@ final class SignupController extends ChangeNotifier {
     final last = parts.length <= 1 ? '' : parts.skip(1).join(' ');
 
     return ProfileForm(
-      email: email.text,
+      email: email.text.trim(),
       firstName: first,
       lastName: last,
       headline: '${_userType.label} · $_specialization',

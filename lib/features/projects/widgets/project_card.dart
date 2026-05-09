@@ -152,9 +152,11 @@ IconData _categoryIcon(String category) {
     'معماري' => Icons.architecture_outlined,
     'كهرباء' => Icons.electrical_services_outlined,
     'ميكانيك' => Icons.precision_manufacturing_outlined,
+    'مساحة' => Icons.map_outlined,
     'آليات' => Icons.local_shipping_outlined,
     'تشطيبات' => Icons.format_paint_outlined,
     'سلامة' => Icons.health_and_safety_outlined,
+    'أخرى' => Icons.category_outlined,
     _ => Icons.folder_special_outlined,
   };
 }
