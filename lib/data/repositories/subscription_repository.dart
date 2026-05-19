@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../session/current_profile_resolver.dart';
+
 import 'repository_failure.dart';
 
 abstract interface class SubscriptionRepository {
@@ -205,18 +207,8 @@ final class SupabaseSubscriptionRepository implements SubscriptionRepository {
     }
   }
 
-  Future<String?> _currentProfileId(SupabaseClient remote) async {
-    final userId = remote.auth.currentUser?.id;
-    if (userId == null) {
-      return null;
-    }
-    final row = await remote
-        .from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-    return row == null ? null : '${row['id']}';
-  }
+  Future<String?> _currentProfileId(SupabaseClient remote) =>
+      CurrentProfileResolver.instance.resolve(client: remote);
 
   Future<String?> _currentAccessToken(SupabaseClient remote) async {
     final currentSession = remote.auth.currentSession;

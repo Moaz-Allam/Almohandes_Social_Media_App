@@ -103,6 +103,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Resolve once per outer build instead of inside the itemBuilder.
+    // Reading on the State context registers a single AppController
+    // dependency for the screen, not one per visible project tile.
+    final myProfileId = AppScope.watch(context).profile?.id;
     return Column(
       children: [
         HomeTopBar(
@@ -221,7 +225,6 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       itemCount: projects.length,
                       itemBuilder: (context, index) {
                         final project = projects[index];
-                        final myProfileId = AppScope.watch(context).profile?.id;
                         final didApply = data.appliedIds.contains(project.id);
                         return ProjectCard(
                           project: project.copyWith(hasApplied: didApply),

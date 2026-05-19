@@ -26,6 +26,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   late Future<List<NotificationItemModel>> _itemsFuture;
   final Set<String> _deletedNotificationIds = {};
   final Set<String> _readNotificationIds = {};
+  bool _didStartLoading = false;
 
   @override
   void initState() {
@@ -36,6 +37,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_didStartLoading) {
+      return;
+    }
+    _didStartLoading = true;
     _itemsFuture = AppScope.read(
       context,
     ).repositories.notifications.fetchNotifications();
@@ -55,13 +60,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _readNotificationIds.add(item.id);
     });
     app.notifyNotificationStateChanged();
-    unawaited(
-      app.repositories.notifications.markRead(item.id).then((_) {
-        if (mounted) {
-          return _refresh();
-        }
-      }),
-    );
+    // Fire-and-forget. The optimistic _readNotificationIds set already
+    // covers the UI; no need to re-fetch the entire list.
+    unawaited(app.repositories.notifications.markRead(item.id));
   }
 
   void _delete(NotificationItemModel item) {

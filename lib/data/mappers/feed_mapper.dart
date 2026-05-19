@@ -53,6 +53,7 @@ FeedPostModel feedPostFromSupabase(
     repostOriginalProfileId: repostOriginalProfileId == null
         ? null
         : '$repostOriginalProfileId',
+    isLikedByViewer: row['is_liked'] == true,
   );
 }
 

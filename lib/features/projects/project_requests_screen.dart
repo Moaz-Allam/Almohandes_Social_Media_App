@@ -219,7 +219,7 @@ class _ProjectRequestsScreenState extends State<ProjectRequestsScreen> {
   }
 }
 
-class _RequestCard extends StatelessWidget {
+class _RequestCard extends StatefulWidget {
   const _RequestCard({
     required this.request,
     required this.onProfile,
@@ -235,6 +235,28 @@ class _RequestCard extends StatelessWidget {
   final VoidCallback onMessage;
   final bool pending;
   final bool loading;
+
+  @override
+  State<_RequestCard> createState() => _RequestCardState();
+}
+
+class _RequestCardState extends State<_RequestCard> {
+  Future<String>? _statusFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _statusFuture ??= AppScope.read(
+      context,
+    ).repositories.profiles.connectionStatus(widget.request.profileId);
+  }
+
+  ProjectApplicationRequest get request => widget.request;
+  VoidCallback get onProfile => widget.onProfile;
+  VoidCallback get onConnect => widget.onConnect;
+  VoidCallback get onMessage => widget.onMessage;
+  bool get pending => widget.pending;
+  bool get loading => widget.loading;
 
   @override
   Widget build(BuildContext context) {
@@ -311,9 +333,7 @@ class _RequestCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: FutureBuilder<String>(
-                    future: AppScope.read(
-                      context,
-                    ).repositories.profiles.connectionStatus(request.profileId),
+                    future: _statusFuture,
                     builder: (context, snapshot) {
                       final connected = snapshot.data == 'accepted';
                       final isPending =

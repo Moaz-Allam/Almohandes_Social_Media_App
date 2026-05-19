@@ -4,7 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -60,7 +60,12 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
       if (!mounted) {
         return;
       }
-      _showMessage(userErrorMessage(error, fallback: 'تعذر إنشاء الحساب الآن'));
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر إنشاء الحساب. تحقق من البيانات أو من الاتصال وحاول مرة أخرى',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -79,16 +84,12 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     _form.previousStep();
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-        ),
-      );
+  void _showInfo(String message) {
+    AppSnack.info(context, message);
+  }
+
+  void _showError(String message) {
+    AppSnack.error(context, message);
   }
 
   Future<void> _handlePrimary() async {
@@ -97,19 +98,37 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     }
     if (_form.step == 0) {
       if (_form.displayName.text.trim().isEmpty) {
-        _showMessage('أكمل الاسم أولا');
+        _showError('أدخل اسمك الكامل');
+        return;
+      }
+      if (_form.email.text.trim().isEmpty) {
+        _showError('أدخل بريدك الإلكتروني');
         return;
       }
       if (!_form.hasValidEmail) {
-        _showMessage('أدخل بريدك الإلكتروني بشكل صحيح');
+        _showError('صيغة البريد الإلكتروني غير صحيحة. مثال: name@example.com');
+        return;
+      }
+      if (_form.phone.text.trim().isEmpty) {
+        _showError('أدخل رقم هاتفك لاستلام رمز التحقق');
         return;
       }
       if (!_form.hasValidPhoneNumber) {
-        _showMessage('أدخل رقمك بشكل صحيح');
+        _showError(
+          'رقم الهاتف غير صحيح. استخدم رقما عراقيا (07xxxxxxxxx) أو مصريا (01xxxxxxxxx)',
+        );
+        return;
+      }
+      if (_form.password.text.isEmpty) {
+        _showError('أدخل كلمة المرور');
+        return;
+      }
+      if (_form.password.text.length < 6) {
+        _showError('كلمة المرور قصيرة جدا. استخدم 6 أحرف على الأقل');
         return;
       }
       if (!_form.hasMatchingPasswords) {
-        _showMessage('تأكد من كلمة المرور وتأكيدها');
+        _showError('كلمتا المرور غير متطابقتين. أعد كتابتهما');
         return;
       }
       setState(() => _isSubmitting = true);
@@ -120,12 +139,15 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
         if (!mounted) {
           return;
         }
-        _showMessage(otpMessage ?? 'تم إرسال رمز التحقق إلى رقم هاتفك');
+        _showInfo(otpMessage ?? 'تم إرسال رمز التحقق إلى رقم هاتفك');
         _form.nextStep();
       } catch (error) {
         if (mounted) {
-          _showMessage(
-            userErrorMessage(error, fallback: 'تعذر إرسال رمز التحقق الآن'),
+          AppSnack.error(
+            context,
+            error,
+            fallback:
+                'تعذر إرسال رمز التحقق. تحقق من رقم الهاتف ومن الاتصال وحاول مرة أخرى',
           );
         }
       } finally {
@@ -137,8 +159,12 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
     }
 
     if (_form.step == 1) {
+      if (_form.otp.text.trim().isEmpty) {
+        _showError('أدخل رمز التحقق المرسل إلى هاتفك');
+        return;
+      }
       if (!_form.hasValidOtp) {
-        _showMessage('أدخل رمز تحقق مكون من 6 أرقام');
+        _showError('رمز التحقق يجب أن يتكون من 6 أرقام');
         return;
       }
       setState(() => _isSubmitting = true);
@@ -149,14 +175,19 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
           return;
         }
         if (!isValidOtp) {
-          _showMessage('رمز التحقق غير صحيح أو انتهت صلاحيته');
+          _showError(
+            'رمز التحقق غير صحيح أو انتهت صلاحيته. اضغط "إعادة إرسال الرمز"',
+          );
           return;
         }
         _form.nextStep();
       } catch (error) {
         if (mounted) {
-          _showMessage(
-            userErrorMessage(error, fallback: 'تعذر التحقق من الرمز الآن'),
+          AppSnack.error(
+            context,
+            error,
+            fallback:
+                'تعذر التحقق من الرمز. اطلب رمزا جديدا ثم حاول مرة أخرى',
           );
         }
       } finally {
@@ -291,18 +322,18 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
                                     .auth
                                     .sendOtp(phone: _form.phone.text);
                                 if (context.mounted) {
-                                  _showMessage(
+                                  _showInfo(
                                     otpMessage ??
                                         'تم إرسال رمز تحقق جديد إلى رقم هاتفك',
                                   );
                                 }
                               } catch (error) {
                                 if (context.mounted) {
-                                  _showMessage(
-                                    userErrorMessage(
-                                      error,
-                                      fallback: 'تعذر إرسال رمز التحقق الآن',
-                                    ),
+                                  AppSnack.error(
+                                    context,
+                                    error,
+                                    fallback:
+                                        'تعذر إرسال رمز جديد. تحقق من الاتصال وحاول مرة أخرى',
                                   );
                                 }
                               }

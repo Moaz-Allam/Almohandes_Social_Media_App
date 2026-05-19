@@ -1,9 +1,7 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import 'cached_image.dart';
 
 class AppAvatar extends StatelessWidget {
   const AppAvatar({
@@ -44,8 +42,15 @@ class AppAvatar extends StatelessWidget {
         if (_hasImage)
           Positioned.fill(
             child: ClipOval(
-              child: _AvatarImage(
-                imageUrl: imageUrl!,
+              child: CachedImage(
+                url: imageUrl,
+                cacheWidth: (radius * 2 * MediaQuery.devicePixelRatioOf(context))
+                    .round()
+                    .clamp(48, 512),
+                cacheHeight:
+                    (radius * 2 * MediaQuery.devicePixelRatioOf(context))
+                        .round()
+                        .clamp(48, 512),
                 fallback: ColoredBox(
                   color: color,
                   child: Center(
@@ -88,43 +93,4 @@ class AppAvatar extends StatelessWidget {
   }
 
   bool get _hasImage => imageUrl != null && imageUrl!.trim().isNotEmpty;
-}
-
-class _AvatarImage extends StatelessWidget {
-  const _AvatarImage({required this.imageUrl, required this.fallback});
-
-  final String imageUrl;
-  final Widget fallback;
-
-  @override
-  Widget build(BuildContext context) {
-    final bytes = _bytesFromDataUrl(imageUrl);
-    if (bytes != null) {
-      return Image.memory(
-        bytes,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => fallback,
-      );
-    }
-    return Image.network(
-      imageUrl,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => fallback,
-    );
-  }
-
-  Uint8List? _bytesFromDataUrl(String value) {
-    if (!value.startsWith('data:')) {
-      return null;
-    }
-    final comma = value.indexOf(',');
-    if (comma == -1) {
-      return null;
-    }
-    try {
-      return base64Decode(value.substring(comma + 1));
-    } catch (_) {
-      return null;
-    }
-  }
 }

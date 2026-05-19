@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/account_type.dart';
 import '../../models/profile_form.dart';
+import '../../shared/errors/user_error_message.dart';
 import '../mappers/supabase_enum_mapper.dart';
 import '../session/session_store.dart';
 import 'repository_failure.dart';
@@ -49,11 +50,20 @@ final class SupabaseAuthRepository implements AuthRepository {
   }) async {
     final remote = client;
     if (remote == null) {
-      throw const RepositoryFailure('خدمة تسجيل الدخول غير مهيأة الآن');
+      throw const RepositoryFailure(
+        'خدمة تسجيل الدخول غير متاحة الآن. تحقق من اتصالك بالإنترنت ثم حاول مرة أخرى',
+      );
+    }
+    final trimmedLogin = login.trim();
+    if (trimmedLogin.isEmpty) {
+      throw const RepositoryFailure('أدخل بريدك الإلكتروني أو رقم هاتفك');
+    }
+    if (password.isEmpty) {
+      throw const RepositoryFailure('أدخل كلمة المرور');
     }
 
+    AuthException? lastAuthError;
     try {
-      final trimmedLogin = login.trim();
       if (trimmedLogin.contains('@')) {
         await remote.auth.signInWithPassword(
           email: trimmedLogin,
@@ -66,7 +76,11 @@ final class SupabaseAuthRepository implements AuthRepository {
             phone: normalizedPhone,
             password: password,
           );
-        } catch (_) {
+        } on AuthException catch (err) {
+          // Some older accounts were registered with the synthetic
+          // "phone-as-email" address. Fall back to that before giving up,
+          // but remember the real error in case the fallback also fails.
+          lastAuthError = err;
           await remote.auth.signInWithPassword(
             email: _phoneOnlyAuthEmail(normalizedPhone),
             password: password,
@@ -74,8 +88,22 @@ final class SupabaseAuthRepository implements AuthRepository {
         }
       }
       await sessionStore.saveSignedIn();
+    } on AuthException catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          lastAuthError ?? error,
+          fallback: 'بيانات الدخول غير صحيحة. تحقق منها ثم حاول مرة أخرى',
+        ),
+        error,
+      );
     } catch (error) {
-      throw RepositoryFailure('تعذر تسجيل الدخول الآن', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback: 'تعذر تسجيل الدخول. تحقق من الاتصال وحاول مرة أخرى',
+        ),
+        error,
+      );
     }
   }
 
@@ -83,21 +111,36 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<void> sendPasswordReset({required String email}) async {
     final remote = client;
     if (remote == null) {
-      throw const RepositoryFailure('خدمة استعادة كلمة المرور غير مهيأة الآن');
+      throw const RepositoryFailure(
+        'خدمة استعادة كلمة المرور غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
     }
-    if (!email.trim().contains('@')) {
+    final trimmed = email.trim();
+    if (trimmed.isEmpty) {
       throw const RepositoryFailure(
         'أدخل بريدك الإلكتروني لاستعادة كلمة المرور',
+      );
+    }
+    if (!_isValidEmail(trimmed)) {
+      throw const RepositoryFailure(
+        'صيغة البريد الإلكتروني غير صحيحة. استخدم صيغة مثل name@example.com',
       );
     }
 
     try {
       await remote.auth.resetPasswordForEmail(
-        email.trim(),
+        trimmed,
         redirectTo: 'com.almohandes.app://reset-password',
       );
     } catch (error) {
-      throw RepositoryFailure('تعذر إرسال رابط استعادة كلمة المرور', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر إرسال رابط استعادة كلمة المرور. تحقق من البريد الإلكتروني وحاول مرة أخرى',
+        ),
+        error,
+      );
     }
   }
 
@@ -105,17 +148,31 @@ final class SupabaseAuthRepository implements AuthRepository {
   Future<void> updatePassword({required String password}) async {
     final remote = client;
     if (remote == null) {
-      throw const RepositoryFailure('خدمة تغيير كلمة المرور غير مهيأة الآن');
+      throw const RepositoryFailure(
+        'خدمة تغيير كلمة المرور غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
     }
     final value = password.trim();
+    if (value.isEmpty) {
+      throw const RepositoryFailure('أدخل كلمة المرور الجديدة');
+    }
     if (value.length < 6) {
-      throw const RepositoryFailure('كلمة المرور يجب ألا تقل عن 6 أحرف');
+      throw const RepositoryFailure(
+        'كلمة المرور قصيرة جدا. استخدم 6 أحرف على الأقل',
+      );
     }
 
     try {
       await remote.auth.updateUser(UserAttributes(password: value));
     } catch (error) {
-      throw RepositoryFailure('تعذر تغيير كلمة المرور الآن', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر تغيير كلمة المرور. تأكد من فتح رابط الاستعادة في نفس الجهاز ثم حاول مرة أخرى',
+        ),
+        error,
+      );
     }
   }
 
@@ -126,15 +183,21 @@ final class SupabaseAuthRepository implements AuthRepository {
       return null;
     }
 
+    final normalized = _normalizePhone(phone);
+    if (!_looksLikePhone(normalized)) {
+      throw const RepositoryFailure(
+        'رقم الهاتف غير صحيح. أدخل رقما عراقيا (07xxxxxxxxx) أو مصريا (01xxxxxxxxx)',
+      );
+    }
     try {
       final response = await remote.functions.invoke(
         'send-otp',
-        body: {'phone': _normalizePhone(phone)},
+        body: {'phone': normalized},
       );
       final data = response.data;
       if (data is Map && data['sent'] == false) {
         throw RepositoryFailure(
-          '${data['message'] ?? 'تعذر إرسال رمز التحقق الآن'}',
+          '${data['message'] ?? 'تعذر إرسال رمز التحقق. تحقق من رقم الهاتف وحاول مرة أخرى'}',
         );
       }
       if (data is Map) {
@@ -152,7 +215,14 @@ final class SupabaseAuthRepository implements AuthRepository {
       if (message != null) {
         throw RepositoryFailure(message, error);
       }
-      throw RepositoryFailure('تعذر إرسال رمز التحقق الآن', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر إرسال رمز التحقق الآن. تحقق من الشبكة وحاول مرة أخرى',
+        ),
+        error,
+      );
     }
   }
 
@@ -162,11 +232,20 @@ final class SupabaseAuthRepository implements AuthRepository {
     if (remote == null) {
       return code.trim() == '123456';
     }
+    final trimmedCode = code.trim();
+    if (trimmedCode.isEmpty) {
+      throw const RepositoryFailure('أدخل رمز التحقق المرسل إلى هاتفك');
+    }
+    if (!RegExp(r'^\d{4,8}$').hasMatch(trimmedCode)) {
+      throw const RepositoryFailure(
+        'رمز التحقق يجب أن يتكون من أرقام فقط',
+      );
+    }
 
     try {
       final edgeResponse = await remote.functions.invoke(
         'verify-otp',
-        body: {'phone': _normalizePhone(phone), 'code': code.trim()},
+        body: {'phone': _normalizePhone(phone), 'code': trimmedCode},
       );
       final edgeData = edgeResponse.data;
       if (edgeData is Map) {
@@ -194,12 +273,26 @@ final class SupabaseAuthRepository implements AuthRepository {
         'verify_otp_token',
         params: {
           'p_phone_local10': _phoneLocal10(phone),
-          'p_verification_code': code.trim(),
+          'p_verification_code': trimmedCode,
         },
       );
-      return response == true;
+      if (response != true) {
+        throw const RepositoryFailure(
+          'رمز التحقق غير صحيح أو منتهي الصلاحية. اطلب رمزا جديدا',
+        );
+      }
+      return true;
+    } on RepositoryFailure {
+      rethrow;
     } catch (error) {
-      throw RepositoryFailure('تعذر التحقق من رمز الهاتف الآن', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر التحقق من رمز الهاتف. تحقق من الاتصال أو اطلب رمزا جديدا',
+        ),
+        error,
+      );
     }
   }
 
@@ -221,8 +314,28 @@ final class SupabaseAuthRepository implements AuthRepository {
     final governorate = governorateToSupabase(profile.location);
     final normalizedPhone = _normalizePhone(phone);
     final profileEmail = profile.email.trim();
+    if (profile.fullName.trim().isEmpty) {
+      throw const RepositoryFailure('أدخل اسمك الكامل');
+    }
+    if (profileEmail.isEmpty) {
+      throw const RepositoryFailure(
+        'أدخل بريدك الإلكتروني. سنستخدمه لتسجيل الدخول واستعادة كلمة المرور',
+      );
+    }
     if (!_isValidEmail(profileEmail)) {
-      throw const RepositoryFailure('أدخل بريدك الإلكتروني بشكل صحيح');
+      throw const RepositoryFailure(
+        'صيغة البريد الإلكتروني غير صحيحة. مثال: name@example.com',
+      );
+    }
+    if (password.length < 6) {
+      throw const RepositoryFailure(
+        'كلمة المرور قصيرة جدا. استخدم 6 أحرف على الأقل',
+      );
+    }
+    if (!_looksLikePhone(normalizedPhone)) {
+      throw const RepositoryFailure(
+        'رقم الهاتف غير صحيح. تحقق من الرقم ثم أعد المحاولة',
+      );
     }
     final authEmail = profileEmail;
     try {
@@ -231,7 +344,9 @@ final class SupabaseAuthRepository implements AuthRepository {
         params: {'p_phone': normalizedPhone},
       );
       if (phoneVerified != true) {
-        throw const RepositoryFailure('يرجى تأكيد رقم الهاتف أولاً');
+        throw const RepositoryFailure(
+          'يجب تأكيد رقم الهاتف قبل إنشاء الحساب. عد للخطوة السابقة وأكمل التحقق',
+        );
       }
       final authResponse = await remote.auth.signUp(
         email: authEmail,
@@ -257,12 +372,14 @@ final class SupabaseAuthRepository implements AuthRepository {
       }
       if (remote.auth.currentSession == null) {
         throw const RepositoryFailure(
-          'تم إنشاء الحساب. سجل الدخول برقم الهاتف وكلمة المرور.',
+          'تم إنشاء الحساب. افتح رسالة تأكيد البريد من بريدك ثم سجل الدخول',
         );
       }
       final userId = authResponse.user?.id ?? remote.auth.currentUser?.id;
       if (userId == null) {
-        throw const RepositoryFailure('تعذر تأكيد جلسة الحساب الجديدة');
+        throw const RepositoryFailure(
+          'تعذر تأكيد جلسة الحساب الجديدة. جرّب تسجيل الدخول مباشرة',
+        );
       }
       await _syncAuthPhone(remote, normalizedPhone);
 
@@ -289,7 +406,14 @@ final class SupabaseAuthRepository implements AuthRepository {
       if (error is RepositoryFailure) {
         rethrow;
       }
-      throw RepositoryFailure('تعذر إنشاء الحساب الآن', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر إنشاء الحساب. تحقق من البيانات أو من الاتصال بالإنترنت وحاول مرة أخرى',
+        ),
+        error,
+      );
     }
   }
 
@@ -317,7 +441,7 @@ final class SupabaseAuthRepository implements AuthRepository {
       final data = response.data;
       if (data is Map && data['success'] == false) {
         throw RepositoryFailure(
-          '${data['message'] ?? 'تعذر ربط رقم الهاتف بالحساب الآن'}',
+          '${data['message'] ?? 'تعذر ربط رقم الهاتف بالحساب. قد يكون الرقم مستخدما من قبل'}',
         );
       }
     } catch (error) {
@@ -328,7 +452,14 @@ final class SupabaseAuthRepository implements AuthRepository {
       if (message != null) {
         throw RepositoryFailure(message, error);
       }
-      throw RepositoryFailure('تعذر ربط رقم الهاتف بالحساب الآن', error);
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر ربط رقم الهاتف بالحساب. تحقق من الرقم أو من الاتصال وحاول مرة أخرى',
+        ),
+        error,
+      );
     }
   }
 
@@ -519,6 +650,12 @@ final class SupabaseAuthRepository implements AuthRepository {
 
   bool _isValidEmail(String value) {
     return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
+  }
+
+  bool _looksLikePhone(String normalized) {
+    // After _normalizePhone, valid numbers start with +964 / +20 etc.
+    // and are 10–15 digits total.
+    return RegExp(r'^\+\d{9,14}$').hasMatch(normalized);
   }
 
   String? _functionErrorMessage(Object error) {

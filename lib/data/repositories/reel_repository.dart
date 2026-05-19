@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../session/current_profile_resolver.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../models/reel_item.dart';
 import '../cache/timed_memory_cache.dart';
@@ -119,7 +121,9 @@ final class SupabaseReelRepository implements ReelRepository {
             .eq('reel_id', reelId)
             .eq('profile_id', profileId);
       }
-      _cache.clear();
+      // Intentionally NOT clearing the cache: the optimistic UI already
+      // applied the like flip. Re-downloading every reel for a single tap
+      // (with the video URLs they carry) was extremely expensive.
     } catch (_) {
       // Optimistic UI already reflects the tap.
     }
@@ -206,18 +210,8 @@ final class SupabaseReelRepository implements ReelRepository {
     };
   }
 
-  Future<String?> _currentProfileId(SupabaseClient remote) async {
-    final userId = remote.auth.currentUser?.id;
-    if (userId == null) {
-      return null;
-    }
-    final row = await remote
-        .from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-    return row == null ? null : '${row['id']}';
-  }
+  Future<String?> _currentProfileId(SupabaseClient remote) =>
+      CurrentProfileResolver.instance.resolve(client: remote);
 
   Future<void> _notifyReelOwner(
     SupabaseClient remote, {

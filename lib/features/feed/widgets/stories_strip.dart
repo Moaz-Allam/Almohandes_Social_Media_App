@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,8 +5,10 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/storage/media_upload_service.dart';
 import '../../../models/story_item.dart';
-import '../../../shared/errors/user_error_message.dart';
+import '../../../shared/widgets/app_snack.dart';
+import '../../../shared/widgets/cached_image.dart';
 import '../../../shared/widgets/media_preview.dart';
 import '../../../state/app_scope.dart';
 import '../../stories/story_viewer_screen.dart';
@@ -23,6 +24,7 @@ class _StoriesStripState extends State<StoriesStrip> {
   late Future<List<StoryItem>> _storiesFuture;
   final Set<String> _seenStoryGroups = {};
   bool _didStartLoading = false;
+  int _lastStoriesVersion = 0;
 
   @override
   void initState() {
@@ -33,11 +35,17 @@ class _StoriesStripState extends State<StoriesStrip> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didStartLoading) {
+    final controller = AppScope.watch(context);
+    final shouldRefresh = !_didStartLoading ||
+        controller.storiesVersion != _lastStoriesVersion;
+    if (!shouldRefresh) {
       return;
     }
     _didStartLoading = true;
-    _storiesFuture = AppScope.read(context).repositories.stories.fetchStories();
+    _lastStoriesVersion = controller.storiesVersion;
+    _storiesFuture = controller.repositories.stories.fetchStories(
+      forceRefresh: true,
+    );
   }
 
   void _openStory(BuildContext context, _StoryGroup group, int index) {
@@ -73,13 +81,7 @@ class _StoriesStripState extends State<StoriesStrip> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر نشر القصة الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر نشر القصة الآن');
       return;
     }
     if (!context.mounted) {
@@ -88,9 +90,10 @@ class _StoriesStripState extends State<StoriesStrip> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('تم نشر القصة')));
-    setState(() {
-      _storiesFuture = repositories.stories.fetchStories(forceRefresh: true);
-    });
+    // Bump the version once. didChangeDependencies will pick it up and
+    // trigger the refresh; no need to also setState locally (would cause
+    // a duplicate fetch).
+    AppScope.read(context).notifyStoriesChanged();
   }
 
   @override
@@ -200,6 +203,7 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
   final _controller = TextEditingController();
   String _mediaUrl = '';
   String _mediaType = 'image';
+  bool _isUploading = false;
 
   @override
   void dispose() {
@@ -208,16 +212,22 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
   }
 
   Future<void> _pickMedia(bool video) async {
+    if (_isUploading) {
+      return;
+    }
     final XFile? picked;
-    final List<int> bytes;
+    final Uint8List bytes;
     try {
       final picker = ImagePicker();
       picked = video
-          ? await picker.pickVideo(source: ImageSource.gallery)
+          ? await picker.pickVideo(
+              source: ImageSource.gallery,
+              maxDuration: const Duration(seconds: 30),
+            )
           : await picker.pickImage(
               source: ImageSource.gallery,
-              maxWidth: 1200,
-              imageQuality: 82,
+              maxWidth: 1080,
+              imageQuality: 60,
             );
       if (picked == null) {
         return;
@@ -227,23 +237,39 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر اختيار القصة الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر اختيار القصة الآن');
       return;
     }
     if (!mounted) {
       return;
     }
+    setState(() => _isUploading = true);
     final mimeType = picked.mimeType ?? (video ? 'video/mp4' : 'image/jpeg');
-    setState(() {
-      _mediaUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
-      _mediaType = video ? 'video' : 'image';
-    });
+    final media = AppScope.read(context).repositories.media;
+    try {
+      final url = await media.uploadBytes(
+        bucket: video ? MediaBucket.reels : MediaBucket.stories,
+        bytes: bytes,
+        fileName: picked.name,
+        mimeType: mimeType,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mediaUrl = url;
+        _mediaType = video ? 'video' : 'image';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppSnack.error(context, error, fallback: 'تعذر رفع القصة الآن');
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
   }
 
   void _publish() {
@@ -274,7 +300,6 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
             children: [
               TextField(
                 controller: _controller,
-                onChanged: (_) => setState(() {}),
                 minLines: 2,
                 maxLines: 4,
                 textDirection: TextDirection.rtl,
@@ -318,15 +343,24 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
                               ? 'فيديو'
                               : 'صورة',
                         ),
-                        if (_controller.text.trim().isNotEmpty)
-                          PositionedDirectional(
-                            start: 10,
-                            end: 10,
-                            bottom: 10,
-                            child: _StoryTextOverlay(
-                              text: _controller.text.trim(),
-                            ),
+                        // Subscribe just the text overlay to the controller
+                        // so typing doesn't rebuild the whole dialog (and
+                        // re-render the media preview underneath).
+                        PositionedDirectional(
+                          start: 10,
+                          end: 10,
+                          bottom: 10,
+                          child: ListenableBuilder(
+                            listenable: _controller,
+                            builder: (context, _) {
+                              final text = _controller.text.trim();
+                              if (text.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              return _StoryTextOverlay(text: text);
+                            },
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -453,15 +487,24 @@ class _StoryPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final story = group.preview;
     if (story.hasVisualMedia) {
+      // For videos we deliberately do NOT spin up a video_player here —
+      // a horizontal strip with N controllers was a big source of jank.
+      // Image stories render the image, video stories fall through to the
+      // avatar tile with a play badge.
+      final mediaUrl = story.isVideo ? '' : story.mediaUrl;
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            MediaPreview(
-              mediaUrl: story.mediaUrl,
-              mediaType: story.mediaType,
-              fallbackLabel: story.isVideo ? 'فيديو' : 'صورة',
+            CachedImage(
+              url: mediaUrl,
+              cacheWidth: 240,
+              cacheHeight: 360,
+              fallback: _StoryAvatarFill(
+                imageUrl: story.avatarUrl,
+                color: story.color,
+              ),
             ),
             if (story.isVideo)
               const Center(
@@ -495,47 +538,17 @@ class _StoryAvatarFill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = imageUrl?.trim() ?? '';
-    final bytes = _bytesFromDataUrl(url);
-    if (bytes != null) {
-      return Image.memory(
-        bytes,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => _fallback(),
-      );
-    }
-    if (url.isNotEmpty) {
-      return Image.network(
-        url,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => _fallback(),
-      );
-    }
-    return _fallback();
-  }
-
-  Widget _fallback() {
-    return ColoredBox(
-      color: color,
-      child: const Center(
-        child: Icon(Icons.person, color: Colors.white, size: 30),
+    return CachedImage(
+      url: imageUrl,
+      cacheWidth: 240,
+      cacheHeight: 360,
+      fallback: ColoredBox(
+        color: color,
+        child: const Center(
+          child: Icon(Icons.person, color: Colors.white, size: 30),
+        ),
       ),
     );
-  }
-
-  Uint8List? _bytesFromDataUrl(String value) {
-    if (!value.startsWith('data:')) {
-      return null;
-    }
-    final comma = value.indexOf(',');
-    if (comma == -1) {
-      return null;
-    }
-    try {
-      return base64Decode(value.substring(comma + 1));
-    } catch (_) {
-      return null;
-    }
   }
 }
 

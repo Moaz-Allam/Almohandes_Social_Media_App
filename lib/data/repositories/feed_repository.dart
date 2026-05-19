@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../session/current_profile_resolver.dart';
+
 import '../../models/feed_post_model.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/feed_mapper.dart';
@@ -37,6 +39,11 @@ final class SupabaseFeedRepository implements FeedRepository {
   final _cache = TimedMemoryCache<List<FeedPostModel>>(
     ttl: const Duration(minutes: 1),
   );
+  // LRU cap: per-profile post caches are useful for the recently-viewed
+  // profiles only. Without a cap, browsing through many profiles leaks one
+  // cache (with image URL lists + decoded data) per profile id for the
+  // lifetime of the app.
+  static const _maxProfileCaches = 16;
   final _profileCaches = <String, TimedMemoryCache<List<FeedPostModel>>>{};
 
   @override
@@ -84,12 +91,16 @@ final class SupabaseFeedRepository implements FeedRepository {
     String profileId, {
     bool forceRefresh = false,
   }) {
-    final cache = _profileCaches.putIfAbsent(
-      profileId,
-      () => TimedMemoryCache<List<FeedPostModel>>(
-        ttl: const Duration(minutes: 1),
-      ),
-    );
+    final existing = _profileCaches.remove(profileId);
+    final cache = existing ??
+        TimedMemoryCache<List<FeedPostModel>>(
+          ttl: const Duration(minutes: 1),
+        );
+    // Reinsert (or insert) at the end so iteration order reflects recency.
+    _profileCaches[profileId] = cache;
+    while (_profileCaches.length > _maxProfileCaches) {
+      _profileCaches.remove(_profileCaches.keys.first);
+    }
     return cache.read(
       () => _fetchProfilePosts(profileId),
       forceRefresh: forceRefresh,
@@ -195,7 +206,9 @@ final class SupabaseFeedRepository implements FeedRepository {
             .eq('post_id', postId)
             .eq('profile_id', profileId);
       }
-      _cache.clear();
+      // Intentionally NOT clearing the cache here: the UI already applied
+      // the optimistic like flip, and re-downloading the entire feed for a
+      // single like was a major source of jank.
     } catch (_) {
       // The UI already applied the optimistic state.
     }
@@ -251,18 +264,8 @@ final class SupabaseFeedRepository implements FeedRepository {
     }
   }
 
-  Future<String?> _currentProfileId(SupabaseClient remote) async {
-    final userId = remote.auth.currentUser?.id;
-    if (userId == null) {
-      return null;
-    }
-    final row = await remote
-        .from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-    return row == null ? null : '${row['id']}';
-  }
+  Future<String?> _currentProfileId(SupabaseClient remote) =>
+      CurrentProfileResolver.instance.resolve(client: remote);
 
   List<FeedPostModel> _postsFromRows(List<dynamic> rows) {
     final posts = <FeedPostModel>[];

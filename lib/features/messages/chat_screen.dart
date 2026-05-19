@@ -10,9 +10,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/storage/media_upload_service.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/message_item.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
@@ -41,6 +42,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSendingVoice = false;
   bool _isRecordingVoice = false;
   bool _isSendingFile = false;
+  int _renderedMessageCount = 0;
 
   @override
   void initState() {
@@ -188,17 +190,30 @@ class _ChatScreenState extends State<ChatScreen> {
       _isSendingVoice = true;
     });
     try {
-      await _voiceRecorder.stop();
+      // Cancel the subscription FIRST so no more chunks land in
+      // _voiceBytes after we read it.
       await _voiceSubscription?.cancel();
       _voiceSubscription = null;
+      await _voiceRecorder.stop();
       final pcmBytes = _voiceBytes?.takeBytes() ?? Uint8List(0);
       _voiceBytes = null;
       if (pcmBytes.isEmpty) {
         _showError('لم يتم تسجيل صوت واضح');
         return;
       }
-      final voiceUrl =
-          'data:audio/wav;base64,${base64Encode(_wavFromPcm16(pcmBytes))}';
+      final wavBytes = _wavFromPcm16(pcmBytes);
+      final String voiceUrl;
+      try {
+        voiceUrl = await app.repositories.media.uploadBytes(
+          bucket: MediaBucket.voice,
+          bytes: wavBytes,
+          fileName: 'voice.wav',
+          mimeType: 'audio/wav',
+        );
+      } catch (error) {
+        _showError(error);
+        return;
+      }
       final optimistic = _optimisticMessage(text: voiceUrl, type: 'voice');
       setState(() => _optimisticMessages.add(optimistic));
       app.notifyMessageStateChanged();
@@ -298,14 +313,27 @@ class _ChatScreenState extends State<ChatScreen> {
       _showError('تعذر قراءة الملف المحدد الآن');
       return;
     }
-    final fileUrl =
-        'data:${_mimeTypeForFile(file.name)};base64,${base64Encode(bytes)}';
+    setState(() => _isSendingFile = true);
+    final String fileUrl;
+    try {
+      fileUrl = await app.repositories.media.uploadBytes(
+        bucket: MediaBucket.chatFiles,
+        bytes: bytes,
+        fileName: file.name,
+        mimeType: _mimeTypeForFile(file.name),
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isSendingFile = false);
+        _showError(error);
+      }
+      return;
+    }
     final optimistic = _optimisticMessage(
       text: '${file.name}\n$fileUrl',
       type: _messageTypeForAttachment(file.name, fileUrl),
     );
     setState(() {
-      _isSendingFile = true;
       _optimisticMessages.add(optimistic);
     });
     app.notifyMessageStateChanged();
@@ -453,13 +481,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          userErrorMessage(error, fallback: 'تعذر تنفيذ العملية الآن'),
-        ),
-      ),
-    );
+    AppSnack.error(context, error, fallback: 'تعذر تنفيذ العملية الآن');
   }
 
   @override
@@ -545,7 +567,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (messages.isEmpty) {
                     return const _EmptyChatState();
                   }
-                  _scrollToLatest();
+                  // Auto-scroll only when the message list grows (new arrival
+                  // or optimistic send). Scrolling inside build() on every
+                  // rebuild made typing feel sticky.
+                  if (messages.length != _renderedMessageCount) {
+                    _renderedMessageCount = messages.length;
+                    _scrollToLatest();
+                  }
                   return ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
@@ -1029,6 +1057,7 @@ class _ChatMediaBubble extends StatelessWidget {
             mediaType: type,
             fallbackLabel: type == 'video' ? 'فيديو' : 'صورة',
             showVideoControls: type == 'video',
+            cacheWidth: 640,
           ),
         ),
       ),

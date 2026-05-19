@@ -47,6 +47,9 @@ dependencies:
   flutter_svg: ^2.3.0
   app_links: ^7.0.0
   webview_flutter: ^4.13.1
+  cached_network_image: ^3.4.1
+  mime: ^2.0.0
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

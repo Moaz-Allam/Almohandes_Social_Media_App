@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
@@ -33,18 +35,34 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   late final TextEditingController _query;
+  // Debounced mirror of _query.text. Results re-filter against this, not
+  // every keystroke — keeps the input responsive on long lists.
+  final ValueNotifier<String> _debouncedQuery = ValueNotifier('');
+  Timer? _debounceTimer;
   SearchFilter _filter = SearchFilter.people;
 
   @override
   void initState() {
     super.initState();
     _query = TextEditingController(text: widget.initialQuery);
+    _debouncedQuery.value = widget.initialQuery;
+    _query.addListener(_onQueryChanged);
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _query.removeListener(_onQueryChanged);
     _query.dispose();
+    _debouncedQuery.dispose();
     super.dispose();
+  }
+
+  void _onQueryChanged() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+      _debouncedQuery.value = _query.text;
+    });
   }
 
   @override
@@ -93,7 +111,6 @@ class _SearchScreenState extends State<SearchScreen> {
                           borderSide: const BorderSide(color: AppColors.blue),
                         ),
                       ),
-                      onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],
@@ -133,7 +150,15 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
             Expanded(
-              child: _SearchResults(filter: _filter, query: _query.text),
+              // Subscribes to the debounced query, not the raw controller,
+              // so result filtering happens at most every 150 ms even on
+              // fast typists. Input itself remains instantly responsive.
+              child: ValueListenableBuilder<String>(
+                valueListenable: _debouncedQuery,
+                builder: (context, query, _) {
+                  return _SearchResults(filter: _filter, query: query);
+                },
+              ),
             ),
           ],
         ),
@@ -158,23 +183,35 @@ class _SearchResults extends StatelessWidget {
   }
 }
 
-class _PeopleResults extends StatelessWidget {
+class _PeopleResults extends StatefulWidget {
   const _PeopleResults({required this.query});
 
   final String query;
 
   @override
+  State<_PeopleResults> createState() => _PeopleResultsState();
+}
+
+class _PeopleResultsState extends State<_PeopleResults> {
+  Future<List<NetworkPerson>>? _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= AppScope.read(context).repositories.profiles.fetchNetworkProfiles(
+      viewerType: accountTypeFromProfile(AppScope.read(context).profile),
+      companies: false,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
     return FutureBuilder<List<NetworkPerson>>(
-      future: AppScope.read(context).repositories.profiles.fetchNetworkProfiles(
-        viewerType: accountType,
-        companies: false,
-      ),
+      future: _future,
       builder: (context, snapshot) {
         final rows = _filterPeople(
           snapshot.data ?? const <NetworkPerson>[],
-          query,
+          widget.query,
         );
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -240,19 +277,32 @@ class _PeopleResults extends StatelessWidget {
   }
 }
 
-class _ProjectResults extends StatelessWidget {
+class _ProjectResults extends StatefulWidget {
   const _ProjectResults({required this.query});
 
   final String query;
 
   @override
+  State<_ProjectResults> createState() => _ProjectResultsState();
+}
+
+class _ProjectResultsState extends State<_ProjectResults> {
+  Future<List<ProjectItem>>? _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= AppScope.read(context).repositories.projects.fetchProjects();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<ProjectItem>>(
-      future: AppScope.read(context).repositories.projects.fetchProjects(),
+      future: _future,
       builder: (context, snapshot) {
         final rows = _filterProjects(
           snapshot.data ?? const <ProjectItem>[],
-          query,
+          widget.query,
         );
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -309,19 +359,32 @@ class _ProjectResults extends StatelessWidget {
   }
 }
 
-class _PostResults extends StatelessWidget {
+class _PostResults extends StatefulWidget {
   const _PostResults({required this.query});
 
   final String query;
 
   @override
+  State<_PostResults> createState() => _PostResultsState();
+}
+
+class _PostResultsState extends State<_PostResults> {
+  Future<List<FeedPostModel>>? _future;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= AppScope.read(context).repositories.feed.fetchHomeFeed();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<FeedPostModel>>(
-      future: AppScope.read(context).repositories.feed.fetchHomeFeed(),
+      future: _future,
       builder: (context, snapshot) {
         final rows = _filterPosts(
           snapshot.data ?? const <FeedPostModel>[],
-          query,
+          widget.query,
         );
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {

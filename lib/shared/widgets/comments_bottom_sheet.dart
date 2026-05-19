@@ -43,6 +43,7 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
   final _commentController = TextEditingController();
   final List<CommentItem> _optimisticComments = [];
   late Future<List<CommentItem>> _commentsFuture;
+  bool _didStartLoading = false;
 
   @override
   void initState() {
@@ -53,6 +54,13 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_didStartLoading) {
+      // Already fetched. Without this guard, opening the keyboard
+      // (a MediaQuery change) re-fires the network call and flashes a
+      // spinner over the existing comments.
+      return;
+    }
+    _didStartLoading = true;
     _commentsFuture = AppScope.read(context).repositories.comments
         .fetchComments(
           targetType: widget.targetType,
@@ -137,7 +145,11 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final profile = AppScope.watch(context).profile;
+    // `read` (not `watch`): we just need the avatar/name snapshot. If the
+    // user updates their profile elsewhere, the sheet doesn't need to
+    // repaint live — and a `watch` here would rebuild the whole sheet on
+    // every unrelated AppController notify (likes, messages, etc.).
+    final profile = AppScope.read(context).profile;
     final name = (profile?.fullName.isNotEmpty ?? false)
         ? profile!.fullName
         : 'المستخدم';

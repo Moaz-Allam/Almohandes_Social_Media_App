@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -33,12 +33,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
     final password = _password.text.trim();
+    if (password.isEmpty) {
+      AppSnack.error(context, 'أدخل كلمة المرور الجديدة');
+      return;
+    }
     if (password.length < 6) {
-      _showMessage('كلمة المرور يجب ألا تقل عن 6 أحرف');
+      AppSnack.error(
+        context,
+        'كلمة المرور قصيرة جدا. استخدم 6 أحرف على الأقل',
+      );
       return;
     }
     if (password != _confirmPassword.text.trim()) {
-      _showMessage('تأكد من تطابق كلمة المرور');
+      AppSnack.error(context, 'كلمتا المرور غير متطابقتين. أعد كتابتهما');
       return;
     }
 
@@ -50,11 +57,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          const SnackBar(content: Text('تم تغيير كلمة المرور. سجل الدخول الآن')),
-        );
+      AppSnack.success(
+        context,
+        'تم تغيير كلمة المرور. سجل الدخول بكلمة المرور الجديدة',
+      );
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const SignInScreen()),
         (_) => false,
@@ -63,18 +69,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       if (!mounted) {
         return;
       }
-      _showMessage(userErrorMessage(error, fallback: 'تعذر تغيير كلمة المرور'));
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر تغيير كلمة المرور. تأكد من فتح رابط الاستعادة في نفس الجهاز ثم حاول مرة أخرى',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
     }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../session/current_profile_resolver.dart';
 import 'package:flutter/material.dart' show Color;
 
 import '../../core/constants/app_colors.dart';
@@ -104,7 +106,12 @@ final class SupabaseProfileRepository implements ProfileRepository {
       values['avatar_url'] = avatarUrl;
     }
     if (coverUrl != null) {
+      // Write both columns. There's a server-side trigger that syncs them,
+      // but it doesn't always fire across PostgREST partial updates, so
+      // we set them explicitly to avoid the profile UI flickering between
+      // the new cover and a stale one read from the other column.
       values['cover_url'] = coverUrl;
+      values['cover_photo_url'] = coverUrl;
     }
     if (values.isEmpty) {
       return;
@@ -523,18 +530,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
     );
   }
 
-  Future<String?> _currentProfileId(SupabaseClient remote) async {
-    final userId = remote.auth.currentUser?.id;
-    if (userId == null) {
-      return null;
-    }
-    final row = await remote
-        .from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-    return row == null ? null : '${row['id']}';
-  }
+  Future<String?> _currentProfileId(SupabaseClient remote) =>
+      CurrentProfileResolver.instance.resolve(client: remote);
 
   bool _canViewNetwork(AccountType viewerType) {
     return viewerType == AccountType.engineer ||

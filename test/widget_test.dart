@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tradeflow/app/linked_arabic_app.dart';
 import 'package:tradeflow/core/constants/app_colors.dart';
 import 'package:tradeflow/data/repositories/app_repositories.dart';
+import 'package:tradeflow/data/storage/media_upload_service.dart';
 import 'package:tradeflow/data/repositories/auth_repository.dart';
 import 'package:tradeflow/data/repositories/comment_repository.dart';
 import 'package:tradeflow/data/repositories/course_repository.dart';
@@ -18,6 +19,7 @@ import 'package:tradeflow/data/repositories/saved_content_repository.dart';
 import 'package:tradeflow/data/repositories/story_repository.dart';
 import 'package:tradeflow/data/repositories/subscription_repository.dart';
 import 'package:tradeflow/data/session/session_store.dart';
+import 'package:tradeflow/models/app_theme_mode.dart';
 import 'package:tradeflow/features/home/widgets/linked_bottom_navigation.dart';
 import 'package:tradeflow/features/premium/models/premium_course.dart';
 import 'package:tradeflow/models/account_type.dart';
@@ -66,6 +68,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    Future<void> dismissSnacks() async {
+      // AppSnack toasts auto-dismiss after a few seconds, but the SnackBar
+      // timer doesn't schedule frames, so pumpAndSettle returns while the
+      // snackbar is still visible (and can overlap bottom buttons).
+      // Advance the clock manually past its duration.
+      await tester.pump(const Duration(seconds: 6));
+    }
+
     await tester.tap(find.byType(PrimaryButton).first);
     await tester.pumpAndSettle();
 
@@ -79,23 +89,29 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'secret123');
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await dismissSnacks();
 
     await tester.enterText(find.byType(TextField).last, '123456');
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await dismissSnacks();
 
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await dismissSnacks();
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await dismissSnacks();
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await dismissSnacks();
     await tester.enterText(
       find.byType(TextField).first,
       'مهندس متخصص في المشاريع السكنية والتجارية.',
     );
     await tester.tap(find.byType(PrimaryButton).last);
     await tester.pumpAndSettle();
+    await dismissSnacks();
 
     expect(find.byIcon(Icons.check), findsOneWidget);
 
@@ -250,6 +266,7 @@ AppRepositories _repositories({
     savedContent: _FakeSavedContentRepository(),
     stories: _FakeStoryRepository(),
     subscriptions: _FakeSubscriptionRepository(),
+    media: MediaUploadService(),
   );
 }
 
@@ -281,19 +298,26 @@ final class _MemorySessionStore implements SessionStore {
   _MemorySessionStore({this.signedIn = true});
 
   bool signedIn;
-  bool darkMode = false;
+  AppThemeMode themeMode = AppThemeMode.system;
 
   @override
   Future<void> clear() async => signedIn = false;
 
   @override
-  Future<bool> isDarkMode() async => darkMode;
+  Future<bool> isDarkMode() async => themeMode == AppThemeMode.dark;
+
+  @override
+  Future<AppThemeMode> getThemeMode() async => themeMode;
 
   @override
   Future<bool> isSignedIn() async => signedIn;
 
   @override
-  Future<void> saveDarkMode(bool enabled) async => darkMode = enabled;
+  Future<void> saveDarkMode(bool enabled) async =>
+      themeMode = enabled ? AppThemeMode.dark : AppThemeMode.light;
+
+  @override
+  Future<void> saveThemeMode(AppThemeMode mode) async => themeMode = mode;
 
   @override
   Future<void> saveSignedIn() async => signedIn = true;

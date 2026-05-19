@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/home/main_shell.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -35,27 +35,29 @@ class _SignInScreenState extends State<SignInScreen> {
     if (_isSubmitting) {
       return;
     }
-    if (_login.text.trim().isEmpty || _password.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('أدخل البريد أو الهاتف وكلمة المرور')),
-      );
+    final login = _login.text.trim();
+    if (login.isEmpty) {
+      AppSnack.error(context, 'أدخل بريدك الإلكتروني أو رقم هاتفك');
+      return;
+    }
+    if (_password.text.isEmpty) {
+      AppSnack.error(context, 'أدخل كلمة المرور');
       return;
     }
     setState(() => _isSubmitting = true);
     try {
       await AppScope.read(
         context,
-      ).signInWithPassword(login: _login.text, password: _password.text);
+      ).signInWithPassword(login: login, password: _password.text);
     } catch (error) {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر تسجيل الدخول الآن'),
-          ),
-        ),
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر تسجيل الدخول. تحقق من بيانات الحساب وحاول مرة أخرى',
       );
       return;
     } finally {

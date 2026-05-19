@@ -8,6 +8,7 @@ import '../../models/comment_item.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/saved_content.dart';
 import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
 import '../../shared/widgets/like_burst.dart';
@@ -457,13 +458,7 @@ class _InlineCommentsSectionState extends State<_InlineCommentsSection> {
         return;
       }
       _commentController.text = text;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر إرسال التعليق الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر إرسال التعليق الآن');
     }
   }
 

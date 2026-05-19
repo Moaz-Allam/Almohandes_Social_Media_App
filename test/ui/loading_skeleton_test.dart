@@ -18,6 +18,8 @@ import 'package:tradeflow/data/repositories/reel_repository.dart';
 import 'package:tradeflow/data/repositories/saved_content_repository.dart';
 import 'package:tradeflow/data/repositories/story_repository.dart';
 import 'package:tradeflow/data/repositories/subscription_repository.dart';
+import 'package:tradeflow/data/storage/media_upload_service.dart';
+import 'package:tradeflow/models/app_theme_mode.dart';
 import 'package:tradeflow/data/session/session_store.dart';
 import 'package:tradeflow/features/feed/home_feed_screen.dart';
 import 'package:tradeflow/features/premium/models/premium_course.dart';
@@ -137,6 +139,7 @@ AppController _controller({
       savedContent: _FakeSavedContentRepository(),
       stories: _FakeStoryRepository(),
       subscriptions: _FakeSubscriptionRepository(),
+      media: MediaUploadService(),
     ),
   );
 }
@@ -212,19 +215,26 @@ final _testReels = <ReelItem>[
 
 final class _MemorySessionStore implements SessionStore {
   bool _signedIn = true;
-  bool _darkMode = false;
+  AppThemeMode _themeMode = AppThemeMode.system;
 
   @override
   Future<void> clear() async => _signedIn = false;
 
   @override
-  Future<bool> isDarkMode() async => _darkMode;
+  Future<bool> isDarkMode() async => _themeMode == AppThemeMode.dark;
+
+  @override
+  Future<AppThemeMode> getThemeMode() async => _themeMode;
 
   @override
   Future<bool> isSignedIn() async => _signedIn;
 
   @override
-  Future<void> saveDarkMode(bool enabled) async => _darkMode = enabled;
+  Future<void> saveDarkMode(bool enabled) async =>
+      _themeMode = enabled ? AppThemeMode.dark : AppThemeMode.light;
+
+  @override
+  Future<void> saveThemeMode(AppThemeMode mode) async => _themeMode = mode;
 
   @override
   Future<void> saveSignedIn() async => _signedIn = true;

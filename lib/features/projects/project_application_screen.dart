@@ -5,7 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/project_item.dart';
 import '../../models/saved_content.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../state/app_scope.dart';
 import 'project_application_success_screen.dart';
 
@@ -88,13 +88,7 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
         return;
       }
       setState(() => _isSubmitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر إرسال طلب المشروع الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر إرسال طلب المشروع الآن');
       return;
     }
     await appController.saveAppliedProject(

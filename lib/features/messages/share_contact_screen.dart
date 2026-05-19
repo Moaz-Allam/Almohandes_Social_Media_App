@@ -4,7 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/message_item.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
 import 'chat_screen.dart';
@@ -53,13 +53,7 @@ class _ShareContactScreenState extends State<ShareContactScreen> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر إرسال المحتوى الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر إرسال المحتوى الآن');
       return;
     }
     if (!context.mounted) {

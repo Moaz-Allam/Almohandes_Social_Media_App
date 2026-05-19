@@ -5,7 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../models/project_draft.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../state/app_scope.dart';
 import 'widgets/composer_top_bar.dart';
 
@@ -77,13 +77,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر اختيار المرفقات الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر اختيار المرفقات الآن');
       return;
     }
     if (result == null || result.files.isEmpty) {
@@ -123,13 +117,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر نشر المشروع الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر نشر المشروع الآن');
       setState(() => _isSubmitting = false);
     }
   }

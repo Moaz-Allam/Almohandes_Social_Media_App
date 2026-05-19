@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/app_tab.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/reel_item.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/comments_bottom_sheet.dart';
 import '../../shared/widgets/like_burst.dart';
@@ -34,6 +35,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   int _index = 0;
   bool _showLike = false;
   bool _didStartLoading = false;
+  int _lastReelsVersion = 0;
 
   @override
   void initState() {
@@ -45,11 +47,17 @@ class _ReelsScreenState extends State<ReelsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didStartLoading) {
+    final controller = AppScope.watch(context);
+    final shouldRefresh = !_didStartLoading ||
+        controller.reelsVersion != _lastReelsVersion;
+    if (!shouldRefresh) {
       return;
     }
     _didStartLoading = true;
-    _reelsFuture = AppScope.read(context).repositories.reels.fetchReels();
+    _lastReelsVersion = controller.reelsVersion;
+    _reelsFuture = controller.repositories.reels.fetchReels(
+      forceRefresh: true,
+    );
   }
 
   @override
@@ -90,6 +98,15 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _index = value);
   }
 
+  Future<void> _refresh() async {
+    setState(() {
+      _reelsFuture = AppScope.read(
+        context,
+      ).repositories.reels.fetchReels(forceRefresh: true);
+    });
+    await _reelsFuture;
+  }
+
   void _openSendFlow(ReelItem item) {
     final profile = AppScope.read(context).profile;
     final avatarUrl = profile?.id != null && profile!.id == item.profileId
@@ -120,6 +137,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch the selected tab so we can pause playback when the user leaves
+    // the reels tab (IndexedStack keeps us mounted otherwise).
+    final controller = AppScope.watch(context);
+    final tabIsVisible = controller.selectedTab == AppTab.reels;
     return Column(
       children: [
         HomeTopBar(
@@ -139,8 +160,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
               }
               final reels = snapshot.data ?? const <ReelItem>[];
               if (reels.isEmpty) {
-                return const _ReelsEmptyState();
+                return RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 200),
+                      _ReelsEmptyState(),
+                    ],
+                  ),
+                );
               }
+              final profile = controller.profile;
               return Stack(
                 alignment: Alignment.center,
                 children: [
@@ -153,11 +184,19 @@ class _ReelsScreenState extends State<ReelsScreen> {
                       final item = reels[index];
                       final likes =
                           _localLikeCounts[item.id] ?? item.likesCount;
+                      final effectiveAvatarUrl =
+                          profile?.id != null && profile!.id == item.profileId
+                          ? profile.avatarUrl
+                          : item.avatarUrl;
                       return _ReelPage(
+                        key: ValueKey('reel-${item.id}'),
                         item: item,
                         likesCount: likes,
                         isLiked: _likedReels.contains(item.id),
-                        isActive: index == _index,
+                        // Only autoplay when this reel is the active page
+                        // AND the reels tab itself is visible.
+                        isActive: index == _index && tabIsVisible,
+                        effectiveAvatarUrl: effectiveAvatarUrl,
                         onLike: () => _triggerLike(item),
                         onSend: () => _openSendFlow(item),
                       );
@@ -211,10 +250,12 @@ class _ReelsEmptyState extends StatelessWidget {
 
 class _ReelPage extends StatelessWidget {
   const _ReelPage({
+    super.key,
     required this.item,
     required this.likesCount,
     required this.isLiked,
     required this.isActive,
+    required this.effectiveAvatarUrl,
     required this.onLike,
     required this.onSend,
   });
@@ -223,6 +264,7 @@ class _ReelPage extends StatelessWidget {
   final int likesCount;
   final bool isLiked;
   final bool isActive;
+  final String? effectiveAvatarUrl;
   final VoidCallback onLike;
   final VoidCallback onSend;
 
@@ -232,11 +274,6 @@ class _ReelPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = AppScope.watch(context).profile;
-    final effectiveAvatarUrl =
-        profile?.id != null && profile!.id == item.profileId
-        ? profile.avatarUrl
-        : item.avatarUrl;
     return Container(
       color: Colors.black,
       child: Stack(
@@ -290,16 +327,7 @@ class _ReelPage extends StatelessWidget {
                       ).repositories.reels.repost(item.id);
                     } catch (error) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              userErrorMessage(
-                                error,
-                                fallback: 'تعذر إعادة نشر الريل الآن',
-                              ),
-                            ),
-                          ),
-                        );
+                        AppSnack.error(context, error, fallback: 'تعذر إعادة نشر الريل الآن');
                       }
                       return;
                     }

@@ -4,6 +4,7 @@ import '../data/repositories/app_repositories.dart';
 import '../data/session/session_store.dart';
 import '../models/account_type.dart';
 import '../models/app_tab.dart';
+import '../models/app_theme_mode.dart';
 import '../models/profile_form.dart';
 import '../models/saved_content.dart';
 
@@ -19,19 +20,33 @@ final class AppController extends ChangeNotifier {
 
   bool _isBootstrapped = false;
   bool _isSignedIn = false;
-  bool _isDarkMode = false;
+  AppThemeMode _themeMode = AppThemeMode.system;
+  // Exposed separately so the MaterialApp can subscribe ONLY to theme
+  // changes without rebuilding on every unrelated notify (likes, messages,
+  // notifications, …).
+  late final ValueNotifier<AppThemeMode> themeModeListenable =
+      ValueNotifier<AppThemeMode>(_themeMode);
   bool _hasPremiumLibrary = false;
   AppTab _selectedTab = AppTab.feed;
   ProfileForm? _profile;
   final List<SavedContent> _savedItems = [];
   int _messageStateVersion = 0;
   int _notificationStateVersion = 0;
+  int _feedVersion = 0;
+  int _reelsVersion = 0;
+  int _storiesVersion = 0;
 
   bool get isBootstrapped => _isBootstrapped;
 
   bool get isSignedIn => _isSignedIn;
 
-  bool get isDarkMode => _isDarkMode;
+  /// User's theme preference. [AppThemeMode.system] follows the OS.
+  AppThemeMode get themeMode => _themeMode;
+
+  /// Convenience for "is the user explicitly using dark right now?"
+  /// — does not reflect system dark mode. Use [themeMode] + the platform
+  /// brightness if you need the *effective* color scheme.
+  bool get isDarkMode => _themeMode == AppThemeMode.dark;
 
   bool get hasPremiumLibrary => _hasPremiumLibrary;
 
@@ -45,17 +60,25 @@ final class AppController extends ChangeNotifier {
 
   int get notificationStateVersion => _notificationStateVersion;
 
+  /// Bumped whenever the home feed should be re-fetched (post published,
+  /// post deleted, etc.). Screens cache the previous version in their State
+  /// and refresh when it changes.
+  int get feedVersion => _feedVersion;
+  int get reelsVersion => _reelsVersion;
+  int get storiesVersion => _storiesVersion;
+
   bool isSaved(String id) {
     return _savedItems.any((item) => item.id == id);
   }
 
   Future<void> bootstrap() async {
-    final (signedIn, darkMode) = await (
+    final (signedIn, themeMode) = await (
       _sessionStore.isSignedIn(),
-      _sessionStore.isDarkMode(),
+      _sessionStore.getThemeMode(),
     ).wait;
     _isSignedIn = signedIn;
-    _isDarkMode = darkMode;
+    _themeMode = themeMode;
+    themeModeListenable.value = themeMode;
     if (signedIn) {
       final (remoteProfile, remoteSavedItems, hasPremium) = await (
         repositories.profiles.currentProfile(),
@@ -187,12 +210,17 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> setDarkMode(bool enabled) async {
-    if (_isDarkMode == enabled) {
+    return setThemeMode(enabled ? AppThemeMode.dark : AppThemeMode.light);
+  }
+
+  Future<void> setThemeMode(AppThemeMode mode) async {
+    if (_themeMode == mode) {
       return;
     }
-    _isDarkMode = enabled;
+    _themeMode = mode;
+    themeModeListenable.value = mode;
     notifyListeners();
-    await _sessionStore.saveDarkMode(enabled);
+    await _sessionStore.saveThemeMode(mode);
   }
 
   void selectTab(AppTab tab) {
@@ -205,6 +233,21 @@ final class AppController extends ChangeNotifier {
 
   void notifyMessageStateChanged() {
     _messageStateVersion += 1;
+    notifyListeners();
+  }
+
+  void notifyFeedChanged() {
+    _feedVersion += 1;
+    notifyListeners();
+  }
+
+  void notifyReelsChanged() {
+    _reelsVersion += 1;
+    notifyListeners();
+  }
+
+  void notifyStoriesChanged() {
+    _storiesVersion += 1;
     notifyListeners();
   }
 

@@ -4,8 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/onboarding/onboarding_screen.dart';
+import '../../models/app_theme_mode.dart';
 import '../../models/settings_item.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
 
@@ -126,13 +127,7 @@ class SettingsScreen extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر حذف الحساب الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر حذف الحساب الآن');
     }
   }
 
@@ -219,37 +214,9 @@ class SettingsScreen extends StatelessWidget {
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
                   if (index == 0) {
-                    return SwitchListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                      secondary: Icon(
-                        controller.isDarkMode
-                            ? Icons.dark_mode
-                            : Icons.light_mode_outlined,
-                        color: AppColors.blue,
-                      ),
-                      title: const Text(
-                        'الوضع الداكن',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      subtitle: Text(
-                        controller.isDarkMode
-                            ? 'التطبيق يستخدم ألوانا داكنة'
-                            : 'فعّل تجربة مريحة في الإضاءة المنخفضة',
-                        style: TextStyle(
-                          color: context.appMuted,
-                          fontSize: 14.5,
-                          height: 1.25,
-                        ),
-                      ),
-                      value: controller.isDarkMode,
-                      activeThumbColor: AppColors.blue,
-                      onChanged: controller.setDarkMode,
+                    return _ThemeSelectionTile(
+                      themeMode: controller.themeMode,
+                      onChanged: controller.setThemeMode,
                     );
                   }
                   if (index == _sections.length + 1) {
@@ -338,6 +305,118 @@ class SettingsScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ThemeSelectionTile extends StatelessWidget {
+  const _ThemeSelectionTile({
+    required this.themeMode,
+    required this.onChanged,
+  });
+
+  final AppThemeMode themeMode;
+  final ValueChanged<AppThemeMode> onChanged;
+
+  String _subtitleFor(BuildContext context) {
+    final platformBrightness = MediaQuery.platformBrightnessOf(context);
+    return switch (themeMode) {
+      AppThemeMode.system =>
+        platformBrightness == Brightness.dark
+            ? 'تابع إعدادات النظام · حاليا داكن'
+            : 'تابع إعدادات النظام · حاليا فاتح',
+      AppThemeMode.light => 'التطبيق يستخدم الوضع الفاتح',
+      AppThemeMode.dark => 'التطبيق يستخدم الوضع الداكن',
+    };
+  }
+
+  IconData _iconFor() {
+    return switch (themeMode) {
+      AppThemeMode.system => Icons.brightness_auto,
+      AppThemeMode.light => Icons.light_mode_outlined,
+      AppThemeMode.dark => Icons.dark_mode,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(_iconFor(), color: AppColors.blue),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'مظهر التطبيق',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _subtitleFor(context),
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontSize: 13.5,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<AppThemeMode>(
+            segments: const [
+              ButtonSegment(
+                value: AppThemeMode.system,
+                label: Text('تلقائي'),
+                icon: Icon(Icons.brightness_auto, size: 18),
+              ),
+              ButtonSegment(
+                value: AppThemeMode.light,
+                label: Text('فاتح'),
+                icon: Icon(Icons.light_mode_outlined, size: 18),
+              ),
+              ButtonSegment(
+                value: AppThemeMode.dark,
+                label: Text('داكن'),
+                icon: Icon(Icons.dark_mode, size: 18),
+              ),
+            ],
+            selected: {themeMode},
+            onSelectionChanged: (selection) {
+              if (selection.isNotEmpty) {
+                onChanged(selection.first);
+              }
+            },
+            showSelectedIcon: false,
+            style: ButtonStyle(
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return AppColors.blue;
+                }
+                return null;
+              }),
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Colors.white;
+                }
+                return null;
+              }),
+            ),
+          ),
+        ],
       ),
     );
   }

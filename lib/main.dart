@@ -7,6 +7,12 @@ import 'data/supabase/supabase_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Cap the in-memory image cache. Default is 1000 entries / ~100MB which
+  // can OOM mid-range Android devices after scrolling long feeds. We don't
+  // need that much — the disk cache (via cached_network_image) covers
+  // re-fetches.
+  PaintingBinding.instance.imageCache.maximumSize = 200;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 << 20; // 50 MB
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
   };
@@ -29,6 +35,7 @@ Future<void> main() async {
       ),
     ),
   );
+
   await SupabaseBootstrap.initializeIfConfigured();
   runApp(const LinkedArabicApp());
 }

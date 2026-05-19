@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../shared/widgets/linked_text_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -41,8 +41,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       return;
     }
     final email = _email.text.trim();
+    if (email.isEmpty) {
+      AppSnack.error(context, 'أدخل بريدك الإلكتروني');
+      return;
+    }
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      _showMessage('أدخل بريدك الإلكتروني بشكل صحيح');
+      AppSnack.error(
+        context,
+        'صيغة البريد الإلكتروني غير صحيحة. استخدم صيغة مثل name@example.com',
+      );
       return;
     }
 
@@ -55,23 +62,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         return;
       }
       setState(() => _sent = true);
-      _showMessage('تم إرسال رابط استعادة كلمة المرور');
+      AppSnack.success(
+        context,
+        'تم إرسال رابط استعادة كلمة المرور إلى $email. تحقق من صندوق الوارد وكذلك من البريد المهمل',
+      );
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _showMessage(userErrorMessage(error, fallback: 'تعذر إرسال الرابط الآن'));
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر إرسال رابط الاستعادة. تأكد من صحة البريد ومن اتصالك بالإنترنت',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
       }
     }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

@@ -6,7 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/saved_content.dart';
-import '../../../shared/errors/user_error_message.dart';
+import '../../../shared/widgets/app_snack.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/comments_bottom_sheet.dart';
 import '../../../shared/widgets/like_burst.dart';
@@ -36,6 +36,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
   void initState() {
     super.initState();
     _reactionCount = _parseReactionCount(post.reactions);
+    _isLiked = post.isLikedByViewer;
   }
 
   int _parseReactionCount(String value) {
@@ -114,17 +115,19 @@ class _FeedPostCardState extends State<FeedPostCard> {
             detail: 'منشور محفوظ · ${post.comments}',
           ),
         );
-        ScaffoldMessenger.of(
+        AppSnack.success(
           context,
-        ).showSnackBar(const SnackBar(content: Text('تم الحفظ في المحفوظات')));
+          'تم حفظ المنشور في "المحفوظات". افتحها من القائمة الجانبية',
+        );
         return;
       case 'report':
         AppScope.read(
           context,
         ).repositories.feed.reportPost(postId: post.id, reason: 'user_report');
-        ScaffoldMessenger.of(
+        AppSnack.success(
           context,
-        ).showSnackBar(const SnackBar(content: Text('تم إرسال البلاغ')));
+          'تم إرسال البلاغ. سيراجعه فريق الإشراف خلال 24 ساعة',
+        );
         return;
     }
   }
@@ -150,33 +153,34 @@ class _FeedPostCardState extends State<FeedPostCard> {
 
     if (confirmed == true && context.mounted) {
       final feed = AppScope.read(context).repositories.feed;
-      final messenger = ScaffoldMessenger.of(context);
       try {
         await feed.repost(post.id);
       } catch (error) {
         if (!context.mounted) {
           return;
         }
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              userErrorMessage(error, fallback: 'تعذر إعادة النشر الآن'),
-            ),
-          ),
+        AppSnack.error(
+          context,
+          error,
+          fallback:
+              'تعذر إعادة نشر هذا المنشور. تحقق من الاتصال وحاول مرة أخرى',
         );
         return;
       }
       if (!context.mounted) {
         return;
       }
-      messenger.showSnackBar(const SnackBar(content: Text('تمت إعادة النشر')));
+      AppSnack.success(context, 'تمت إعادة نشر المنشور على ملفك الشخصي');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Intentionally `read` not `watch`: every notify on AppController would
+    // otherwise rebuild every visible feed card. The avatar will refresh on
+    // pull-to-refresh.
     final effectiveAvatarUrl = _effectiveAvatarUrlFrom(
-      AppScope.watch(context).profile,
+      AppScope.read(context).profile,
     );
     return Stack(
       alignment: Alignment.center,
@@ -247,10 +251,13 @@ class _FeedPostCardState extends State<FeedPostCard> {
               if (post.showMedia)
                 AspectRatio(
                   aspectRatio: 1.55,
-                  child: MediaPreview(
-                    mediaUrl: post.mediaUrl,
-                    mediaType: post.mediaType,
-                    fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+                  child: RepaintBoundary(
+                    child: MediaPreview(
+                      mediaUrl: post.mediaUrl,
+                      mediaType: post.mediaType,
+                      fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+                      cacheWidth: 1080,
+                    ),
                   ),
                 ),
               Padding(

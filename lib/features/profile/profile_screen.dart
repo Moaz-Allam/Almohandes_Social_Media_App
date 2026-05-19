@@ -6,9 +6,10 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/storage/media_upload_service.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/project_item.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../shared/widgets/skeleton.dart';
@@ -54,8 +55,11 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppScope.watch(context);
-    final currentProfile = app.profile;
+    // Watch AppController ONLY when viewing my own profile. Viewing
+    // anyone else's profile is fully driven by constructor props, so a
+    // notify on AppController (a like elsewhere, a message refresh,
+    // anything) won't repaint the screen at all.
+    final currentProfile = isMe ? AppScope.watch(context).profile : null;
     final effectiveName = isMe
         ? ((currentProfile?.fullName.isNotEmpty ?? false)
               ? currentProfile!.fullName
@@ -921,15 +925,45 @@ class _ProfileTabBody extends StatelessWidget {
   }
 }
 
-class _ProfilePosts extends StatelessWidget {
+class _ProfilePosts extends StatefulWidget {
   const _ProfilePosts({required this.profileId, required this.mode});
 
   final String? profileId;
   final _ProfileViewMode mode;
 
   @override
+  State<_ProfilePosts> createState() => _ProfilePostsState();
+}
+
+class _ProfilePostsState extends State<_ProfilePosts> {
+  Future<List<FeedPostModel>>? _future;
+  String? _futureProfileId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final id = widget.profileId;
+    if (id != null && id.isNotEmpty && _futureProfileId != id) {
+      _futureProfileId = id;
+      _future = AppScope.read(context).repositories.feed.fetchProfilePosts(id);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfilePosts oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final id = widget.profileId;
+    if (id != null && id.isNotEmpty && _futureProfileId != id) {
+      setState(() {
+        _futureProfileId = id;
+        _future = AppScope.read(context).repositories.feed.fetchProfilePosts(id);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final id = profileId;
+    final id = widget.profileId;
     if (id == null || id.isEmpty) {
       return const _EmptyProfileGrid(
         icon: Icons.grid_on,
@@ -937,7 +971,7 @@ class _ProfilePosts extends StatelessWidget {
       );
     }
     return FutureBuilder<List<FeedPostModel>>(
-      future: AppScope.read(context).repositories.feed.fetchProfilePosts(id),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -950,7 +984,7 @@ class _ProfilePosts extends StatelessWidget {
             message: 'لا توجد منشورات بعد',
           );
         }
-        return _ProfilePostsGrid(posts: posts, mode: mode);
+        return _ProfilePostsGrid(posts: posts, mode: widget.mode);
       },
     );
   }
@@ -1096,14 +1130,22 @@ class _ProfilePostThumb extends StatelessWidget {
   }
 }
 
-class _ProfileProjects extends StatelessWidget {
+class _ProfileProjects extends StatefulWidget {
   const _ProfileProjects({required this.profileId, required this.showRequests});
 
   final String? profileId;
   final bool showRequests;
 
+  @override
+  State<_ProfileProjects> createState() => _ProfileProjectsState();
+}
+
+class _ProfileProjectsState extends State<_ProfileProjects> {
+  Future<List<ProjectItem>>? _future;
+  String? _futureProfileId;
+
   void _openProject(BuildContext context, ProjectItem project) {
-    if (!showRequests) {
+    if (!widget.showRequests) {
       return;
     }
     Navigator.of(context).push(
@@ -1114,8 +1156,30 @@ class _ProfileProjects extends StatelessWidget {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final id = widget.profileId;
+    if (id != null && id.isNotEmpty && _futureProfileId != id) {
+      _futureProfileId = id;
+      _future = AppScope.read(context).repositories.projects.fetchProjectsForProfile(id);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileProjects oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final id = widget.profileId;
+    if (id != null && id.isNotEmpty && _futureProfileId != id) {
+      setState(() {
+        _futureProfileId = id;
+        _future = AppScope.read(context).repositories.projects.fetchProjectsForProfile(id);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final id = profileId;
+    final id = widget.profileId;
     if (id == null || id.isEmpty) {
       return const _EmptyProfileGrid(
         icon: Icons.folder_special_outlined,
@@ -1123,9 +1187,7 @@ class _ProfileProjects extends StatelessWidget {
       );
     }
     return FutureBuilder<List<ProjectItem>>(
-      future: AppScope.read(
-        context,
-      ).repositories.projects.fetchProjectsForProfile(id),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting &&
             !snapshot.hasData) {
@@ -1153,10 +1215,10 @@ class _ProfileProjects extends StatelessWidget {
             return _ProfileContentCard(
               icon: Icons.folder_special_outlined,
               title: project.title,
-              subtitle: showRequests
+              subtitle: widget.showRequests
                   ? 'اضغط لعرض طلبات المشروع'
                   : project.tagline,
-              onTap: showRequests ? () => _openProject(context, project) : null,
+              onTap: widget.showRequests ? () => _openProject(context, project) : null,
             );
           },
         );
@@ -1578,36 +1640,41 @@ class _ProfileMediaViewerState extends State<_ProfileMediaViewer> {
     try {
       final picked = await ImagePicker().pickImage(
         source: ImageSource.gallery,
-        maxWidth: widget.media == _ProfileMedia.cover ? 1400 : 720,
-        imageQuality: 82,
+        maxWidth: widget.media == _ProfileMedia.cover ? 1080 : 480,
+        imageQuality: 60,
       );
       if (picked == null) {
         return;
       }
       final bytes = await picked.readAsBytes();
       final mimeType = picked.mimeType ?? _mimeTypeFromPath(picked.path);
-      final dataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
       if (!mounted) {
         return;
       }
-      setState(() => _imageUrl = dataUrl);
       final app = AppScope.read(context);
+      final bucket = widget.media == _ProfileMedia.avatar
+          ? MediaBucket.avatars
+          : MediaBucket.covers;
+      final uploadedUrl = await app.repositories.media.uploadBytes(
+        bucket: bucket,
+        bytes: bytes,
+        fileName: picked.name,
+        mimeType: mimeType,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _imageUrl = uploadedUrl);
       if (widget.media == _ProfileMedia.avatar) {
-        await app.updateMyAvatar(dataUrl);
+        await app.updateMyAvatar(uploadedUrl);
       } else {
-        await app.updateMyCover(dataUrl);
+        await app.updateMyCover(uploadedUrl);
       }
     } catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر تغيير الصورة الآن'),
-          ),
-        ),
-      );
+      AppSnack.error(context, error, fallback: 'تعذر تغيير الصورة الآن');
     } finally {
       if (mounted) {
         setState(() => _isPicking = false);

@@ -1,4 +1,5 @@
 import '../session/session_store.dart';
+import '../storage/media_upload_service.dart';
 import '../supabase/supabase_bootstrap.dart';
 import 'auth_repository.dart';
 import 'comment_repository.dart';
@@ -29,6 +30,7 @@ final class AppRepositories {
     required this.savedContent,
     required this.stories,
     required this.subscriptions,
+    required this.media,
   });
 
   factory AppRepositories.production({required SessionStore sessionStore}) {
@@ -47,6 +49,7 @@ final class AppRepositories {
       savedContent: SupabaseSavedContentRepository(client: client),
       stories: SupabaseStoryRepository(client: client),
       subscriptions: SupabaseSubscriptionRepository(client: client),
+      media: MediaUploadService(client: client),
     );
   }
 
@@ -63,4 +66,5 @@ final class AppRepositories {
   final SavedContentRepository savedContent;
   final StoryRepository stories;
   final SubscriptionRepository subscriptions;
+  final MediaUploadService media;
 }

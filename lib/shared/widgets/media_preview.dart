@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -9,6 +10,7 @@ import '../../core/constants/app_colors.dart';
 import '../painters/post_media_painter.dart';
 import 'video_controller_source_stub.dart'
     if (dart.library.io) 'video_controller_source_io.dart';
+import 'video_seek_bar.dart';
 
 class MediaPreview extends StatelessWidget {
   const MediaPreview({
@@ -19,6 +21,8 @@ class MediaPreview extends StatelessWidget {
     this.fallbackLabel,
     this.autoplay = false,
     this.showVideoControls = false,
+    this.cacheWidth,
+    this.cacheHeight,
   });
 
   final String mediaUrl;
@@ -28,12 +32,17 @@ class MediaPreview extends StatelessWidget {
   final bool autoplay;
   final bool showVideoControls;
 
+  /// Decode hint in pixels. Pass roughly the on-screen size — decoding 4K
+  /// images down to feed-card dimensions is one of the biggest sources of
+  /// jank on lower-end devices.
+  final int? cacheWidth;
+  final int? cacheHeight;
+
   bool get _hasMedia => mediaUrl.trim().isNotEmpty;
   bool get _isVideo => mediaType == 'video' || mediaType == 'reel';
 
   @override
   Widget build(BuildContext context) {
-    final bytes = _bytesFromDataUrl(mediaUrl);
     if (_hasMedia && _isVideo) {
       return _VideoFramePreview(
         mediaUrl: mediaUrl,
@@ -43,29 +52,40 @@ class MediaPreview extends StatelessWidget {
         showControls: showVideoControls,
       );
     }
-    if (bytes != null && !_isVideo) {
+    if (!_hasMedia) {
+      return _FallbackMedia(isVideo: _isVideo, label: fallbackLabel);
+    }
+    if (mediaUrl.startsWith('data:')) {
+      final bytes = _bytesFromDataUrl(mediaUrl);
+      if (bytes == null) {
+        return _FallbackMedia(isVideo: _isVideo, label: fallbackLabel);
+      }
       return Image.memory(
         bytes,
         fit: fit,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
+        gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) =>
             _FallbackMedia(isVideo: _isVideo, label: fallbackLabel),
       );
     }
-    if (_hasMedia && !_isVideo && !mediaUrl.startsWith('data:')) {
-      return Image.network(
-        mediaUrl,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) =>
-            _FallbackMedia(isVideo: _isVideo, label: fallbackLabel),
-      );
+    if (!mediaUrl.startsWith('http')) {
+      return _FallbackMedia(isVideo: _isVideo, label: fallbackLabel);
     }
-    return _FallbackMedia(isVideo: _isVideo, label: fallbackLabel);
+    return CachedNetworkImage(
+      imageUrl: mediaUrl,
+      fit: fit,
+      memCacheWidth: cacheWidth,
+      memCacheHeight: cacheHeight,
+      fadeInDuration: const Duration(milliseconds: 160),
+      placeholder: (_, _) => const ColoredBox(color: Color(0x11000000)),
+      errorWidget: (context, error, stackTrace) =>
+          _FallbackMedia(isVideo: _isVideo, label: fallbackLabel),
+    );
   }
 
   Uint8List? _bytesFromDataUrl(String value) {
-    if (!value.startsWith('data:')) {
-      return null;
-    }
     final comma = value.indexOf(',');
     if (comma == -1) {
       return null;
@@ -252,21 +272,12 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
               ),
             ),
           Positioned(
-            left: 14,
-            right: 14,
-            bottom: 14,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: VideoProgressIndicator(
-                controller,
-                allowScrubbing: true,
-                padding: EdgeInsets.zero,
-                colors: const VideoProgressColors(
-                  playedColor: Colors.white,
-                  bufferedColor: Colors.white38,
-                  backgroundColor: Colors.white24,
-                ),
-              ),
+            left: 8,
+            right: 8,
+            bottom: 6,
+            child: VideoSeekBar(
+              controller: controller,
+              showLabels: false,
             ),
           ),
         ],

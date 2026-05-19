@@ -25,6 +25,7 @@ class HomeFeedScreen extends StatefulWidget {
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
   late Future<List<FeedPostModel>> _postsFuture;
   bool _didStartLoading = false;
+  int _lastFeedVersion = 0;
 
   @override
   void initState() {
@@ -35,20 +36,29 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didStartLoading) {
+    final controller = AppScope.watch(context);
+    final shouldRefresh = !_didStartLoading ||
+        controller.feedVersion != _lastFeedVersion;
+    if (!shouldRefresh) {
       return;
     }
     _didStartLoading = true;
-    _postsFuture = AppScope.read(context).repositories.feed.fetchHomeFeed();
+    _lastFeedVersion = controller.feedVersion;
+    _postsFuture = controller.repositories.feed.fetchHomeFeed(
+      forceRefresh: true,
+    );
   }
 
   Future<void> _refresh() async {
+    final controller = AppScope.read(context);
+    final future = controller.repositories.feed.fetchHomeFeed(
+      forceRefresh: true,
+    );
+    _lastFeedVersion = controller.feedVersion;
     setState(() {
-      _postsFuture = AppScope.read(
-        context,
-      ).repositories.feed.fetchHomeFeed(forceRefresh: true);
+      _postsFuture = future;
     });
-    await _postsFuture;
+    await future;
   }
 
   @override
@@ -69,16 +79,25 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               final posts = snapshot.data ?? const <FeedPostModel>[];
               return RefreshIndicator(
                 onRefresh: _refresh,
-                child: ListView(
+                child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: EdgeInsets.zero,
-                  children: [
-                    const StoriesStrip(),
-                    if (posts.isEmpty)
-                      const _FeedEmptyState()
-                    else
-                      for (final post in posts) FeedPostCard(post: post),
-                  ],
+                  // +1 for the stories strip header. When the feed is empty
+                  // we add a single empty-state row instead of a post list.
+                  itemCount: 1 + (posts.isEmpty ? 1 : posts.length),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return const StoriesStrip();
+                    }
+                    if (posts.isEmpty) {
+                      return const _FeedEmptyState();
+                    }
+                    final post = posts[index - 1];
+                    return FeedPostCard(
+                      key: ValueKey('feed-post-${post.id}'),
+                      post: post,
+                    );
+                  },
                 ),
               );
             },

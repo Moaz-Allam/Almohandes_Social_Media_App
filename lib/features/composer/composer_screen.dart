@@ -1,13 +1,14 @@
-import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/storage/media_upload_service.dart';
 import '../../models/account_type.dart';
 import '../../models/app_tab.dart';
-import '../../shared/errors/user_error_message.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
@@ -26,6 +27,7 @@ class ComposerScreen extends StatefulWidget {
 class _ComposerScreenState extends State<ComposerScreen> {
   final _contentController = TextEditingController();
   bool _isPublishing = false;
+  bool _isUploadingMedia = false;
   String _mediaUrl = '';
   String _mediaType = 'text';
   String _mediaName = '';
@@ -65,9 +67,11 @@ class _ComposerScreenState extends State<ComposerScreen> {
       return;
     }
     setState(() => _isPublishing = true);
-    final repositories = AppScope.read(context).repositories;
+    final app = AppScope.read(context);
+    final repositories = app.repositories;
+    final wasReel = _mediaType == 'reel';
     try {
-      if (_mediaType == 'reel') {
+      if (wasReel) {
         await repositories.reels.createReel(
           caption: content,
           videoUrl: _mediaUrl,
@@ -82,15 +86,29 @@ class _ComposerScreenState extends State<ComposerScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _mediaType == 'reel' ? 'تم نشر الريل' : 'تم النشر بنجاح',
-          ),
-        ),
+      // Drop the composer draft so the user doesn't see their old content
+      // when they come back to this tab. IndexedStack keeps the State
+      // alive otherwise.
+      _contentController.clear();
+      setState(() {
+        _mediaUrl = '';
+        _mediaType = 'text';
+        _mediaName = '';
+      });
+      // Tell downstream screens (feed/reels) to refetch on their next
+      // didChangeDependencies — so the user lands on a feed that already
+      // includes what they just posted.
+      if (wasReel) {
+        app.notifyReelsChanged();
+      } else {
+        app.notifyFeedChanged();
+      }
+      AppSnack.success(
+        context,
+        wasReel ? 'تم نشر الريل بنجاح' : 'تم نشر المنشور بنجاح',
       );
-      if (_mediaType == 'reel') {
-        AppScope.read(context).selectTab(AppTab.reels);
+      if (wasReel) {
+        app.selectTab(AppTab.reels);
       } else {
         widget.onClose();
       }
@@ -98,12 +116,11 @@ class _ComposerScreenState extends State<ComposerScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر نشر المحتوى الآن'),
-          ),
-        ),
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر نشر المحتوى. تحقق من الاتصال أو من حجم الملف وحاول مرة أخرى',
       );
     } finally {
       if (mounted) {
@@ -113,8 +130,11 @@ class _ComposerScreenState extends State<ComposerScreen> {
   }
 
   Future<void> _pickMedia(_ComposerAction action) async {
+    if (_isUploadingMedia) {
+      return;
+    }
     final XFile? picked;
-    final List<int> bytes;
+    final Uint8List bytes;
     final String mimeType;
     final String mediaName;
     try {
@@ -122,10 +142,13 @@ class _ComposerScreenState extends State<ComposerScreen> {
       picked = action == _ComposerAction.photo
           ? await picker.pickImage(
               source: ImageSource.gallery,
-              maxWidth: 1400,
-              imageQuality: 82,
+              maxWidth: 1080,
+              imageQuality: 60,
             )
-          : await picker.pickVideo(source: ImageSource.gallery);
+          : await picker.pickVideo(
+              source: ImageSource.gallery,
+              maxDuration: const Duration(seconds: 90),
+            );
       if (picked == null) {
         return;
       }
@@ -138,32 +161,58 @@ class _ComposerScreenState extends State<ComposerScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            userErrorMessage(error, fallback: 'تعذر اختيار الملف الآن'),
-          ),
-        ),
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر اختيار الملف من المعرض. تأكد من منح صلاحية الوصول للصور',
       );
       return;
     }
     if (!mounted) {
       return;
     }
-    setState(() {
-      _mediaUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
-      _mediaType = action == _ComposerAction.photo ? 'image' : 'reel';
-      _mediaName = mediaName;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          action == _ComposerAction.photo
-              ? 'تمت إضافة الصورة'
-              : 'تمت إضافة الفيديو',
-        ),
-      ),
-    );
+    setState(() => _isUploadingMedia = true);
+    final media = AppScope.read(context).repositories.media;
+    final bucket = action == _ComposerAction.photo
+        ? MediaBucket.posts
+        : MediaBucket.reels;
+    try {
+      final url = await media.uploadBytes(
+        bucket: bucket,
+        bytes: bytes,
+        fileName: mediaName,
+        mimeType: mimeType,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mediaUrl = url;
+        _mediaType = action == _ComposerAction.photo ? 'image' : 'reel';
+        _mediaName = mediaName;
+      });
+      AppSnack.success(
+        context,
+        action == _ComposerAction.photo
+            ? 'تم رفع الصورة. أكمل المنشور ثم اضغط نشر'
+            : 'تم رفع الفيديو. أكمل المنشور ثم اضغط نشر',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppSnack.error(
+        context,
+        error,
+        fallback:
+            'تعذر رفع الملف. تحقق من حجم الملف ونوعه ومن الاتصال بالإنترنت',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingMedia = false);
+      }
+    }
   }
 
   void _removeMedia() {
@@ -188,10 +237,9 @@ class _ComposerScreenState extends State<ComposerScreen> {
         return;
       case _ComposerAction.project:
         if (!accountType.canPostProjects) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('مشاركة المشاريع متاحة للمهندسين والشركات فقط'),
-            ),
+          AppSnack.info(
+            context,
+            'مشاركة المشاريع متاحة لحسابات المهندسين والشركات فقط. حدّث نوع الحساب من ملفك الشخصي إذا كنت مؤهلا',
           );
           return;
         }
@@ -217,14 +265,22 @@ class _ComposerScreenState extends State<ComposerScreen> {
 
     return Column(
       children: [
-        ComposerTopBar(
-          title: 'مشاركة منشور',
-          onClose: widget.onClose,
-          onAction: _publishPost,
-          actionEnabled:
-              (_contentController.text.trim().isNotEmpty ||
-                  _mediaUrl.isNotEmpty) &&
-              !_isPublishing,
+        // The publish button enable-state is the only thing that depends on
+        // the text field, so subscribe just the top bar to the controller
+        // instead of rebuilding the whole composer on every keystroke.
+        ListenableBuilder(
+          listenable: _contentController,
+          builder: (context, _) {
+            return ComposerTopBar(
+              title: 'مشاركة منشور',
+              onClose: widget.onClose,
+              onAction: _publishPost,
+              actionEnabled:
+                  (_contentController.text.trim().isNotEmpty ||
+                      _mediaUrl.isNotEmpty) &&
+                  !_isPublishing,
+            );
+          },
         ),
         Expanded(
           child: ListView(
@@ -287,7 +343,6 @@ class _ComposerScreenState extends State<ComposerScreen> {
                 minLines: 4,
                 maxLines: 12,
                 textDirection: TextDirection.rtl,
-                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,

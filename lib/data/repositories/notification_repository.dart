@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../session/current_profile_resolver.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../models/notification_item_model.dart';
 import '../cache/timed_memory_cache.dart';
@@ -37,7 +39,6 @@ final class SupabaseNotificationRepository implements NotificationRepository {
     if (remote == null || notificationId.isEmpty) {
       return;
     }
-    _cache.clear();
     try {
       await remote
           .from('notifications')
@@ -55,7 +56,6 @@ final class SupabaseNotificationRepository implements NotificationRepository {
     if (remote == null || notificationId.isEmpty) {
       return;
     }
-    _cache.clear();
     try {
       await remote.from('notifications').delete().eq('id', notificationId);
       _cache.clear();
@@ -120,16 +120,6 @@ final class SupabaseNotificationRepository implements NotificationRepository {
     return '${date.year}-${two(date.month)}-${two(date.day)} ${two(date.hour)}:${two(date.minute)}';
   }
 
-  Future<String?> _currentProfileId(SupabaseClient remote) async {
-    final userId = remote.auth.currentUser?.id;
-    if (userId == null) {
-      return null;
-    }
-    final row = await remote
-        .from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-    return row == null ? null : '${row['id']}';
-  }
+  Future<String?> _currentProfileId(SupabaseClient remote) =>
+      CurrentProfileResolver.instance.resolve(client: remote);
 }

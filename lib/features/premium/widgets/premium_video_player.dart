@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../shared/widgets/video_seek_bar.dart';
 import '../models/premium_course.dart';
 
 class PremiumVideoPlayer extends StatefulWidget {
@@ -30,20 +31,11 @@ class _PremiumVideoPlayerState extends State<PremiumVideoPlayer> {
             }
             setState(() => _isReady = true);
           });
-    _controller.addListener(_onVideoChanged);
-  }
-
-  void _onVideoChanged() {
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   @override
   void dispose() {
-    _controller
-      ..removeListener(_onVideoChanged)
-      ..dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -129,28 +121,37 @@ class _PremiumVideoPlayerState extends State<PremiumVideoPlayer> {
                   child: InkWell(onTap: _togglePlayback),
                 ),
               ),
-              _CenterPlaybackButton(
-                isReady: _isReady,
-                isPlaying: _controller.value.isPlaying,
-                onTap: _togglePlayback,
-              ),
-              PositionedDirectional(
-                start: 0,
-                end: 0,
-                bottom: 0,
-                child: _PremiumVideoControls(
-                  controller: _controller,
-                  isReady: _isReady,
-                  isMuted: _isMuted,
-                  playbackSpeed: _playbackSpeed,
-                  onTogglePlayback: _togglePlayback,
-                  onBackward: () => _seekBy(const Duration(seconds: -10)),
-                  onForward: () => _seekBy(const Duration(seconds: 10)),
-                  onRestart: _restart,
-                  onToggleMute: _toggleMute,
-                  onSpeedChanged: _setPlaybackSpeed,
+              // The center button and the controls strip listen to the
+              // controller directly via AnimatedBuilder so a full parent
+              // rebuild isn't needed every video tick (was the biggest
+              // jank source in this player).
+              if (_isReady)
+                AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    return _CenterPlaybackButton(
+                      isPlaying: _controller.value.isPlaying,
+                      onTap: _togglePlayback,
+                    );
+                  },
                 ),
-              ),
+              if (_isReady)
+                PositionedDirectional(
+                  start: 0,
+                  end: 0,
+                  bottom: 0,
+                  child: _PremiumVideoControls(
+                    controller: _controller,
+                    isMuted: _isMuted,
+                    playbackSpeed: _playbackSpeed,
+                    onTogglePlayback: _togglePlayback,
+                    onBackward: () => _seekBy(const Duration(seconds: -10)),
+                    onForward: () => _seekBy(const Duration(seconds: 10)),
+                    onRestart: _restart,
+                    onToggleMute: _toggleMute,
+                    onSpeedChanged: _setPlaybackSpeed,
+                  ),
+                ),
             ],
           ),
         ),
@@ -161,20 +162,15 @@ class _PremiumVideoPlayerState extends State<PremiumVideoPlayer> {
 
 class _CenterPlaybackButton extends StatelessWidget {
   const _CenterPlaybackButton({
-    required this.isReady,
     required this.isPlaying,
     required this.onTap,
   });
 
-  final bool isReady;
   final bool isPlaying;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (!isReady) {
-      return const SizedBox.shrink();
-    }
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
@@ -198,7 +194,6 @@ class _CenterPlaybackButton extends StatelessWidget {
 class _PremiumVideoControls extends StatelessWidget {
   const _PremiumVideoControls({
     required this.controller,
-    required this.isReady,
     required this.isMuted,
     required this.playbackSpeed,
     required this.onTogglePlayback,
@@ -210,7 +205,6 @@ class _PremiumVideoControls extends StatelessWidget {
   });
 
   final VideoPlayerController controller;
-  final bool isReady;
   final bool isMuted;
   final double playbackSpeed;
   final VoidCallback onTogglePlayback;
@@ -222,12 +216,6 @@ class _PremiumVideoControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!isReady) {
-      return const SizedBox.shrink();
-    }
-
-    final value = controller.value;
-
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
       decoration: BoxDecoration(
@@ -243,96 +231,73 @@ class _PremiumVideoControls extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          VideoProgressIndicator(
-            controller,
-            allowScrubbing: true,
-            colors: const VideoProgressColors(
-              playedColor: AppColors.blue,
-              bufferedColor: Colors.white54,
-              backgroundColor: Colors.white24,
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 4),
+          VideoSeekBar(
+            controller: controller,
+            activeColor: AppColors.blue,
+            inactiveColor: Colors.white24,
+            bufferedColor: Colors.white54,
+            showLabels: true,
+            labelColor: AppColors.white,
+            barHeight: 4,
           ),
-          Row(
-            children: [
-              Text(
-                _formatDuration(value.position),
-                style: const TextStyle(color: AppColors.white, fontSize: 12),
-              ),
-              const SizedBox(width: 4),
-              const Text(
-                '/',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                _formatDuration(value.duration),
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const Spacer(),
-              _SpeedMenu(
-                selectedSpeed: playbackSpeed,
-                onChanged: onSpeedChanged,
-              ),
-              _ControlIconButton(
-                icon: Icons.replay,
-                label: 'إعادة من البداية',
-                onTap: onRestart,
-              ),
-              _ControlIconButton(
-                icon: isMuted ? Icons.volume_off : Icons.volume_up,
-                label: isMuted ? 'تشغيل الصوت' : 'كتم الصوت',
-                onTap: onToggleMute,
-              ),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _ControlIconButton(
-                icon: Icons.replay_10,
-                label: 'رجوع 10 ثوان',
-                onTap: onBackward,
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: onTogglePlayback,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    color: AppColors.blue,
-                    shape: BoxShape.circle,
+          AnimatedBuilder(
+            animation: controller,
+            builder: (context, _) {
+              final isPlaying = controller.value.isPlaying;
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _ControlIconButton(
+                    icon: Icons.replay_10,
+                    label: 'رجوع 10 ثوان',
+                    onTap: onBackward,
                   ),
-                  child: Icon(
-                    value.isPlaying ? Icons.pause : Icons.play_arrow,
-                    color: AppColors.white,
-                    size: 29,
+                  const SizedBox(width: 8),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: onTogglePlayback,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: AppColors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: AppColors.white,
+                        size: 29,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _ControlIconButton(
-                icon: Icons.forward_10,
-                label: 'تقديم 10 ثوان',
-                onTap: onForward,
-              ),
-            ],
+                  const SizedBox(width: 8),
+                  _ControlIconButton(
+                    icon: Icons.forward_10,
+                    label: 'تقديم 10 ثوان',
+                    onTap: onForward,
+                  ),
+                  const Spacer(),
+                  _SpeedMenu(
+                    selectedSpeed: playbackSpeed,
+                    onChanged: onSpeedChanged,
+                  ),
+                  _ControlIconButton(
+                    icon: Icons.replay,
+                    label: 'إعادة من البداية',
+                    onTap: onRestart,
+                  ),
+                  _ControlIconButton(
+                    icon: isMuted ? Icons.volume_off : Icons.volume_up,
+                    label: isMuted ? 'تشغيل الصوت' : 'كتم الصوت',
+                    onTap: onToggleMute,
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
-  }
-
-  String _formatDuration(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    if (hours > 0) {
-      return '$hours:$minutes:$seconds';
-    }
-    return '$minutes:$seconds';
   }
 }
 

@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../session/current_profile_resolver.dart';
+
 import '../../core/constants/app_colors.dart';
 import '../../models/story_item.dart';
 import '../cache/timed_memory_cache.dart';
@@ -132,16 +134,6 @@ final class SupabaseStoryRepository implements StoryRepository {
     );
   }
 
-  Future<String?> _currentProfileId(SupabaseClient remote) async {
-    final userId = remote.auth.currentUser?.id;
-    if (userId == null) {
-      return null;
-    }
-    final row = await remote
-        .from('profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .maybeSingle();
-    return row == null ? null : '${row['id']}';
-  }
+  Future<String?> _currentProfileId(SupabaseClient remote) =>
+      CurrentProfileResolver.instance.resolve(client: remote);
 }

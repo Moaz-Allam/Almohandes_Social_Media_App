@@ -28,13 +28,9 @@ class HomeTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = AppScope.watch(context);
-    final profile = controller.profile;
-    final name = (profile?.fullName.isNotEmpty ?? false)
-        ? profile!.fullName
-        : 'المستخدم';
-    final badge = profile?.role.isNotEmpty == true ? profile!.role : null;
-
+    // Stateless wrt. AppController. Each interactive piece (avatar, unread
+    // icon) subscribes only to the slice of state it actually needs, so
+    // a notify on one (e.g. unread count) doesn't repaint the rest.
     return SafeArea(
       bottom: false,
       child: Container(
@@ -45,17 +41,7 @@ class HomeTopBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            GestureDetector(
-              key: const ValueKey('home-menu-avatar'),
-              onTap: onMenu,
-              child: AppAvatar(
-                name: name,
-                radius: 20,
-                color: AppColors.darkBlue,
-                badge: badge,
-                imageUrl: profile?.avatarUrl,
-              ),
-            ),
+            _TopBarAvatar(onMenu: onMenu),
             const SizedBox(width: 10),
             Expanded(
               child: InkWell(
@@ -65,41 +51,106 @@ class HomeTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            FutureBuilder<List<MessageItem>>(
-              future: AppScope.read(
-                context,
-              ).repositories.messages.fetchConversations(),
-              builder: (context, snapshot) {
-                final unreadCount = (snapshot.data ?? const <MessageItem>[])
-                    .fold<int>(
-                      0,
-                      (sum, item) =>
-                          sum + (item.unreadCount > 0 ? item.unreadCount : 0),
-                    );
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    IconButton(
-                      onPressed: onMessages,
-                      icon: const Icon(
-                        Icons.chat_bubble,
-                        color: AppColors.muted,
-                      ),
-                      tooltip: 'الرسائل',
-                    ),
-                    if (unreadCount > 0)
-                      PositionedDirectional(
-                        top: 3,
-                        end: 2,
-                        child: _UnreadBadge(count: unreadCount),
-                      ),
-                  ],
-                );
-              },
-            ),
+            _MessagesIcon(onMessages: onMessages),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _TopBarAvatar extends StatelessWidget {
+  const _TopBarAvatar({required this.onMenu});
+
+  final VoidCallback onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    // Subscribe only here — the rest of the bar doesn't need to rebuild
+    // when the profile updates.
+    final profile = AppScope.watch(context).profile;
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+    final badge = profile?.role.isNotEmpty == true ? profile!.role : null;
+    return GestureDetector(
+      key: const ValueKey('home-menu-avatar'),
+      onTap: onMenu,
+      child: AppAvatar(
+        name: name,
+        radius: 20,
+        color: AppColors.darkBlue,
+        badge: badge,
+        imageUrl: profile?.avatarUrl,
+      ),
+    );
+  }
+}
+
+/// Holds the unread-conversations Future in state so the top bar doesn't
+/// fire a new query on every keyboard / tab rebuild.
+class _MessagesIcon extends StatefulWidget {
+  const _MessagesIcon({required this.onMessages});
+
+  final VoidCallback onMessages;
+
+  @override
+  State<_MessagesIcon> createState() => _MessagesIconState();
+}
+
+class _MessagesIconState extends State<_MessagesIcon> {
+  late Future<List<MessageItem>> _unreadFuture;
+  bool _didStart = false;
+  int? _lastVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _unreadFuture = Future.value(const <MessageItem>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = AppScope.watch(context);
+    if (!_didStart || _lastVersion != controller.messageStateVersion) {
+      _didStart = true;
+      _lastVersion = controller.messageStateVersion;
+      _unreadFuture = controller.repositories.messages.fetchConversations();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<MessageItem>>(
+      future: _unreadFuture,
+      builder: (context, snapshot) {
+        final unreadCount = (snapshot.data ?? const <MessageItem>[])
+            .fold<int>(
+              0,
+              (sum, item) =>
+                  sum + (item.unreadCount > 0 ? item.unreadCount : 0),
+            );
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              onPressed: widget.onMessages,
+              icon: const Icon(
+                Icons.chat_bubble,
+                color: AppColors.muted,
+              ),
+              tooltip: 'الرسائل',
+            ),
+            if (unreadCount > 0)
+              PositionedDirectional(
+                top: 3,
+                end: 2,
+                child: _UnreadBadge(count: unreadCount),
+              ),
+          ],
+        );
+      },
     );
   }
 }
