@@ -117,22 +117,36 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       key: const ValueKey('story-viewer'),
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragEnd: _handleDrag,
-          // Long-press anywhere pauses the story; lifting resumes it.
-          onLongPressStart: (_) => _pauseProgress(),
-          onLongPressEnd: (_) => _resumeProgress(),
-          onLongPressCancel: _resumeProgress,
-          onTapUp: (details) {
-            final width = MediaQuery.sizeOf(context).width;
-            if (details.localPosition.dx < width / 2) {
-              _goNext();
-            } else {
-              _goPrevious();
-            }
-          },
-          child: Stack(
+        child: Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragEnd: _handleDrag,
+            // Long-press anywhere pauses the story; lifting resumes it.
+            onLongPressStart: (_) => _pauseProgress(),
+            onLongPressEnd: (_) => _resumeProgress(),
+            onLongPressCancel: _resumeProgress,
+            onTapUp: (details) {
+              final width = context.size?.width ??
+                  MediaQuery.sizeOf(context).width;
+              if (details.localPosition.dx < width / 2) {
+                _goNext();
+              } else {
+                _goPrevious();
+              }
+            },
+            // Lock story content to a phone-shaped viewport so it doesn't
+            // stretch across a desktop browser. Outside this column the
+            // background stays solid black, like Instagram on the web.
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 420,
+                maxHeight: MediaQuery.sizeOf(context).height,
+              ),
+              child: AspectRatio(
+                aspectRatio: 9 / 16,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
             children: [
               PageView.builder(
                 controller: _controller,
@@ -206,6 +220,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 ),
               ),
             ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),

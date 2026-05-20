@@ -14,6 +14,7 @@ import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../shared/widgets/skeleton.dart';
+import '../../models/app_tab.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
 import '../projects/project_requests_screen.dart';
@@ -1106,6 +1107,15 @@ class _ProfilePostsGrid extends StatelessWidget {
   final Future<void> Function() onDeleted;
 
   void _openPost(BuildContext context, FeedPostModel post) {
+    if (post.isReel) {
+      // Reels live on the reels tab. Drop the navigation stack back to
+      // the shell, then switch to the reels tab so the user sees the
+      // reels feed.
+      final app = AppScope.read(context);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      app.selectTab(AppTab.reels);
+      return;
+    }
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)));

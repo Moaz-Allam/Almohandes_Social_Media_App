@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/layout_breakpoints.dart';
 import '../../../models/message_item.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../shared/widgets/search_pill.dart';
@@ -28,6 +29,12 @@ class HomeTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // On wide / desktop layouts the WebShell renders its own top bar
+    // (logo + search + icon nav), so screens that embed HomeTopBar
+    // shouldn't render a second one stacked under it.
+    if (LayoutBreakpoints.isDesktop(context)) {
+      return const SizedBox.shrink();
+    }
     // Stateless wrt. AppController. Each interactive piece (avatar, unread
     // icon) subscribes only to the slice of state it actually needs, so
     // a notify on one (e.g. unread count) doesn't repaint the rest.

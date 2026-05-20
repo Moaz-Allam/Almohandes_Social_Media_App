@@ -267,17 +267,50 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
       ),
     );
     if (!widget.showControls) {
-      return video;
-    }
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _togglePlayback,
-      child: Stack(
+      // Even when controls are hidden we still need a transparent tap
+      // capture on web: the underlying `VideoPlayer` is a `<video>`
+      // platform-view element on Flutter Web that intercepts clicks at
+      // the browser level. Without an overlay above it, taps never reach
+      // any Flutter-side handler.
+      return Stack(
         fit: StackFit.expand,
         children: [
           video,
-          if (!controller.value.isPlaying)
-            Center(
+          Positioned.fill(
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _togglePlayback,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        video,
+        // ── Pointer overlay ───────────────────────────────────────
+        // Always present, drawn ABOVE the platform-view video so
+        // Flutter (not the browser <video>) gets the tap. The seek bar
+        // and play icon sit on top of this layer, so they still receive
+        // their own gestures.
+        Positioned.fill(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _togglePlayback,
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+        if (!controller.value.isPlaying)
+          Center(
+            child: IgnorePointer(
               child: Container(
                 width: 66,
                 height: 66,
@@ -292,17 +325,17 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
                 ),
               ),
             ),
-          Positioned(
-            left: 8,
-            right: 8,
-            bottom: 6,
-            child: VideoSeekBar(
-              controller: controller,
-              showLabels: false,
-            ),
           ),
-        ],
-      ),
+        Positioned(
+          left: 8,
+          right: 8,
+          bottom: 6,
+          child: VideoSeekBar(
+            controller: controller,
+            showLabels: false,
+          ),
+        ),
+      ],
     );
   }
 }

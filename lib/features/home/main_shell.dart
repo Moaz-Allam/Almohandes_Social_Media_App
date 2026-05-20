@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/layout_breakpoints.dart';
 import '../../models/app_tab.dart';
 import '../../state/app_scope.dart';
 import '../composer/composer_screen.dart';
@@ -10,16 +11,31 @@ import '../network/network_screen.dart';
 import '../projects/projects_screen.dart';
 import '../reels/reels_screen.dart';
 import '../settings/settings_screen.dart';
+import 'web_shell.dart';
 import 'widgets/linked_bottom_navigation.dart';
 
-class MainShell extends StatefulWidget {
+class MainShell extends StatelessWidget {
   const MainShell({super.key});
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  Widget build(BuildContext context) {
+    // Pick the LinkedIn-style web shell on desktop widths, the bottom-nav
+    // mobile shell otherwise. Same theme/colors/state across both.
+    if (LayoutBreakpoints.isDesktop(context)) {
+      return const WebShell();
+    }
+    return const _MobileShell();
+  }
 }
 
-class _MainShellState extends State<MainShell> {
+class _MobileShell extends StatefulWidget {
+  const _MobileShell();
+
+  @override
+  State<_MobileShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<_MobileShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   // Tracks which tabs have been visited at least once. Tabs that haven't
   // been visited render an empty placeholder so they don't pay any

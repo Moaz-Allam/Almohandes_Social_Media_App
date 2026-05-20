@@ -4,12 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_colors.dart';
 
 abstract final class AppTheme {
-  static const _darkBackground = Color(0xFF0B1220);
-  static const _darkSurface = Color(0xFF111827);
-  static const _darkSurfaceAlt = Color(0xFF172033);
-  static const _darkBorder = Color(0xFF2D3748);
-  static const _darkText = Color(0xFFF8FAFC);
-  static const _darkMuted = Color(0xFFA8B3C7);
+  // Near-pure-black dark theme. Background is true black so OLED panels
+  // can shut pixels off entirely; surfaces step up by ~8 luma points each
+  // so the card stack still reads as layered without going grey-blue.
+  static const _darkBackground = Color(0xFF000000);
+  static const _darkSurface = Color(0xFF0A0A0A);
+  static const _darkSurfaceAlt = Color(0xFF141414);
+  static const _darkBorder = Color(0xFF1F1F1F);
+  static const _darkText = Color(0xFFF5F5F5);
+  static const _darkMuted = Color(0xFF9CA3AF);
 
   static ThemeData get light {
     return ThemeData(
@@ -118,7 +121,7 @@ extension AppThemeColors on BuildContext {
   Color get appSurfaceAlt =>
       isDarkMode ? AppTheme._darkSurfaceAlt : AppColors.surface;
 
-  Color get appSoft => isDarkMode ? const Color(0xFF0F172A) : AppColors.soft;
+  Color get appSoft => isDarkMode ? const Color(0xFF050505) : AppColors.soft;
 
   Color get appText => isDarkMode ? AppTheme._darkText : AppColors.ink;
 
@@ -127,5 +130,5 @@ extension AppThemeColors on BuildContext {
   Color get appBorder => isDarkMode ? AppTheme._darkBorder : AppColors.border;
 
   Color get appPaleBlue =>
-      isDarkMode ? const Color(0xFF061D3D) : AppColors.paleBlue;
+      isDarkMode ? const Color(0xFF0A1A2E) : AppColors.paleBlue;
 }
