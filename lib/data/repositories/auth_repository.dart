@@ -23,6 +23,8 @@ abstract interface class AuthRepository {
 
   Future<bool> verifyOtp({required String phone, required String code});
 
+  Future<void> checkExistence({String? email, String? phone});
+
   Future<void> completeSignUp({
     required ProfileForm profile,
     required AccountType accountType,
@@ -293,6 +295,40 @@ final class SupabaseAuthRepository implements AuthRepository {
         ),
         error,
       );
+    }
+  }
+
+  @override
+  Future<void> checkExistence({String? email, String? phone}) async {
+    final remote = client;
+    if (remote == null) return;
+
+    if (email != null && email.trim().isNotEmpty) {
+      final trimmedEmail = email.trim();
+      final existingEmail = await remote
+          .from('profiles')
+          .select('id')
+          .eq('email', trimmedEmail)
+          .maybeSingle();
+      if (existingEmail != null) {
+        throw const RepositoryFailure(
+          'هذا البريد الإلكتروني مسجل مسبقاً. استخدم بريداً آخر أو سجل دخولك',
+        );
+      }
+    }
+
+    if (phone != null && phone.trim().isNotEmpty) {
+      final normalizedPhone = _normalizePhone(phone);
+      final existingPhone = await remote
+          .from('profiles')
+          .select('id')
+          .eq('phone', normalizedPhone)
+          .maybeSingle();
+      if (existingPhone != null) {
+        throw const RepositoryFailure(
+          'رقم الهاتف هذا مسجل مسبقاً. استخدم رقماً آخر أو سجل دخولك',
+        );
+      }
     }
   }
 

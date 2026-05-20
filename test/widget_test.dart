@@ -358,6 +358,9 @@ final class _FakeAuthRepository implements AuthRepository {
   Future<bool> verifyOtp({required String phone, required String code}) async {
     return code == '123456';
   }
+
+  @override
+  Future<void> checkExistence({String? email, String? phone}) async {}
 }
 
 final class _FakeCourseRepository implements CourseRepository {

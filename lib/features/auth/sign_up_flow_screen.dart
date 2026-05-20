@@ -133,9 +133,15 @@ class _SignUpFlowScreenState extends State<SignUpFlowScreen> {
       }
       setState(() => _isSubmitting = true);
       try {
-        final otpMessage = await AppScope.read(
-          context,
-        ).repositories.auth.sendOtp(phone: _form.phone.text);
+        final authRepo = AppScope.read(context).repositories.auth;
+
+        // Check if email or phone already exists before sending OTP
+        await authRepo.checkExistence(
+          email: _form.email.text,
+          phone: _form.phone.text,
+        );
+
+        final otpMessage = await authRepo.sendOtp(phone: _form.phone.text);
         if (!mounted) {
           return;
         }
