@@ -23,6 +23,7 @@ class MediaPreview extends StatelessWidget {
     this.showVideoControls = false,
     this.cacheWidth,
     this.cacheHeight,
+    this.muted,
   });
 
   final String mediaUrl;
@@ -38,6 +39,11 @@ class MediaPreview extends StatelessWidget {
   final int? cacheWidth;
   final int? cacheHeight;
 
+  /// When set, overrides the default volume behaviour. `true` mutes the
+  /// video, `false` unmutes; `null` keeps the legacy behaviour (volume on
+  /// when controls are shown).
+  final bool? muted;
+
   bool get _hasMedia => mediaUrl.trim().isNotEmpty;
   bool get _isVideo => mediaType == 'video' || mediaType == 'reel';
 
@@ -50,6 +56,7 @@ class MediaPreview extends StatelessWidget {
         fallbackLabel: fallbackLabel,
         autoplay: autoplay,
         showControls: showVideoControls,
+        muted: muted,
       );
     }
     if (!_hasMedia) {
@@ -105,6 +112,7 @@ class _VideoFramePreview extends StatefulWidget {
     required this.autoplay,
     required this.showControls,
     this.fallbackLabel,
+    this.muted,
   });
 
   final String mediaUrl;
@@ -112,6 +120,10 @@ class _VideoFramePreview extends StatefulWidget {
   final bool autoplay;
   final bool showControls;
   final String? fallbackLabel;
+
+  /// Explicit mute override. `null` falls back to legacy "follow controls"
+  /// behaviour, where volume is 1 when controls are visible.
+  final bool? muted;
 
   @override
   State<_VideoFramePreview> createState() => _VideoFramePreviewState();
@@ -139,12 +151,21 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
       _initialize();
       return;
     }
-    if (oldWidget.showControls != widget.showControls) {
-      unawaited(_controller?.setVolume(widget.showControls ? 1 : 0));
+    if (oldWidget.showControls != widget.showControls ||
+        oldWidget.muted != widget.muted) {
+      unawaited(_controller?.setVolume(_targetVolume()));
     }
     if (oldWidget.autoplay != widget.autoplay) {
       _syncPlayback();
     }
+  }
+
+  double _targetVolume() {
+    final muted = widget.muted;
+    if (muted != null) {
+      return muted ? 0 : 1;
+    }
+    return widget.showControls ? 1 : 0;
   }
 
   Future<void> _initialize() async {
@@ -159,7 +180,7 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
       final controller = prepared.controller;
       await controller.initialize();
       await controller.setLooping(true);
-      await controller.setVolume(widget.showControls ? 1 : 0);
+      await controller.setVolume(_targetVolume());
       if (!mounted || generation != _loadGeneration) {
         unawaited(prepared.dispose());
         return;

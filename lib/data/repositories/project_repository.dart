@@ -10,7 +10,6 @@ import '../../models/project_item.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/project_mapper.dart';
 import '../mappers/supabase_enum_mapper.dart';
-import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class ProjectRepository {
@@ -227,11 +226,8 @@ final class SupabaseProjectRepository implements ProjectRepository {
       );
       _applicationCaches[project.id]?.clear();
       _appliedProjectsCache.clear();
-      await _notifyProjectOwner(
-        remote,
-        project: project,
-        applicantProfileId: profileId,
-      );
+      // Server-side `app_notify_on_project_application` trigger emits
+      // the notification. No client insert here to avoid duplicates.
       return;
     } catch (_) {
       // Fall through to the table write for projects before the bridge RPC.
@@ -248,11 +244,8 @@ final class SupabaseProjectRepository implements ProjectRepository {
       });
       _applicationCaches[project.id]?.clear();
       _appliedProjectsCache.clear();
-      await _notifyProjectOwner(
-        remote,
-        project: project,
-        applicantProfileId: profileId,
-      );
+      // Server-side `app_notify_on_project_application` trigger emits
+      // the notification. No client insert here to avoid duplicates.
     } catch (error) {
       throw RepositoryFailure('تعذر إرسال طلب المشروع الآن', error);
     }
@@ -532,28 +525,6 @@ final class SupabaseProjectRepository implements ProjectRepository {
 
   Future<String?> _currentProfileId(SupabaseClient remote) =>
       CurrentProfileResolver.instance.resolve(client: remote);
-
-  Future<void> _notifyProjectOwner(
-    SupabaseClient remote, {
-    required ProjectItem project,
-    required String applicantProfileId,
-  }) async {
-    try {
-      final owner = project.profileId;
-      if (owner == null || owner.isEmpty || owner == applicantProfileId) {
-        return;
-      }
-      await NotificationPushDispatcher.create(remote, {
-        'profile_id': owner,
-        'title': 'تقديم جديد على مشروعك',
-        'message': project.title,
-        'type': 'project',
-        'action_url': 'app://project/${project.id}',
-      });
-    } catch (_) {
-      // Notifications are best-effort.
-    }
-  }
 
   void _prependProject(ProjectItem? project) {
     if (project == null) {

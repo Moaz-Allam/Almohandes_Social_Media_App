@@ -14,6 +14,7 @@ final class ReelItem {
     this.videoUrl,
     this.thumbnailUrl,
     this.avatarUrl,
+    this.createdAt,
   });
 
   final String id;
@@ -28,6 +29,7 @@ final class ReelItem {
   final String? videoUrl;
   final String? thumbnailUrl;
   final String? avatarUrl;
+  final DateTime? createdAt;
 
   String get likesLabel => _compactCount(likesCount);
   String get commentsLabel => _compactCount(commentsCount);

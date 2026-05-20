@@ -1,5 +1,6 @@
 import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
+import '../../models/reel_item.dart';
 
 FeedPostModel feedPostFromSupabase(
   Map<String, dynamic> row, {
@@ -78,6 +79,34 @@ String _headlineForRole(String role) {
     'machinery' => 'مزود آليات',
     _ => role.isEmpty ? 'مستخدم' : role,
   };
+}
+
+/// Renders a [ReelItem] as a [FeedPostModel] so the profile grid can show
+/// reels alongside text/image posts in one chronological list.
+FeedPostModel feedPostFromReel(ReelItem reel, {int colorIndex = 0}) {
+  final mediaUrl = reel.videoUrl ?? reel.thumbnailUrl ?? '';
+  return FeedPostModel(
+    id: 'reel:${reel.id}',
+    profileId: reel.profileId,
+    name: reel.name,
+    headline: reel.headline,
+    time: reel.createdAt == null ? '' : _formatDateTime(reel.createdAt!),
+    body: reel.caption,
+    reactions: reel.likesLabel,
+    comments: '${reel.commentsLabel} تعليق',
+    avatarColor: reel.color,
+    showMedia: mediaUrl.isNotEmpty,
+    mediaUrl: mediaUrl,
+    mediaType: 'reel',
+    avatarUrl: reel.avatarUrl,
+  );
+}
+
+String _formatDateTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} '
+      '${two(local.hour)}:${two(local.minute)}';
 }
 
 String _exactDateTime(Object? value) {

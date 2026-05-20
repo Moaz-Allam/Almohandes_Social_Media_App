@@ -23,6 +23,7 @@ class _ProjectRequestsScreenState extends State<ProjectRequestsScreen> {
   late Future<List<ProjectApplicationRequest>> _requestsFuture;
   final Set<String> _pendingConnectionIds = {};
   final Set<String> _connectingIds = {};
+  bool _didStartLoading = false;
 
   @override
   void initState() {
@@ -33,6 +34,10 @@ class _ProjectRequestsScreenState extends State<ProjectRequestsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_didStartLoading) {
+      return;
+    }
+    _didStartLoading = true;
     _requestsFuture = _loadRequests();
   }
 

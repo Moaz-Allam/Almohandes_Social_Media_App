@@ -22,6 +22,8 @@ abstract interface class FeedRepository {
     String mediaType = 'text',
   });
 
+  Future<void> deletePost(String postId);
+
   Future<void> toggleLike({required String postId, required bool shouldLike});
 
   Future<void> repost(String postId);
@@ -113,15 +115,31 @@ final class SupabaseFeedRepository implements FeedRepository {
       return const [];
     }
 
-    try {
-      final rows = await remote
+    // Try progressively-simpler selects so a single missing/renamed column
+    // (or RLS quirk) doesn't silently hide the entire profile feed.
+    const fullSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,'
+        'repost_of_post_id,repost_original_profile_id,repost_original_name,'
+        'profiles(full_name,role,avatar_url)';
+    const baseSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,'
+        'profiles(full_name,role,avatar_url)';
+    const minimalSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at';
+
+    Future<List<FeedPostModel>> tryQuery({
+      required String select,
+      required bool withArchivedFilter,
+    }) async {
+      var query = remote
           .from('posts')
-          .select(
-            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles(full_name,role,avatar_url)',
-          )
+          .select(select)
           .eq('profile_id', profileId)
-          .eq('is_active', true)
-          .eq('is_archived', false)
+          .eq('is_active', true);
+      if (withArchivedFilter) {
+        query = query.eq('is_archived', false);
+      }
+      final rows = await query
           .order('created_at', ascending: false)
           .limit(_profilePageSize);
       return [
@@ -131,6 +149,31 @@ final class SupabaseFeedRepository implements FeedRepository {
             colorIndex: i,
           ),
       ];
+    }
+
+    // Attempt 1: full select including repost columns.
+    try {
+      return await tryQuery(select: fullSelect, withArchivedFilter: true);
+    } catch (_) {
+      // Maybe one of the repost_* columns or the is_archived column is
+      // missing on this deployment. Fall through.
+    }
+    // Attempt 2: base select (no repost columns), still respect archive.
+    try {
+      return await tryQuery(select: baseSelect, withArchivedFilter: true);
+    } catch (_) {
+      // Fall through.
+    }
+    // Attempt 3: drop the is_archived filter (some older schemas don't
+    // have the column at all).
+    try {
+      return await tryQuery(select: baseSelect, withArchivedFilter: false);
+    } catch (_) {
+      // Fall through.
+    }
+    // Attempt 4: minimal select with no joined profile.
+    try {
+      return await tryQuery(select: minimalSelect, withArchivedFilter: false);
     } catch (_) {
       return const [];
     }
@@ -172,6 +215,38 @@ final class SupabaseFeedRepository implements FeedRepository {
   }
 
   @override
+  Future<void> deletePost(String postId) async {
+    final remote = client;
+    if (remote == null || postId.isEmpty) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        throw const RepositoryFailure('سجل الدخول أولا لحذف المنشور');
+      }
+      // Owner-only delete. RLS should also enforce this on the server.
+      final affected = await remote
+          .from('posts')
+          .delete()
+          .eq('id', postId)
+          .eq('profile_id', profileId)
+          .select('id');
+      if (affected.isEmpty) {
+        throw const RepositoryFailure(
+          'لم يتم العثور على المنشور أو ليس لديك صلاحية حذفه',
+        );
+      }
+      _cache.clear();
+      _profileCaches[profileId]?.clear();
+    } on RepositoryFailure {
+      rethrow;
+    } catch (error) {
+      throw RepositoryFailure('تعذر حذف المنشور الآن', error);
+    }
+  }
+
+  @override
   Future<void> toggleLike({
     required String postId,
     required bool shouldLike,
@@ -191,14 +266,9 @@ final class SupabaseFeedRepository implements FeedRepository {
           'post_id': postId,
           'profile_id': profileId,
         }, onConflict: 'post_id,profile_id');
-        await _notifyPostOwner(
-          remote,
-          postId: postId,
-          actorProfileId: profileId,
-          title: 'إعجاب جديد',
-          message: 'تلقى منشورك إعجابا جديدا',
-          type: 'like',
-        );
+        // Notification is emitted by the server-side `app_notify_on_post_like`
+        // trigger. We intentionally don't insert from the client to avoid
+        // duplicate (English + Arabic) entries.
       } else {
         await remote
             .from('post_likes')
@@ -336,33 +406,4 @@ final class SupabaseFeedRepository implements FeedRepository {
     }
   }
 
-  Future<void> _notifyPostOwner(
-    SupabaseClient remote, {
-    required String postId,
-    required String actorProfileId,
-    required String title,
-    required String message,
-    required String type,
-  }) async {
-    try {
-      final row = await remote
-          .from('posts')
-          .select('profile_id')
-          .eq('id', postId)
-          .maybeSingle();
-      final owner = row == null ? '' : '${row['profile_id'] ?? ''}';
-      if (owner.isEmpty || owner == actorProfileId) {
-        return;
-      }
-      await NotificationPushDispatcher.create(remote, {
-        'profile_id': owner,
-        'title': title,
-        'message': message,
-        'type': type,
-        'action_url': 'app://post/$postId',
-      });
-    } catch (_) {
-      // Notifications are best-effort.
-    }
-  }
 }

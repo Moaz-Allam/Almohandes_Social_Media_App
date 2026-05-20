@@ -9,7 +9,6 @@ import '../../models/network_person.dart';
 import '../../models/profile_form.dart';
 import '../cache/timed_memory_cache.dart';
 import '../mappers/supabase_enum_mapper.dart';
-import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class ProfileRepository {
@@ -32,6 +31,12 @@ abstract interface class ProfileRepository {
   Future<List<NetworkPerson>> fetchIncomingConnectionRequests({
     bool forceRefresh = false,
   });
+
+  /// Profiles that follow the current user.
+  Future<List<NetworkPerson>> fetchMyFollowers({bool forceRefresh = false});
+
+  /// Profiles with whom the current user has an accepted connection.
+  Future<List<NetworkPerson>> fetchMyConnections({bool forceRefresh = false});
 
   Future<void> requestConnection(String receiverProfileId);
 
@@ -60,6 +65,12 @@ final class SupabaseProfileRepository implements ProfileRepository {
   final _networkCaches = <String, TimedMemoryCache<List<NetworkPerson>>>{};
   final _incomingRequestsCache = TimedMemoryCache<List<NetworkPerson>>(
     ttl: const Duration(seconds: 45),
+  );
+  final _followersCache = TimedMemoryCache<List<NetworkPerson>>(
+    ttl: const Duration(minutes: 1),
+  );
+  final _connectionsCache = TimedMemoryCache<List<NetworkPerson>>(
+    ttl: const Duration(minutes: 1),
   );
 
   @override
@@ -374,6 +385,153 @@ final class SupabaseProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<List<NetworkPerson>> fetchMyFollowers({bool forceRefresh = false}) {
+    return _followersCache.read(_fetchMyFollowers, forceRefresh: forceRefresh);
+  }
+
+  Future<List<NetworkPerson>> _fetchMyFollowers() async {
+    final remote = client;
+    if (remote == null) {
+      return const [];
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return const [];
+      }
+      final rows = await remote
+          .from('followers')
+          .select(
+            'created_at,follower_id,profiles!followers_follower_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
+          )
+          .eq('following_id', profileId)
+          .order('created_at', ascending: false)
+          .limit(_networkPageSize);
+      return [
+        for (var i = 0; i < rows.length; i++)
+          _personFromJoinedRow(
+            Map<String, dynamic>.from(rows[i] as Map),
+            colorIndex: i,
+          ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<List<NetworkPerson>> fetchMyConnections({bool forceRefresh = false}) {
+    return _connectionsCache.read(
+      _fetchMyConnections,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<List<NetworkPerson>> _fetchMyConnections() async {
+    final remote = client;
+    if (remote == null) {
+      return const [];
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return const [];
+      }
+      // Connection rows can be either direction (I requested OR I received).
+      // Pull both, then take the *other party* on each row.
+      final requestedRows = await remote
+          .from('connection_requests')
+          .select(
+            'updated_at,receiver_profile_id,profiles!connection_requests_receiver_profile_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
+          )
+          .eq('requester_profile_id', profileId)
+          .eq('status', 'accepted')
+          .order('updated_at', ascending: false)
+          .limit(_networkPageSize);
+      final receivedRows = await remote
+          .from('connection_requests')
+          .select(
+            'updated_at,requester_profile_id,profiles!connection_requests_requester_profile_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
+          )
+          .eq('receiver_profile_id', profileId)
+          .eq('status', 'accepted')
+          .order('updated_at', ascending: false)
+          .limit(_networkPageSize);
+      final all = <NetworkPerson>[];
+      final seen = <String>{};
+      var colorIndex = 0;
+      for (final row in [...requestedRows, ...receivedRows]) {
+        final person = _personFromJoinedRow(
+          Map<String, dynamic>.from(row as Map),
+          colorIndex: colorIndex++,
+          connectionStatus: 'accepted',
+        );
+        if (person.id.isEmpty || !seen.add(person.id)) {
+          continue;
+        }
+        all.add(person);
+      }
+      return all;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  NetworkPerson _personFromJoinedRow(
+    Map<String, dynamic> row, {
+    required int colorIndex,
+    String connectionStatus = 'none',
+  }) {
+    final profile = row['profiles'] is Map
+        ? Map<String, dynamic>.from(row['profiles'] as Map)
+        : <String, dynamic>{};
+    final id = '${profile['id'] ?? ''}';
+    final name = '${profile['full_name'] ?? 'مستخدم'}'.trim();
+    final role = '${profile['role'] ?? ''}';
+    final governorate = '${profile['governorate'] ?? ''}';
+    final bio = '${profile['bio'] ?? ''}'.trim();
+    final isCompany = role == 'contractor' || role == 'client';
+    final colors = [
+      AppColors.blue,
+      AppColors.darkBlue,
+      AppColors.muted,
+      AppColors.black,
+    ];
+    return NetworkPerson(
+      id: id,
+      profileId: id,
+      name: name.isEmpty ? 'مستخدم' : name,
+      title: _titleForRole(role, governorate, bio),
+      color: colors[colorIndex % colors.length],
+      badge: profile['is_verified'] == true ? 'موثق' : null,
+      contextLine: governorate.isEmpty ? 'مهني' : governorate,
+      actionLabel: connectionStatus == 'accepted' ? 'متصل' : 'تواصل',
+      isCompany: isCompany,
+      avatarUrl: profile['avatar_url'] == null
+          ? null
+          : '${profile['avatar_url']}',
+      connectionStatus: connectionStatus,
+    );
+  }
+
+  String _titleForRole(String role, String governorate, String bio) {
+    if (bio.isNotEmpty) {
+      return bio;
+    }
+    final label = switch (role) {
+      'engineer' => 'مهندس',
+      'contractor' => 'شركة مقاولات',
+      'client' => 'صاحب مشروع',
+      'craftsman' => 'حرفي',
+      'worker' => 'عامل',
+      'machinery' => 'مزود آليات',
+      'admin' => 'إدارة',
+      _ => 'مهني',
+    };
+    return governorate.isEmpty ? label : '$label · $governorate';
+  }
+
+  @override
   Future<void> requestConnection(String receiverProfileId) async {
     final remote = client;
     if (remote == null || receiverProfileId.isEmpty) {
@@ -385,7 +543,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
         'request_connection_for_app',
         params: {'p_receiver_profile_id': receiverProfileId},
       );
-      await _notifyConnectionRequest(remote, receiverProfileId);
+      // Server-side `app_notify_on_connection_request` trigger handles
+      // the notification. No client insert here to avoid duplicates.
       _networkCaches.clear();
     } catch (_) {
       try {
@@ -398,7 +557,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
           'receiver_profile_id': receiverProfileId,
           'status': 'pending',
         }, onConflict: 'requester_profile_id,receiver_profile_id');
-        await _notifyConnectionRequest(remote, receiverProfileId);
+        // Trigger fires on this insert too.
         _networkCaches.clear();
       } catch (_) {
         // Connection request remains optimistic in the UI.
@@ -497,7 +656,8 @@ final class SupabaseProfileRepository implements ProfileRepository {
           .eq('id', requestId);
       if (accept) {
         await _createConversationForAcceptedRequest(remote, requestId);
-        await _notifyAcceptedConnection(remote, requestId);
+        // The trigger fires on UPDATE status='accepted' and emits the
+        // Arabic notification. No client insert needed.
       }
       _incomingRequestsCache.clear();
       _networkCaches.clear();
@@ -648,59 +808,6 @@ final class SupabaseProfileRepository implements ProfileRepository {
       ];
     } catch (_) {
       return people;
-    }
-  }
-
-  Future<void> _notifyConnectionRequest(
-    SupabaseClient remote,
-    String receiverProfileId,
-  ) async {
-    try {
-      final sender = await _currentProfileId(remote);
-      if (sender == null || sender == receiverProfileId) {
-        return;
-      }
-      await NotificationPushDispatcher.create(remote, {
-        'profile_id': receiverProfileId,
-        'title': 'طلب تواصل جديد',
-        'message': 'لديك طلب تواصل جديد',
-        'type': 'connection',
-        'action_url': 'app://profile/$sender',
-      });
-    } catch (_) {
-      // Notifications are best-effort.
-    }
-  }
-
-  Future<void> _notifyAcceptedConnection(
-    SupabaseClient remote,
-    String requestId,
-  ) async {
-    try {
-      final row = await remote
-          .from('connection_requests')
-          .select('requester_profile_id,receiver_profile_id')
-          .eq('id', requestId)
-          .maybeSingle();
-      if (row == null) {
-        return;
-      }
-      final current = await _currentProfileId(remote);
-      final requester = '${row['requester_profile_id'] ?? ''}';
-      final receiver = '${row['receiver_profile_id'] ?? ''}';
-      final recipient = current == requester ? receiver : requester;
-      if (current == null || recipient.isEmpty || recipient == current) {
-        return;
-      }
-      await NotificationPushDispatcher.create(remote, {
-        'profile_id': recipient,
-        'title': 'تم قبول طلب التواصل',
-        'message': 'أصبح بإمكانكما المراسلة الآن',
-        'type': 'connection',
-        'action_url': 'app://chat/$current',
-      });
-    } catch (_) {
-      // Notifications are best-effort.
     }
   }
 

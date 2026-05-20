@@ -8,7 +8,6 @@ import '../session/current_profile_resolver.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/message_item.dart';
 import '../cache/timed_memory_cache.dart';
-import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class MessageRepository {
@@ -295,13 +294,8 @@ final class SupabaseMessageRepository implements MessageRepository {
         'content': content,
         'message_type': messageType,
       });
-      await _notifyConversationRecipient(
-        remote,
-        conversationId: actualConversationId,
-        senderProfileId: profileId,
-        messageType: messageType,
-        content: content,
-      );
+      // Server-side `app_notify_on_message` trigger emits the notification.
+      // No client insert here to avoid duplicates.
       _messageCaches[conversationId]?.clear();
       _messageCaches[actualConversationId]?.clear();
       _conversationCache.clear();
@@ -737,46 +731,6 @@ final class SupabaseMessageRepository implements MessageRepository {
 
   (String, String) _orderedParticipants(String a, String b) {
     return a.compareTo(b) <= 0 ? (a, b) : (b, a);
-  }
-
-  Future<void> _notifyConversationRecipient(
-    SupabaseClient remote, {
-    required String conversationId,
-    required String senderProfileId,
-    required String messageType,
-    required String content,
-  }) async {
-    try {
-      final conversation = await remote
-          .from('conversations')
-          .select('participant_one,participant_two')
-          .eq('id', conversationId)
-          .maybeSingle();
-      if (conversation == null) {
-        return;
-      }
-      final one = '${conversation['participant_one'] ?? ''}';
-      final two = '${conversation['participant_two'] ?? ''}';
-      final recipient = one == senderProfileId ? two : one;
-      if (recipient.isEmpty || recipient == senderProfileId) {
-        return;
-      }
-      await NotificationPushDispatcher.create(remote, {
-        'profile_id': recipient,
-        'title': 'رسالة جديدة',
-        'message': switch (messageType) {
-          'voice' => 'وصلتك رسالة صوتية جديدة',
-          'image' => 'وصلتك صورة جديدة',
-          'video' => 'وصلك فيديو جديد',
-          'file' => 'وصلك ملف جديد',
-          _ => content.split('\n').first,
-        },
-        'type': 'message',
-        'action_url': 'app://chat/$conversationId',
-      });
-    } catch (_) {
-      // Notifications are best-effort and should not block sending.
-    }
   }
 
   String _timeLabel(Object? value) {

@@ -343,6 +343,33 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
                               ? 'فيديو'
                               : 'صورة',
                         ),
+                        // Drop the currently-attached media so the user
+                        // can pick another one without cancelling the
+                        // whole dialog.
+                        PositionedDirectional(
+                          top: 8,
+                          end: 8,
+                          child: Material(
+                            color: Colors.black.withValues(alpha: .55),
+                            shape: const CircleBorder(),
+                            child: IconButton(
+                              onPressed: _isUploading
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _mediaUrl = '';
+                                        _mediaType = 'image';
+                                      });
+                                    },
+                              icon: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              tooltip: 'إزالة الوسائط',
+                            ),
+                          ),
+                        ),
                         // Subscribe just the text overlay to the controller
                         // so typing doesn't rebuild the whole dialog (and
                         // re-render the media preview underneath).

@@ -21,7 +21,13 @@ class AppAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = name.trim().isEmpty ? '?' : name.trim().substring(0, 1);
+    // Use grapheme clusters, not raw UTF-16 substring. Emoji names ("😀")
+    // and names starting with a multi-codepoint grapheme would crash or
+    // truncate mid-character with `substring(0, 1)`.
+    final trimmed = name.trim();
+    final initial = trimmed.isEmpty
+        ? '?'
+        : (trimmed.characters.firstOrNull ?? '?');
     return Stack(
       clipBehavior: Clip.none,
       children: [

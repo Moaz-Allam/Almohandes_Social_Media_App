@@ -421,6 +421,9 @@ final class _FakeFeedRepository implements FeedRepository {
   }) async {}
 
   @override
+  Future<void> deletePost(String postId) async {}
+
+  @override
   Future<void> repost(String postId) async {}
 
   @override
@@ -483,6 +486,20 @@ final class _FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<List<NetworkPerson>> fetchIncomingConnectionRequests({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<NetworkPerson>> fetchMyFollowers({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
+  Future<List<NetworkPerson>> fetchMyConnections({
     bool forceRefresh = false,
   }) async {
     return const [];
@@ -625,7 +642,18 @@ final class _FakeReelRepository implements ReelRepository {
   }) async {}
 
   @override
+  Future<void> deleteReel(String reelId) async {}
+
+  @override
   Future<List<ReelItem>> fetchReels({bool forceRefresh = false}) async {
+    return const [];
+  }
+
+  @override
+  Future<List<ReelItem>> fetchReelsForProfile(
+    String profileId, {
+    bool forceRefresh = false,
+  }) async {
     return const [];
   }
 

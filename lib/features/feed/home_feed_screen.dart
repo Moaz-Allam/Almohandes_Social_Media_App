@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/app_tab.dart';
 import '../../models/feed_post_model.dart';
 import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
@@ -113,22 +114,33 @@ class _FeedEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(24, 70, 24, 24),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 70, 24, 24),
       child: Column(
         children: [
-          Icon(Icons.article_outlined, color: AppColors.muted, size: 46),
-          SizedBox(height: 12),
-          Text(
+          const Icon(Icons.article_outlined, color: AppColors.muted, size: 46),
+          const SizedBox(height: 12),
+          const Text(
             'لا توجد منشورات بعد',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
           ),
-          SizedBox(height: 6),
-          Text(
-            'ستظهر منشورات المستخدمين هنا بعد إضافتها.',
+          const SizedBox(height: 6),
+          const Text(
+            'ابدأ بمشاركة منشور أو ريل ليظهر هنا.',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.muted, height: 1.45),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () =>
+                AppScope.read(context).selectTab(AppTab.composer),
+            icon: const Icon(Icons.add),
+            label: const Text('إنشاء منشور'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.blue,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            ),
           ),
         ],
       ),

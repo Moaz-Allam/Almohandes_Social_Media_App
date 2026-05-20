@@ -248,7 +248,7 @@ class _ReelsEmptyState extends StatelessWidget {
   }
 }
 
-class _ReelPage extends StatelessWidget {
+class _ReelPage extends StatefulWidget {
   const _ReelPage({
     super.key,
     required this.item,
@@ -268,6 +268,18 @@ class _ReelPage extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onSend;
 
+  @override
+  State<_ReelPage> createState() => _ReelPageState();
+}
+
+class _ReelPageState extends State<_ReelPage> {
+  // Persisted across swipes for this reel. A simple in-memory flag is
+  // sufficient — there's no "global mute" preference yet.
+  bool _muted = true;
+  bool _captionExpanded = false;
+
+  ReelItem get item => widget.item;
+
   void _showComments(BuildContext context) {
     showLinkedCommentsSheet(context, targetType: 'reel', targetId: item.id);
   }
@@ -286,37 +298,38 @@ class _ReelPage extends StatelessWidget {
                 mediaUrl: item.videoUrl ?? item.thumbnailUrl ?? '',
                 mediaType: 'reel',
                 fallbackLabel: 'ريل',
-                autoplay: isActive,
+                autoplay: widget.isActive,
                 showVideoControls: true,
+                muted: _muted,
               ),
             ),
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
-              onDoubleTap: onLike,
+              onDoubleTap: widget.onLike,
             ),
           ),
           Positioned(
-            right: 12,
+            right: 8,
             bottom: 78,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _ReelAction(
-                  icon: isLiked
+                  icon: widget.isLiked
                       ? Icons.thumb_up_alt
                       : Icons.thumb_up_alt_outlined,
-                  label: _compactCount(likesCount),
-                  color: isLiked ? AppColors.blue : Colors.white,
-                  onPressed: onLike,
+                  label: _compactCount(widget.likesCount),
+                  color: widget.isLiked ? AppColors.blue : Colors.white,
+                  onPressed: widget.onLike,
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 _ReelAction(
                   icon: Icons.mode_comment_outlined,
                   label: item.commentsLabel,
                   onPressed: () => _showComments(context),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 _ReelAction(
                   icon: Icons.repeat,
                   label: item.repostsLabel,
@@ -327,22 +340,30 @@ class _ReelPage extends StatelessWidget {
                       ).repositories.reels.repost(item.id);
                     } catch (error) {
                       if (context.mounted) {
-                        AppSnack.error(context, error, fallback: 'تعذر إعادة نشر الريل الآن');
+                        AppSnack.error(
+                          context,
+                          error,
+                          fallback: 'تعذر إعادة نشر الريل الآن',
+                        );
                       }
                       return;
                     }
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تمت إعادة نشر الريل')),
-                      );
+                      AppSnack.success(context, 'تمت إعادة نشر الريل');
                     }
                   },
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 _ReelAction(
                   icon: Icons.send_outlined,
                   label: '',
-                  onPressed: onSend,
+                  onPressed: widget.onSend,
+                ),
+                const SizedBox(height: 10),
+                _ReelAction(
+                  icon: _muted ? Icons.volume_off : Icons.volume_up,
+                  label: '',
+                  onPressed: () => setState(() => _muted = !_muted),
                 ),
               ],
             ),
@@ -360,7 +381,7 @@ class _ReelPage extends StatelessWidget {
                       name: item.name,
                       radius: 25,
                       color: item.color,
-                      imageUrl: effectiveAvatarUrl,
+                      imageUrl: widget.effectiveAvatarUrl,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -389,16 +410,23 @@ class _ReelPage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  item.caption,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    height: 1.35,
+                if (item.caption.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => setState(
+                      () => _captionExpanded = !_captionExpanded,
+                    ),
+                    behavior: HitTestBehavior.opaque,
+                    child: Text(
+                      item.caption,
+                      maxLines: _captionExpanded ? 12 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        height: 1.35,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -423,19 +451,26 @@ class _ReelAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 46,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+    // Larger tap target (54×54 min) for better thumb reach on small phones.
+    // Material spec is 48dp; reels actions are stacked so we add extra
+    // horizontal slack too.
+    return Material(
+      color: Colors.transparent,
+      child: InkResponse(
         onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.all(4),
+        radius: 32,
+        containedInkWell: true,
+        highlightShape: BoxShape.circle,
+        child: SizedBox(
+          width: 54,
+          height: 54,
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 22),
+              Icon(icon, color: color, size: 26),
               if (label.isNotEmpty) ...[
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   label,
                   style: const TextStyle(

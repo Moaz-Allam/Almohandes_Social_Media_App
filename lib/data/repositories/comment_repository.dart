@@ -133,12 +133,8 @@ final class SupabaseCommentRepository implements CommentRepository {
           .single();
       final key = '$targetType:$targetId';
       _caches[key]?.clear();
-      await _notifyCommentTargetOwner(
-        remote,
-        targetType: targetType,
-        targetId: targetId,
-        actorProfileId: profileId,
-      );
+      // Server-side `app_notify_on_comment` trigger handles the
+      // notification. Skipped from the client to avoid duplicates.
       return _commentFromRow(Map<String, dynamic>.from(row), 0);
     } catch (error) {
       try {
@@ -155,6 +151,10 @@ final class SupabaseCommentRepository implements CommentRepository {
         );
         if (inserted != null) {
           _caches['$targetType:$targetId']?.clear();
+          // Legacy fallback path: insert into post_comments/reel_comments
+          // tables directly. These tables don't have the `app_notify_on_comment`
+          // trigger (which is on `app_comments`), so the client must fall
+          // back to writing the notification itself here.
           await _notifyCommentTargetOwner(
             remote,
             targetType: targetType,

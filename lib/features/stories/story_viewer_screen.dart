@@ -26,6 +26,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   late final PageController _controller;
   late final AnimationController _progress;
   late int _index;
+  bool _isHeld = false;
 
   @override
   void initState() {
@@ -52,6 +53,24 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
 
   void _restartProgress() {
     _progress.forward(from: 0);
+  }
+
+  void _pauseProgress() {
+    if (_isHeld) {
+      return;
+    }
+    _isHeld = true;
+    _progress.stop(canceled: false);
+  }
+
+  void _resumeProgress() {
+    if (!_isHeld) {
+      return;
+    }
+    _isHeld = false;
+    if (_progress.status != AnimationStatus.completed) {
+      _progress.forward();
+    }
   }
 
   void _goNext() {
@@ -101,6 +120,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onHorizontalDragEnd: _handleDrag,
+          // Long-press anywhere pauses the story; lifting resumes it.
+          onLongPressStart: (_) => _pauseProgress(),
+          onLongPressEnd: (_) => _resumeProgress(),
+          onLongPressCancel: _resumeProgress,
           onTapUp: (details) {
             final width = MediaQuery.sizeOf(context).width;
             if (details.localPosition.dx < width / 2) {

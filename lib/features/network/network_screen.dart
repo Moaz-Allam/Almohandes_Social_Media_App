@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/account_type.dart';
 import '../../models/network_person.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
@@ -158,9 +159,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('تمت المتابعة')));
+      AppSnack.success(context, 'تمت متابعة ${person.name}');
       return;
     }
     if (_connectingIds.contains(person.id)) {
@@ -182,9 +181,7 @@ class _NetworkScreenState extends State<NetworkScreen> {
     if (!context.mounted) {
       return;
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تم إرسال طلب التواصل')));
+    AppSnack.success(context, 'تم إرسال طلب التواصل إلى ${person.name}');
   }
 
   NetworkPerson _effectivePerson(NetworkPerson person) {
@@ -223,9 +220,18 @@ class _NetworkScreenState extends State<NetworkScreen> {
     );
   }
 
+  bool _isCurrentUser(NetworkPerson person, String? myProfileId) {
+    if (myProfileId == null || myProfileId.isEmpty) {
+      return false;
+    }
+    return person.id == myProfileId || person.profileId == myProfileId;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final accountType = accountTypeFromProfile(AppScope.watch(context).profile);
+    final profile = AppScope.watch(context).profile;
+    final accountType = accountTypeFromProfile(profile);
+    final myProfileId = profile?.id;
     final categories = _categoriesFor(accountType);
     final selectedCategory = _effectiveCategory(accountType);
 
@@ -245,7 +251,15 @@ class _NetworkScreenState extends State<NetworkScreen> {
                     final isLoading =
                         snapshot.connectionState == ConnectionState.waiting &&
                         !snapshot.hasData;
-                    final profiles = snapshot.data ?? const <NetworkPerson>[];
+                    // Filter out current user defensively — the server-side
+                    // RPC already does this, but the fallback path and
+                    // future schema changes shouldn't be allowed to slip
+                    // your own card in.
+                    final rawProfiles = snapshot.data ?? const <NetworkPerson>[];
+                    final profiles = [
+                      for (final p in rawProfiles)
+                        if (!_isCurrentUser(p, myProfileId)) p,
+                    ];
 
                     return RefreshIndicator(
                       onRefresh: () async {
@@ -260,83 +274,104 @@ class _NetworkScreenState extends State<NetworkScreen> {
                           setState(() {});
                         }
                       },
-                      child: ListView(
-                        padding: EdgeInsets.zero,
-                        children: [
-                          _SimpleNavRow(
-                            title: 'الدعوات',
-                            subtitle: 'طلبات التواصل الواردة',
-                            onTap: () => _openInvitations(context),
+                      // CustomScrollView lets the GridView lazy-build only
+                      // visible items. The previous ListView + shrinkWrap
+                      // GridView built every card on first frame.
+                      child: CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        slivers: [
+                          SliverToBoxAdapter(
+                            child: _SimpleNavRow(
+                              title: 'الدعوات',
+                              subtitle: 'طلبات التواصل الواردة',
+                              onTap: () => _openInvitations(context),
+                            ),
                           ),
-                          Divider(
-                            height: 9,
-                            thickness: 8,
-                            color: context.appSoft,
+                          SliverToBoxAdapter(
+                            child: Divider(
+                              height: 9,
+                              thickness: 8,
+                              color: context.appSoft,
+                            ),
                           ),
-                          if (categories.length > 1)
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                16,
-                                12,
-                                16,
-                                12,
-                              ),
-                              child: _NetworkCategoryTabs(
-                                selected: selectedCategory,
-                                onChanged: (value) {
-                                  setState(() => _category = value);
-                                },
+                          SliverToBoxAdapter(
+                            child: categories.length > 1
+                                ? Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      12,
+                                      16,
+                                      12,
+                                    ),
+                                    child: _NetworkCategoryTabs(
+                                      selected: selectedCategory,
+                                      onChanged: (value) {
+                                        setState(() => _category = value);
+                                      },
+                                    ),
+                                  )
+                                : const Padding(
+                                    padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                                    child: Text(
+                                      'أشخاص',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          if (isLoading)
+                            const SliverToBoxAdapter(
+                              child: _NetworkSkeletonGrid(),
+                            )
+                          else if (profiles.isEmpty)
+                            SliverToBoxAdapter(
+                              child: _NetworkEmptyProfiles(
+                                category: selectedCategory,
                               ),
                             )
                           else
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-                              child: Text(
-                                'أشخاص',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      mainAxisSpacing: 10,
+                                      crossAxisSpacing: 10,
+                                      childAspectRatio: .68,
+                                    ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    final person = _effectivePerson(
+                                      profiles[index],
+                                    );
+                                    final canAct =
+                                        !person.isPendingConnection &&
+                                        !person.isConnected &&
+                                        !person.isFollowed &&
+                                        !_followingCompanyIds.contains(
+                                          person.id,
+                                        );
+                                    return NetworkCard(
+                                      key: ValueKey('network-card-${person.id}'),
+                                      person: person,
+                                      loading: _connectingIds.contains(
+                                        person.id,
+                                      ),
+                                      onTap: () => _openProfile(context, person),
+                                      onAction: canAct
+                                          ? () => _handleNetworkAction(
+                                              context,
+                                              person,
+                                            )
+                                          : null,
+                                    );
+                                  },
+                                  childCount: profiles.length,
                                 ),
                               ),
-                            ),
-                          if (isLoading)
-                            const _NetworkSkeletonGrid()
-                          else if (profiles.isEmpty)
-                            _NetworkEmptyProfiles(category: selectedCategory)
-                          else
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                              itemCount: profiles.length,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    mainAxisSpacing: 10,
-                                    crossAxisSpacing: 10,
-                                    childAspectRatio: .68,
-                                  ),
-                              itemBuilder: (context, index) {
-                                final person = _effectivePerson(
-                                  profiles[index],
-                                );
-                                final canAct =
-                                    !person.isPendingConnection &&
-                                    !person.isConnected &&
-                                    !person.isFollowed &&
-                                    !_followingCompanyIds.contains(person.id);
-                                return NetworkCard(
-                                  person: person,
-                                  loading: _connectingIds.contains(person.id),
-                                  onTap: () => _openProfile(context, person),
-                                  onAction: canAct
-                                      ? () => _handleNetworkAction(
-                                          context,
-                                          person,
-                                        )
-                                      : null,
-                                );
-                              },
                             ),
                         ],
                       ),

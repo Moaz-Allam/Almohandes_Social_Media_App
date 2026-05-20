@@ -313,6 +313,16 @@ class _ChatScreenState extends State<ChatScreen> {
       _showError('تعذر قراءة الملف المحدد الآن');
       return;
     }
+    // Bucket limits cap most uploads at ~20 MB. Catch oversize files
+    // before kicking off a long upload that the server will reject.
+    const maxAttachmentBytes = 20 * 1024 * 1024;
+    if (bytes.length > maxAttachmentBytes) {
+      final mb = (bytes.length / (1024 * 1024)).toStringAsFixed(1);
+      _showError(
+        'حجم الملف ($mb ميجابايت) أكبر من الحد المسموح (20 ميجابايت). اختر ملفا أصغر',
+      );
+      return;
+    }
     setState(() => _isSendingFile = true);
     final String fileUrl;
     try {
@@ -567,12 +577,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   if (messages.isEmpty) {
                     return const _EmptyChatState();
                   }
-                  // Auto-scroll only when the message list grows (new arrival
-                  // or optimistic send). Scrolling inside build() on every
-                  // rebuild made typing feel sticky.
-                  if (messages.length != _renderedMessageCount) {
+                  // Auto-scroll only when the message list GROWS (a new
+                  // arrival or optimistic send). Don't fire when length
+                  // shrinks during the refresh-future swap (optimistic
+                  // message removed before server data arrives) — that
+                  // would yank the user back to the bottom mid-read.
+                  if (messages.length > _renderedMessageCount) {
                     _renderedMessageCount = messages.length;
                     _scrollToLatest();
+                  } else {
+                    _renderedMessageCount = messages.length;
                   }
                   return ListView.builder(
                     controller: _scrollController,

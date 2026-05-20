@@ -11,7 +11,17 @@ import 'repository_failure.dart';
 abstract interface class ReelRepository {
   Future<List<ReelItem>> fetchReels({bool forceRefresh = false});
 
+  /// Reels created by a specific profile, newest first. Used by the
+  /// profile screen so users see ALL of their own content (the `posts`
+  /// table query doesn't cover reels).
+  Future<List<ReelItem>> fetchReelsForProfile(
+    String profileId, {
+    bool forceRefresh = false,
+  });
+
   Future<void> createReel({required String caption, required String videoUrl});
+
+  Future<void> deleteReel(String reelId);
 
   Future<void> toggleLike({required String reelId, required bool shouldLike});
 
@@ -22,11 +32,14 @@ final class SupabaseReelRepository implements ReelRepository {
   SupabaseReelRepository({required this.client});
 
   static const _reelsPageSize = 12;
+  static const _profileReelsPageSize = 24;
+  static const _maxProfileCaches = 16;
 
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<ReelItem>>(
     ttl: const Duration(minutes: 1),
   );
+  final _profileCaches = <String, TimedMemoryCache<List<ReelItem>>>{};
 
   @override
   Future<List<ReelItem>> fetchReels({bool forceRefresh = false}) {
@@ -43,11 +56,53 @@ final class SupabaseReelRepository implements ReelRepository {
       final rows = await remote
           .from('reels')
           .select(
-            'id,profile_id,video_url,thumbnail_url,caption,likes_count,comments_count,shares_count,profiles(full_name,role,avatar_url)',
+            'id,profile_id,video_url,thumbnail_url,caption,likes_count,comments_count,shares_count,created_at,profiles(full_name,role,avatar_url)',
           )
           .eq('is_active', true)
           .order('created_at', ascending: false)
           .limit(_reelsPageSize);
+      return [
+        for (var i = 0; i < rows.length; i++)
+          _reelFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<List<ReelItem>> fetchReelsForProfile(
+    String profileId, {
+    bool forceRefresh = false,
+  }) {
+    final existing = _profileCaches.remove(profileId);
+    final cache = existing ??
+        TimedMemoryCache<List<ReelItem>>(ttl: const Duration(minutes: 1));
+    _profileCaches[profileId] = cache;
+    while (_profileCaches.length > _maxProfileCaches) {
+      _profileCaches.remove(_profileCaches.keys.first);
+    }
+    return cache.read(
+      () => _fetchReelsForProfile(profileId),
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<List<ReelItem>> _fetchReelsForProfile(String profileId) async {
+    final remote = client;
+    if (remote == null || profileId.isEmpty) {
+      return const [];
+    }
+    try {
+      final rows = await remote
+          .from('reels')
+          .select(
+            'id,profile_id,video_url,thumbnail_url,caption,likes_count,comments_count,shares_count,created_at,profiles(full_name,role,avatar_url)',
+          )
+          .eq('profile_id', profileId)
+          .eq('is_active', true)
+          .order('created_at', ascending: false)
+          .limit(_profileReelsPageSize);
       return [
         for (var i = 0; i < rows.length; i++)
           _reelFromRow(Map<String, dynamic>.from(rows[i] as Map), i),
@@ -79,10 +134,42 @@ final class SupabaseReelRepository implements ReelRepository {
         'is_active': true,
       });
       _cache.clear();
+      _profileCaches[profileId]?.clear();
     } on RepositoryFailure {
       rethrow;
     } catch (error) {
       throw RepositoryFailure('تعذر نشر الريل الآن', error);
+    }
+  }
+
+  @override
+  Future<void> deleteReel(String reelId) async {
+    final remote = client;
+    if (remote == null || reelId.isEmpty) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        throw const RepositoryFailure('سجل الدخول أولا لحذف الريل');
+      }
+      final affected = await remote
+          .from('reels')
+          .delete()
+          .eq('id', reelId)
+          .eq('profile_id', profileId)
+          .select('id');
+      if (affected.isEmpty) {
+        throw const RepositoryFailure(
+          'لم يتم العثور على الريل أو ليس لديك صلاحية حذفه',
+        );
+      }
+      _cache.clear();
+      _profileCaches[profileId]?.clear();
+    } on RepositoryFailure {
+      rethrow;
+    } catch (error) {
+      throw RepositoryFailure('تعذر حذف الريل الآن', error);
     }
   }
 
@@ -106,14 +193,8 @@ final class SupabaseReelRepository implements ReelRepository {
           'reel_id': reelId,
           'profile_id': profileId,
         }, onConflict: 'reel_id,profile_id');
-        await _notifyReelOwner(
-          remote,
-          reelId: reelId,
-          actorProfileId: profileId,
-          title: 'إعجاب جديد',
-          message: 'تلقى الريل إعجابا جديدا',
-          type: 'like',
-        );
+        // Server-side `app_notify_on_reel_like` trigger emits the
+        // notification. No client insert here to avoid duplicates.
       } else {
         await remote
             .from('reel_likes')
@@ -189,6 +270,7 @@ final class SupabaseReelRepository implements ReelRepository {
         2 => AppColors.muted,
         _ => AppColors.black,
       },
+      createdAt: DateTime.tryParse('${row['created_at']}')?.toLocal(),
     );
   }
 

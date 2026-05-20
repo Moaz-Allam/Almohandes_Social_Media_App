@@ -22,6 +22,10 @@ class NetworkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The decorative bubble pattern overlaps the dark surface awkwardly
+    // and was specifically called out as noise in dark mode. Render it
+    // only in light mode.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Material(
       color: context.appSurface,
       shape: RoundedRectangleBorder(
@@ -39,10 +43,12 @@ class NetworkCard extends StatelessWidget {
                 Container(
                   height: 64,
                   color: context.appSurfaceAlt,
-                  child: CustomPaint(
-                    painter: CardPatternPainter(color: person.color),
-                    child: const SizedBox.expand(),
-                  ),
+                  child: isDark
+                      ? const SizedBox.expand()
+                      : CustomPaint(
+                          painter: CardPatternPainter(color: person.color),
+                          child: const SizedBox.expand(),
+                        ),
                 ),
                 Positioned(
                   bottom: -38,
