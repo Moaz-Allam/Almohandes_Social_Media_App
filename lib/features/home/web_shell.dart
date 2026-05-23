@@ -8,7 +8,6 @@ import '../../models/message_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/linkedin_logo.dart';
 import '../../state/app_scope.dart';
-import '../composer/composer_screen.dart';
 import '../feed/home_feed_screen.dart';
 import '../messages/messages_screen.dart';
 import '../network/network_screen.dart';
@@ -91,8 +90,13 @@ class _WebShellState extends State<WebShell> {
         onMenu: _noOpMenu,
         onMessages: _openMessages,
       ),
-      AppTab.composer => ComposerScreen(
-        onClose: () => AppScope.read(context).selectTab(AppTab.feed),
+      // No dedicated composer page on web — posting happens inline through
+      // the WebComposerPrompt dialog above the feed tabs. If something
+      // routes to AppTab.composer (e.g. legacy empty-state CTA), bounce
+      // back to the feed.
+      AppTab.composer => HomeFeedScreen(
+        onMenu: _noOpMenu,
+        onMessages: _openMessages,
       ),
       AppTab.reels => ReelsScreen(
         onMenu: _noOpMenu,

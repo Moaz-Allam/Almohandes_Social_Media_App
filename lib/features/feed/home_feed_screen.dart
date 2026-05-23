@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/layout_breakpoints.dart';
 import '../../models/app_tab.dart';
 import '../../models/feed_post_model.dart';
 import '../../shared/widgets/skeleton.dart';
@@ -8,6 +9,7 @@ import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'widgets/feed_post_card.dart';
 import 'widgets/stories_strip.dart';
+import 'widgets/web_composer_prompt.dart';
 
 class HomeFeedScreen extends StatefulWidget {
   const HomeFeedScreen({
@@ -27,6 +29,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   late Future<List<FeedPostModel>> _postsFuture;
   bool _didStartLoading = false;
   int _lastFeedVersion = 0;
+  int _lastFollowVersion = 0;
 
   @override
   void initState() {
@@ -38,13 +41,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final controller = AppScope.watch(context);
+    final followChanged = controller.followVersion != _lastFollowVersion;
     final shouldRefresh = !_didStartLoading ||
-        controller.feedVersion != _lastFeedVersion;
+        controller.feedVersion != _lastFeedVersion ||
+        followChanged;
     if (!shouldRefresh) {
       return;
     }
     _didStartLoading = true;
     _lastFeedVersion = controller.feedVersion;
+    _lastFollowVersion = controller.followVersion;
     _postsFuture = controller.repositories.feed.fetchHomeFeed(
       forceRefresh: true,
     );
@@ -56,6 +62,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       forceRefresh: true,
     );
     _lastFeedVersion = controller.feedVersion;
+    _lastFollowVersion = controller.followVersion;
     setState(() {
       _postsFuture = future;
     });
@@ -64,9 +71,18 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Layout-driven gate: desktop/tablet width gets the inline composer
+    // prompt above the feed; phone-sized viewports keep the bottom-nav
+    // composer tab and skip the prompt.
+    final isDesktopLayout = LayoutBreakpoints.isDesktop(context);
     return Column(
       children: [
         HomeTopBar(onMenu: widget.onMenu, onMessages: widget.onMessages),
+        if (isDesktopLayout)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(0, 8, 0, 0),
+            child: WebComposerPrompt(),
+          ),
         Expanded(
           child: FutureBuilder<List<FeedPostModel>>(
             future: _postsFuture,

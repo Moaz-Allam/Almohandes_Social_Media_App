@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/storage/media_upload_service.dart';
 import '../../models/account_type.dart';
 import '../../models/app_tab.dart';
+import '../../models/post_visibility.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
@@ -31,6 +32,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
   String _mediaUrl = '';
   String _mediaType = 'text';
   String _mediaName = '';
+  PostVisibility _visibility = PostVisibility.public;
 
   static const _allOptions = [
     _ComposerOption(Icons.image_outlined, 'إضافة صورة', _ComposerAction.photo),
@@ -81,6 +83,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
           content: content,
           mediaUrl: _mediaUrl,
           mediaType: _mediaType,
+          visibility: _visibility,
         );
       }
       if (!mounted) {
@@ -94,6 +97,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         _mediaUrl = '';
         _mediaType = 'text';
         _mediaName = '';
+        _visibility = PostVisibility.public;
       });
       // Tell downstream screens (feed/reels) to refetch on their next
       // didChangeDependencies — so the user lands on a feed that already
@@ -215,6 +219,57 @@ class _ComposerScreenState extends State<ComposerScreen> {
     }
   }
 
+  Future<void> _pickVisibility() async {
+    final picked = await showModalBottomSheet<PostVisibility>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 4, 20, 6),
+              child: Text(
+                'من يمكنه رؤية هذا المنشور؟',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+              ),
+            ),
+            for (final option in PostVisibility.values)
+              RadioListTile<PostVisibility>(
+                value: option,
+                groupValue: _visibility,
+                onChanged: (value) => Navigator.of(context).pop(value),
+                title: Row(
+                  children: [
+                    Icon(
+                      option == PostVisibility.public
+                          ? Icons.public
+                          : Icons.lock_outline,
+                      size: 18,
+                      color: AppColors.muted,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      option.arabicLabel,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+                subtitle: Text(option.arabicDescription),
+                activeColor: AppColors.blue,
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || picked == null || picked == _visibility) {
+      return;
+    }
+    setState(() => _visibility = picked);
+  }
+
   void _removeMedia() {
     setState(() {
       _mediaUrl = '';
@@ -308,29 +363,40 @@ class _ComposerScreenState extends State<ComposerScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Container(
-                        height: 28,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.muted),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.public,
-                              size: 16,
-                              color: AppColors.muted,
-                            ),
-                            SizedBox(width: 5),
-                            Text(
-                              'أي شخص',
-                              style: TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            SizedBox(width: 3),
-                            Icon(Icons.arrow_drop_down, color: AppColors.muted),
-                          ],
+                      InkWell(
+                        onTap: _pickVisibility,
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          height: 28,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.muted),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _visibility == PostVisibility.public
+                                    ? Icons.public
+                                    : Icons.lock_outline,
+                                size: 16,
+                                color: AppColors.muted,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _visibility.arabicLabel,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              const Icon(
+                                Icons.arrow_drop_down,
+                                color: AppColors.muted,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],

@@ -209,7 +209,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: _sections.length + 3,
+                itemCount: _sections.length + 4,
                 separatorBuilder: (context, index) =>
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
@@ -219,7 +219,13 @@ class SettingsScreen extends StatelessWidget {
                       onChanged: controller.setThemeMode,
                     );
                   }
-                  if (index == _sections.length + 1) {
+                  if (index == 1) {
+                    return _PrivateProfileTile(
+                      isPrivate: controller.isProfilePrivate,
+                      onChanged: controller.setProfilePrivate,
+                    );
+                  }
+                  if (index == _sections.length + 2) {
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -247,7 +253,7 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () => showPrivacyPolicyDialog(context),
                     );
                   }
-                  if (index == _sections.length + 2) {
+                  if (index == _sections.length + 3) {
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -276,7 +282,7 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () => _deleteAccount(context),
                     );
                   }
-                  final section = _sections[index - 1];
+                  final section = _sections[index - 2];
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 18,
@@ -417,6 +423,40 @@ class _ThemeSelectionTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PrivateProfileTile extends StatelessWidget {
+  const _PrivateProfileTile({
+    required this.isPrivate,
+    required this.onChanged,
+  });
+
+  final bool isPrivate;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: isPrivate,
+      onChanged: onChanged,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+      activeColor: AppColors.blue,
+      secondary: Icon(
+        isPrivate ? Icons.lock : Icons.lock_open_outlined,
+        color: AppColors.blue,
+      ),
+      title: const Text(
+        'ملف خاص',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+      ),
+      subtitle: Text(
+        isPrivate
+            ? 'يرى غير المتصلين الاسم والصورة والنبذة فقط'
+            : 'ملفك مرئي بالكامل لأي مستخدم على المنصة',
+        style: TextStyle(color: context.appMuted, height: 1.35),
       ),
     );
   }

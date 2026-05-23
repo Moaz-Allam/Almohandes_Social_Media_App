@@ -9,13 +9,14 @@ import '../../state/app_scope.dart';
 import '../messages/chat_screen.dart';
 import 'profile_screen.dart';
 
-/// Two-tab page surfaced by tapping "X متابع · Y اتصال" on your own profile.
-/// First tab: people who follow you. Second tab: accepted connections, each
-/// row shows a Message button that opens a chat with that user.
+/// Three-tab page surfaced by tapping any of the stats on your own profile.
+/// Tab 0: followers (who follows me). Tab 1: connections (accepted). Tab 2:
+/// following (the people I follow). The connections tab shows a Message
+/// button on each row, the others don't.
 class ProfileConnectionsScreen extends StatefulWidget {
   const ProfileConnectionsScreen({super.key, this.initialTab = 0});
 
-  /// 0 = followers, 1 = connections.
+  /// 0 = followers, 1 = connections, 2 = following.
   final int initialTab;
 
   @override
@@ -28,28 +29,40 @@ class _ProfileConnectionsScreenState extends State<ProfileConnectionsScreen>
   late final TabController _tabController;
   Future<List<NetworkPerson>>? _followersFuture;
   Future<List<NetworkPerson>>? _connectionsFuture;
+  Future<List<NetworkPerson>>? _followingFuture;
   bool _didStart = false;
+  int _lastFollowVersion = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 2,
+      length: 3,
       vsync: this,
-      initialIndex: widget.initialTab.clamp(0, 1),
+      initialIndex: widget.initialTab.clamp(0, 2),
     );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didStart) {
-      return;
+    final controller = AppScope.watch(context);
+    final followChanged = controller.followVersion != _lastFollowVersion;
+    if (!_didStart) {
+      _didStart = true;
+      _lastFollowVersion = controller.followVersion;
+      final repo = controller.repositories.profiles;
+      _followersFuture = repo.fetchMyFollowers();
+      _connectionsFuture = repo.fetchMyConnections();
+      _followingFuture = repo.fetchMyFollowing(forceRefresh: true);
+    } else if (followChanged) {
+      _lastFollowVersion = controller.followVersion;
+      final repo = controller.repositories.profiles;
+      setState(() {
+        _followingFuture = repo.fetchMyFollowing(forceRefresh: true);
+        _followersFuture = repo.fetchMyFollowers(forceRefresh: true);
+      });
     }
-    _didStart = true;
-    final repo = AppScope.read(context).repositories.profiles;
-    _followersFuture = repo.fetchMyFollowers();
-    _connectionsFuture = repo.fetchMyConnections();
   }
 
   @override
@@ -72,6 +85,13 @@ class _ProfileConnectionsScreenState extends State<ProfileConnectionsScreen>
     await future;
   }
 
+  Future<void> _refreshFollowing() async {
+    final repo = AppScope.read(context).repositories.profiles;
+    final future = repo.fetchMyFollowing(forceRefresh: true);
+    setState(() => _followingFuture = future);
+    await future;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,6 +111,7 @@ class _ProfileConnectionsScreenState extends State<ProfileConnectionsScreen>
           tabs: const [
             Tab(text: 'المتابعون'),
             Tab(text: 'الاتصالات'),
+            Tab(text: 'الذين أتابعهم'),
           ],
         ),
       ),
@@ -112,6 +133,14 @@ class _ProfileConnectionsScreenState extends State<ProfileConnectionsScreen>
                 'لا توجد اتصالات بعد. أرسل طلب تواصل من صفحة "شبكتي"',
             emptyIcon: Icons.people_alt_outlined,
             showMessageButton: true,
+          ),
+          _PeopleTab(
+            future: _followingFuture,
+            onRefresh: _refreshFollowing,
+            emptyMessage:
+                'لا تتابع أحدا بعد. تابع حسابات لرؤية منشوراتهم في تبويب "الذين تتابعهم"',
+            emptyIcon: Icons.person_add_alt_outlined,
+            showMessageButton: false,
           ),
         ],
       ),

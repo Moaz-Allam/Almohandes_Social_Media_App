@@ -275,7 +275,7 @@ class _ReelPage extends StatefulWidget {
 class _ReelPageState extends State<_ReelPage> {
   // Persisted across swipes for this reel. A simple in-memory flag is
   // sufficient — there's no "global mute" preference yet.
-  bool _muted = true;
+  bool _muted = false;
   bool _captionExpanded = false;
 
   ReelItem get item => widget.item;

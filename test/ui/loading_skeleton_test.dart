@@ -32,6 +32,7 @@ import 'package:tradeflow/models/feed_post_model.dart';
 import 'package:tradeflow/models/message_item.dart';
 import 'package:tradeflow/models/network_person.dart';
 import 'package:tradeflow/models/notification_item_model.dart';
+import 'package:tradeflow/models/post_visibility.dart';
 import 'package:tradeflow/models/profile_form.dart';
 import 'package:tradeflow/models/project_application_request.dart';
 import 'package:tradeflow/models/project_draft.dart';
@@ -216,6 +217,7 @@ final _testReels = <ReelItem>[
 final class _MemorySessionStore implements SessionStore {
   bool _signedIn = true;
   AppThemeMode _themeMode = AppThemeMode.system;
+  bool _profilePrivate = false;
 
   @override
   Future<void> clear() async => _signedIn = false;
@@ -238,6 +240,13 @@ final class _MemorySessionStore implements SessionStore {
 
   @override
   Future<void> saveSignedIn() async => _signedIn = true;
+
+  @override
+  Future<bool> isProfilePrivate() async => _profilePrivate;
+
+  @override
+  Future<void> saveProfilePrivate(bool isPrivate) async =>
+      _profilePrivate = isPrivate;
 }
 
 final class _FakeAuthRepository implements AuthRepository {
@@ -314,6 +323,7 @@ final class _FakeCommentRepository implements CommentRepository {
     required String targetType,
     required String targetId,
     required String content,
+    String? parentId,
   }) async {
     return null;
   }
@@ -326,6 +336,12 @@ final class _FakeCommentRepository implements CommentRepository {
   }) async {
     return const [];
   }
+
+  @override
+  Future<void> toggleCommentLike({
+    required String commentId,
+    required bool shouldLike,
+  }) async {}
 }
 
 final class _ControlledFeedRepository implements FeedRepository {
@@ -336,6 +352,7 @@ final class _ControlledFeedRepository implements FeedRepository {
     required String content,
     String mediaUrl = '',
     String mediaType = 'text',
+    PostVisibility visibility = PostVisibility.public,
   }) async {}
 
   @override
@@ -347,6 +364,13 @@ final class _ControlledFeedRepository implements FeedRepository {
   @override
   Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) {
     return _completer.future;
+  }
+
+  @override
+  Future<List<FeedPostModel>> fetchFollowingFeed({
+    bool forceRefresh = false,
+  }) async {
+    return _testPosts;
   }
 
   @override
@@ -380,6 +404,7 @@ final class _ImmediateFeedRepository implements FeedRepository {
     required String content,
     String mediaUrl = '',
     String mediaType = 'text',
+    PostVisibility visibility = PostVisibility.public,
   }) async {}
 
   @override
@@ -390,6 +415,13 @@ final class _ImmediateFeedRepository implements FeedRepository {
 
   @override
   Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) async {
+    return _testPosts;
+  }
+
+  @override
+  Future<List<FeedPostModel>> fetchFollowingFeed({
+    bool forceRefresh = false,
+  }) async {
     return _testPosts;
   }
 
@@ -611,6 +643,13 @@ final class _FakeProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<List<NetworkPerson>> fetchMyFollowing({
+    bool forceRefresh = false,
+  }) async {
+    return const [];
+  }
+
+  @override
   Future<List<NetworkPerson>> fetchMyConnections({
     bool forceRefresh = false,
   }) async {
@@ -637,6 +676,11 @@ final class _FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<void> requestConnection(String receiverProfileId) async {}
+
+  @override
+  Future<ProfileStats> fetchProfileStats(String profileId) async {
+    return ProfileStats.empty;
+  }
 }
 
 final class _FakeMessageRepository implements MessageRepository {
@@ -727,6 +771,12 @@ final class _FakeStoryRepository implements StoryRepository {
   Future<List<StoryItem>> fetchStories({bool forceRefresh = false}) async {
     return const [];
   }
+
+  @override
+  Future<void> reactToStory({
+    required String storyId,
+    required String emoji,
+  }) async {}
 }
 
 final class _FakeSubscriptionRepository implements SubscriptionRepository {

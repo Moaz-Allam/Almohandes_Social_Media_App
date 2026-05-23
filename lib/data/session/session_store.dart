@@ -20,6 +20,12 @@ abstract interface class SessionStore {
 
   Future<void> saveThemeMode(AppThemeMode mode);
 
+  /// Returns true when the user has flipped their profile to "private".
+  /// A private profile only exposes basic info to non-connected viewers.
+  Future<bool> isProfilePrivate();
+
+  Future<void> saveProfilePrivate(bool isPrivate);
+
   Future<void> clear();
 }
 
@@ -27,6 +33,7 @@ final class SharedPreferencesSessionStore implements SessionStore {
   static const _signedInKey = 'session.signedIn';
   static const _darkModeKey = 'settings.darkMode';
   static const _themeModeKey = 'settings.themeMode';
+  static const _profilePrivateKey = 'settings.profilePrivate';
 
   @override
   Future<bool> isSignedIn() async {
@@ -75,8 +82,21 @@ final class SharedPreferencesSessionStore implements SessionStore {
   }
 
   @override
+  Future<bool> isProfilePrivate() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_profilePrivateKey) ?? false;
+  }
+
+  @override
+  Future<void> saveProfilePrivate(bool isPrivate) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_profilePrivateKey, isPrivate);
+  }
+
+  @override
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_signedInKey);
+    await prefs.remove(_profilePrivateKey);
   }
 }

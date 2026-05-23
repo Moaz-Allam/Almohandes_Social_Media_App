@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/story_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
+import '../../state/app_scope.dart';
 
 class StoryViewerScreen extends StatefulWidget {
   const StoryViewerScreen({
@@ -20,13 +21,17 @@ class StoryViewerScreen extends StatefulWidget {
 }
 
 class _StoryViewerScreenState extends State<StoryViewerScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _storyDuration = Duration(seconds: 6);
+  static const _burstDuration = Duration(milliseconds: 1100);
+  static const _reactionEmojis = ['❤️', '😂', '😮', '😢', '🔥', '👏'];
 
   late final PageController _controller;
   late final AnimationController _progress;
+  late final AnimationController _burst;
   late int _index;
   bool _isHeld = false;
+  String? _burstEmoji;
 
   @override
   void initState() {
@@ -42,11 +47,18 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
         }
       })
       ..forward();
+    _burst = AnimationController(vsync: this, duration: _burstDuration)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed && mounted) {
+          setState(() => _burstEmoji = null);
+        }
+      });
   }
 
   @override
   void dispose() {
     _progress.dispose();
+    _burst.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -95,6 +107,22 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOut,
     );
+  }
+
+  void _sendReaction(String emoji, StoryItem story) {
+    if (story.id.isEmpty) {
+      return;
+    }
+    // Trigger the big centre burst immediately so the tap feels
+    // responsive even on slow networks. The actual upsert runs in the
+    // background and any error is recovered silently — losing a story
+    // reaction isn't worth surfacing a snackbar.
+    setState(() => _burstEmoji = emoji);
+    _burst.forward(from: 0);
+    AppScope.read(context).repositories.stories.reactToStory(
+          storyId: story.id,
+          emoji: emoji,
+        );
   }
 
   void _handleDrag(DragEndDetails details) {
@@ -153,7 +181,11 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: widget.stories.length,
                 onPageChanged: (value) {
-                  setState(() => _index = value);
+                  setState(() {
+                    _index = value;
+                    _burstEmoji = null;
+                  });
+                  _burst.stop();
                   _restartProgress();
                 },
                 itemBuilder: (context, index) {
@@ -197,14 +229,33 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                           tooltip: 'إغلاق',
                         ),
                         const Spacer(),
-                        Text(
-                          currentStory.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: .55),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: .35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              currentStory.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -219,6 +270,24 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   ],
                 ),
               ),
+              PositionedDirectional(
+                start: 0,
+                end: 0,
+                bottom: 16,
+                child: _StoryReactionBar(
+                  emojis: _reactionEmojis,
+                  onTap: (emoji) => _sendReaction(emoji, currentStory),
+                ),
+              ),
+              if (_burstEmoji != null)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: _StoryReactionBurst(
+                      controller: _burst,
+                      emoji: _burstEmoji!,
+                    ),
+                  ),
+                ),
             ],
                   ),
                 ),
@@ -227,6 +296,146 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StoryReactionBar extends StatelessWidget {
+  const _StoryReactionBar({
+    required this.emojis,
+    required this.onTap,
+  });
+
+  final List<String> emojis;
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: .45),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.white.withValues(alpha: .14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final emoji in emojis)
+              _ReactionButton(
+                emoji: emoji,
+                onTap: () => onTap(emoji),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReactionButton extends StatelessWidget {
+  const _ReactionButton({required this.emoji, required this.onTap});
+
+  final String emoji;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkResponse(
+      onTap: onTap,
+      radius: 26,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Text(
+          emoji,
+          style: const TextStyle(fontSize: 26),
+        ),
+      ),
+    );
+  }
+}
+
+/// Plays a one-shot animation that pops the tapped emoji at the centre of
+/// the story, scales it up briefly, then fades it out. The parent screen
+/// supplies the [controller] so it can re-run the animation each time a
+/// new emoji is tapped.
+class _StoryReactionBurst extends StatelessWidget {
+  const _StoryReactionBurst({
+    required this.controller,
+    required this.emoji,
+  });
+
+  final AnimationController controller;
+  final String emoji;
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.3, end: 1.35)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.35, end: 1.1)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.1, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 40,
+      ),
+    ]).animate(controller);
+    final opacity = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 15,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween(1.0),
+        weight: 55,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)),
+        weight: 30,
+      ),
+    ]).animate(controller);
+    final rise = Tween<double>(begin: 0, end: -40)
+        .chain(CurveTween(curve: Curves.easeOut))
+        .animate(controller);
+
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Center(
+          child: Transform.translate(
+            offset: Offset(0, rise.value),
+            child: Opacity(
+              opacity: opacity.value,
+              child: Transform.scale(
+                scale: scale.value,
+                child: Text(
+                  emoji,
+                  style: const TextStyle(
+                    fontSize: 120,
+                    shadows: [
+                      Shadow(
+                        color: Color(0x66000000),
+                        blurRadius: 24,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

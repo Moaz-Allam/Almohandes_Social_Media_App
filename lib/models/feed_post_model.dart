@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'post_visibility.dart';
+
 final class FeedPostModel {
   const FeedPostModel({
     this.id = '',
@@ -19,6 +21,7 @@ final class FeedPostModel {
     this.repostOriginalName,
     this.repostOriginalProfileId,
     this.isLikedByViewer = false,
+    this.visibility = PostVisibility.public,
   });
 
   final String id;
@@ -38,8 +41,10 @@ final class FeedPostModel {
   final String? repostOriginalName;
   final String? repostOriginalProfileId;
   final bool isLikedByViewer;
+  final PostVisibility visibility;
 
   bool get isReel => mediaType == 'reel' || mediaType == 'video';
   bool get isImagePost => mediaType == 'image';
   bool get isTextOnly => !showMedia && body.trim().isNotEmpty;
+  bool get isConnectionsOnly => visibility == PostVisibility.private;
 }

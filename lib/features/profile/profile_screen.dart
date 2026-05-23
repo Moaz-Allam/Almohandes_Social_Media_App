@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/mappers/feed_mapper.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../data/storage/media_upload_service.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/project_item.dart';
@@ -32,6 +33,7 @@ class ProfileScreen extends StatelessWidget {
     this.isConnectionRequest = false,
     this.avatarUrl,
     this.initialConnectionStatus = 'none',
+    this.isPrivateProfile = false,
   });
 
   const ProfileScreen.me({super.key})
@@ -43,7 +45,8 @@ class ProfileScreen extends StatelessWidget {
       isMe = true,
       isConnectionRequest = false,
       avatarUrl = null,
-      initialConnectionStatus = 'none';
+      initialConnectionStatus = 'none',
+      isPrivateProfile = false;
 
   final String name;
   final String headline;
@@ -54,6 +57,7 @@ class ProfileScreen extends StatelessWidget {
   final bool isConnectionRequest;
   final String? avatarUrl;
   final String initialConnectionStatus;
+  final bool isPrivateProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -129,17 +133,21 @@ class ProfileScreen extends StatelessWidget {
                     followersCount: currentProfile?.followersCount ?? 0,
                     connectionsCount: currentProfile?.followingCount ?? 0,
                     initialConnectionStatus: initialConnectionStatus,
+                    isPrivateProfile: isPrivateProfile,
                   ),
                   Divider(height: 10, thickness: 10, color: context.appSoft),
-                  _ProfileWorkspace(
-                    profileId: effectiveProfileId,
-                    isMe: isMe,
-                    headline: effectiveHeadline,
-                    about: effectiveAbout,
-                    location: effectiveLocation,
-                    skills: effectiveSkills,
-                    programs: effectivePrograms,
-                  ),
+                  if (_canSeeFullProfile(context))
+                    _ProfileWorkspace(
+                      profileId: effectiveProfileId,
+                      isMe: isMe,
+                      headline: effectiveHeadline,
+                      about: effectiveAbout,
+                      location: effectiveLocation,
+                      skills: effectiveSkills,
+                      programs: effectivePrograms,
+                    )
+                  else
+                    _PrivateProfileLockoutPanel(name: effectiveName),
                   const SizedBox(height: 28),
                 ],
               ),
@@ -148,6 +156,16 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _canSeeFullProfile(BuildContext context) {
+    if (isMe) {
+      return true;
+    }
+    if (!isPrivateProfile) {
+      return true;
+    }
+    return initialConnectionStatus == 'accepted';
   }
 
   String _currentHeadline(dynamic profile) {
@@ -211,6 +229,7 @@ class _ProfileHero extends StatefulWidget {
     required this.followersCount,
     required this.connectionsCount,
     required this.initialConnectionStatus,
+    this.isPrivateProfile = false,
   });
 
   final String? profileId;
@@ -225,6 +244,7 @@ class _ProfileHero extends StatefulWidget {
   final int followersCount;
   final int connectionsCount;
   final String initialConnectionStatus;
+  final bool isPrivateProfile;
 
   @override
   State<_ProfileHero> createState() => _ProfileHeroState();
@@ -235,6 +255,7 @@ class _ProfileHeroState extends State<_ProfileHero> {
   bool _isFollowing = false;
   bool _isSendingFollow = false;
   bool _isSendingConnection = false;
+  ProfileStats _stats = ProfileStats.empty;
 
   @override
   void initState() {
@@ -242,6 +263,19 @@ class _ProfileHeroState extends State<_ProfileHero> {
     _connectionStatus = widget.initialConnectionStatus;
     _loadConnectionStatus();
     _loadFollowStatus();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final id = widget.profileId;
+    if (id == null || id.isEmpty) {
+      return;
+    }
+    final stats =
+        await AppScope.read(context).repositories.profiles.fetchProfileStats(id);
+    if (mounted) {
+      setState(() => _stats = stats);
+    }
   }
 
   Future<void> _loadConnectionStatus() async {
@@ -398,7 +432,13 @@ class _ProfileHeroState extends State<_ProfileHero> {
     final id = widget.profileId;
     try {
       if (id != null && id.isNotEmpty) {
-        await AppScope.read(context).repositories.profiles.followProfile(id);
+        final app = AppScope.read(context);
+        await app.repositories.profiles.followProfile(id);
+        // Tell the rest of the app that "who I follow" just changed so
+        // the home Following feed and the profile "Following" tab pick
+        // the new entry up on their next view, without waiting for a
+        // pull-to-refresh.
+        app.notifyFollowChanged();
       }
     } catch (_) {
       if (mounted) {
@@ -553,7 +593,31 @@ class _ProfileHeroState extends State<_ProfileHero> {
                           vertical: 4,
                         ),
                         child: Text(
-                          '${widget.followersCount} متابع',
+                          '${_stats.followers > 0 ? _stats.followers : widget.followersCount} متابع',
+                          style: const TextStyle(
+                            color: AppColors.blue,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      ' · ',
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => _openConnections(initialTab: 2),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          '${_stats.following > 0 ? _stats.following : widget.connectionsCount} يتابع',
                           style: const TextStyle(
                             color: AppColors.blue,
                             fontWeight: FontWeight.w900,
@@ -577,7 +641,7 @@ class _ProfileHeroState extends State<_ProfileHero> {
                           vertical: 4,
                         ),
                         child: Text(
-                          '${widget.connectionsCount} اتصال',
+                          '${_stats.connections} اتصال',
                           style: const TextStyle(
                             color: AppColors.blue,
                             fontWeight: FontWeight.w900,
@@ -588,13 +652,7 @@ class _ProfileHeroState extends State<_ProfileHero> {
                   ],
                 )
               else
-                Text(
-                  'ملف عام',
-                  style: TextStyle(
-                    color: context.appMuted,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                _OtherProfileStats(stats: _stats),
               if (!isMe) ...[
                 const SizedBox(height: 16),
                 Row(
@@ -2035,6 +2093,102 @@ class _MediaPlaceholder extends StatelessWidget {
       height: 220,
       width: double.infinity,
       child: _PatternCover(color: viewer.color),
+    );
+  }
+}
+
+class _OtherProfileStats extends StatelessWidget {
+  const _OtherProfileStats({required this.stats});
+
+  final ProfileStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _StatChip(value: stats.followers, label: 'متابع'),
+        _StatChipDivider(),
+        _StatChip(value: stats.following, label: 'يتابع'),
+        _StatChipDivider(),
+        _StatChip(value: stats.connections, label: 'اتصال'),
+      ],
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$value',
+            style: const TextStyle(
+              color: AppColors.blue,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: context.appMuted,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatChipDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      ' · ',
+      style: TextStyle(
+        color: context.appMuted,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _PrivateProfileLockoutPanel extends StatelessWidget {
+  const _PrivateProfileLockoutPanel({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+      child: Column(
+        children: [
+          Icon(Icons.lock_outline, color: context.appMuted, size: 46),
+          const SizedBox(height: 14),
+          const Text(
+            'هذا الحساب خاص',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'تواصل مع $name لرؤية منشوراته ومشاريعه ونشاطه.',
+            style: TextStyle(color: context.appMuted, height: 1.45),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

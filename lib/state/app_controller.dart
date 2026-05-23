@@ -27,6 +27,7 @@ final class AppController extends ChangeNotifier {
   late final ValueNotifier<AppThemeMode> themeModeListenable =
       ValueNotifier<AppThemeMode>(_themeMode);
   bool _hasPremiumLibrary = false;
+  bool _isProfilePrivate = false;
   AppTab _selectedTab = AppTab.feed;
   ProfileForm? _profile;
   final List<SavedContent> _savedItems = [];
@@ -35,6 +36,7 @@ final class AppController extends ChangeNotifier {
   int _feedVersion = 0;
   int _reelsVersion = 0;
   int _storiesVersion = 0;
+  int _followVersion = 0;
 
   bool get isBootstrapped => _isBootstrapped;
 
@@ -49,6 +51,11 @@ final class AppController extends ChangeNotifier {
   bool get isDarkMode => _themeMode == AppThemeMode.dark;
 
   bool get hasPremiumLibrary => _hasPremiumLibrary;
+
+  /// True when the current user has flipped their profile to private. A
+  /// private profile is fully visible to the owner and to accepted
+  /// connections, but only shows basic info to anyone else.
+  bool get isProfilePrivate => _isProfilePrivate;
 
   AppTab get selectedTab => _selectedTab;
 
@@ -67,17 +74,24 @@ final class AppController extends ChangeNotifier {
   int get reelsVersion => _reelsVersion;
   int get storiesVersion => _storiesVersion;
 
+  /// Bumped each time the viewer follows or unfollows another profile.
+  /// Screens that depend on "who I follow" (home Following feed, profile
+  /// "Following" tab) watch this and refetch when it changes.
+  int get followVersion => _followVersion;
+
   bool isSaved(String id) {
     return _savedItems.any((item) => item.id == id);
   }
 
   Future<void> bootstrap() async {
-    final (signedIn, themeMode) = await (
+    final (signedIn, themeMode, profilePrivate) = await (
       _sessionStore.isSignedIn(),
       _sessionStore.getThemeMode(),
+      _sessionStore.isProfilePrivate(),
     ).wait;
     _isSignedIn = signedIn;
     _themeMode = themeMode;
+    _isProfilePrivate = profilePrivate;
     themeModeListenable.value = themeMode;
     if (signedIn) {
       final (remoteProfile, remoteSavedItems, hasPremium) = await (
@@ -223,6 +237,15 @@ final class AppController extends ChangeNotifier {
     await _sessionStore.saveThemeMode(mode);
   }
 
+  Future<void> setProfilePrivate(bool isPrivate) async {
+    if (_isProfilePrivate == isPrivate) {
+      return;
+    }
+    _isProfilePrivate = isPrivate;
+    notifyListeners();
+    await _sessionStore.saveProfilePrivate(isPrivate);
+  }
+
   void selectTab(AppTab tab) {
     if (_selectedTab == tab) {
       return;
@@ -248,6 +271,11 @@ final class AppController extends ChangeNotifier {
 
   void notifyStoriesChanged() {
     _storiesVersion += 1;
+    notifyListeners();
+  }
+
+  void notifyFollowChanged() {
+    _followVersion += 1;
     notifyListeners();
   }
 

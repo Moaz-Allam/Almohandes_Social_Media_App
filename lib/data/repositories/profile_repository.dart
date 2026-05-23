@@ -35,6 +35,9 @@ abstract interface class ProfileRepository {
   /// Profiles that follow the current user.
   Future<List<NetworkPerson>> fetchMyFollowers({bool forceRefresh = false});
 
+  /// Profiles the current user follows.
+  Future<List<NetworkPerson>> fetchMyFollowing({bool forceRefresh = false});
+
   /// Profiles with whom the current user has an accepted connection.
   Future<List<NetworkPerson>> fetchMyConnections({bool forceRefresh = false});
 
@@ -50,6 +53,28 @@ abstract interface class ProfileRepository {
     required String requestId,
     required bool accept,
   });
+
+  /// Returns simple counts (followers / following / connections) for the
+  /// given profile, or all zeros if the data isn't available.
+  Future<ProfileStats> fetchProfileStats(String profileId);
+}
+
+class ProfileStats {
+  const ProfileStats({
+    required this.followers,
+    required this.following,
+    required this.connections,
+  });
+
+  static const empty = ProfileStats(
+    followers: 0,
+    following: 0,
+    connections: 0,
+  );
+
+  final int followers;
+  final int following;
+  final int connections;
 }
 
 final class SupabaseProfileRepository implements ProfileRepository {
@@ -67,6 +92,9 @@ final class SupabaseProfileRepository implements ProfileRepository {
     ttl: const Duration(seconds: 45),
   );
   final _followersCache = TimedMemoryCache<List<NetworkPerson>>(
+    ttl: const Duration(minutes: 1),
+  );
+  final _followingCache = TimedMemoryCache<List<NetworkPerson>>(
     ttl: const Duration(minutes: 1),
   );
   final _connectionsCache = TimedMemoryCache<List<NetworkPerson>>(
@@ -297,6 +325,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       coverUrl: row['cover_url'] == null ? null : '${row['cover_url']}',
       followersCount: _intFrom(row['followers_count']),
       followingCount: _intFrom(row['following_count']),
+      connectionsCount: _intFrom(row['connections_count']),
       postsCount: _intFrom(row['posts_count']),
       projectsCount: _intFrom(row['projects_count']),
       isPremium:
@@ -417,6 +446,109 @@ final class SupabaseProfileRepository implements ProfileRepository {
     } catch (_) {
       return const [];
     }
+  }
+
+  @override
+  Future<List<NetworkPerson>> fetchMyFollowing({bool forceRefresh = false}) {
+    return _followingCache.read(_fetchMyFollowing, forceRefresh: forceRefresh);
+  }
+
+  Future<List<NetworkPerson>> _fetchMyFollowing() async {
+    final remote = client;
+    if (remote == null) {
+      return const [];
+    }
+    final profileId = await _currentProfileId(remote);
+    if (profileId == null) {
+      return const [];
+    }
+    // Attempt 1 — single embedded select using the named FK. Works on
+    // deployments where PostgREST exposes the FK relationship and the user
+    // can read the joined profile row through RLS.
+    try {
+      final rows = await remote
+          .from('followers')
+          .select(
+            'created_at,following_id,profiles!followers_following_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
+          )
+          .eq('follower_id', profileId)
+          .order('created_at', ascending: false)
+          .limit(_networkPageSize);
+      final list = <NetworkPerson>[];
+      for (var i = 0; i < rows.length; i++) {
+        final person = _markFollowed(_personFromJoinedRow(
+          Map<String, dynamic>.from(rows[i] as Map),
+          colorIndex: i,
+        ));
+        if (person.id.isNotEmpty) {
+          list.add(person);
+        }
+      }
+      if (list.isNotEmpty) {
+        return list;
+      }
+    } catch (_) {
+      // Fall through to the two-query fallback.
+    }
+    // Attempt 2 — two-query fallback for older schemas / strict RLS:
+    // pull followed ids first, then resolve each profile separately.
+    try {
+      final followRows = await remote
+          .from('followers')
+          .select('following_id,created_at')
+          .eq('follower_id', profileId)
+          .order('created_at', ascending: false)
+          .limit(_networkPageSize);
+      final followedIds = <String>[
+        for (final raw in followRows)
+          '${(raw as Map)['following_id'] ?? ''}',
+      ]..removeWhere((id) => id.isEmpty);
+      if (followedIds.isEmpty) {
+        return const [];
+      }
+      final profileRows = await remote
+          .from('profiles')
+          .select(
+            'id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified',
+          )
+          .inFilter('id', followedIds);
+      // Preserve the ordering we got from the followers query.
+      final byId = <String, Map<String, dynamic>>{
+        for (final raw in profileRows)
+          '${(raw as Map)['id'] ?? ''}':
+              Map<String, dynamic>.from(raw as Map),
+      };
+      final list = <NetworkPerson>[];
+      for (var i = 0; i < followedIds.length; i++) {
+        final profileRow = byId[followedIds[i]];
+        if (profileRow == null) {
+          continue;
+        }
+        list.add(_markFollowed(
+          _networkPersonFromRow(profileRow, colorIndex: i),
+        ));
+      }
+      return list;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  NetworkPerson _markFollowed(NetworkPerson person) {
+    return NetworkPerson(
+      id: person.id,
+      profileId: person.profileId,
+      name: person.name,
+      title: person.title,
+      color: person.color,
+      badge: person.badge,
+      contextLine: person.contextLine,
+      actionLabel: 'متابَع',
+      isCompany: person.isCompany,
+      avatarUrl: person.avatarUrl,
+      connectionStatus: person.connectionStatus,
+      isFollowed: true,
+    );
   }
 
   @override
@@ -607,6 +739,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
         'following_id': followingProfileId,
       }, onConflict: 'follower_id,following_id');
       _networkCaches.clear();
+      _followingCache.clear();
     } catch (_) {
       // Follow stays best-effort when the optional relation is unavailable.
     }
@@ -634,6 +767,75 @@ final class SupabaseProfileRepository implements ProfileRepository {
     } catch (_) {
       return false;
     }
+  }
+
+  @override
+  Future<ProfileStats> fetchProfileStats(String profileId) async {
+    final remote = client;
+    if (remote == null || profileId.isEmpty) {
+      return ProfileStats.empty;
+    }
+    int followers = 0;
+    int following = 0;
+    int connections = 0;
+    try {
+      final row = await remote
+          .from('profiles')
+          .select('followers_count,following_count,connections_count')
+          .eq('id', profileId)
+          .maybeSingle();
+      if (row != null) {
+        followers = _intFrom(row['followers_count']);
+        following = _intFrom(row['following_count']);
+        connections = _intFrom(row['connections_count']);
+      }
+    } catch (_) {
+      // Counts columns may be missing — fall through to per-table counts.
+    }
+    if (followers == 0) {
+      try {
+        final rows = await remote
+            .from('followers')
+            .select('id')
+            .eq('following_id', profileId);
+        followers = rows.length;
+      } catch (_) {
+        // Followers table is optional in older deployments.
+      }
+    }
+    if (following == 0) {
+      try {
+        final rows = await remote
+            .from('followers')
+            .select('id')
+            .eq('follower_id', profileId);
+        following = rows.length;
+      } catch (_) {
+        // Followers table is optional in older deployments.
+      }
+    }
+    if (connections == 0) {
+      try {
+        final asRequester = await remote
+            .from('connection_requests')
+            .select('id')
+            .eq('requester_profile_id', profileId)
+            .eq('status', 'accepted');
+        final asReceiver = await remote
+            .from('connection_requests')
+            .select('id')
+            .eq('receiver_profile_id', profileId)
+            .eq('status', 'accepted');
+        connections = asRequester.length + asReceiver.length;
+      } catch (_) {
+        // connection_requests table is optional in older deployments.
+      }
+    }
+    return ProfileStats(
+      followers: followers,
+      following: following,
+      connections: connections,
+    );
   }
 
   @override

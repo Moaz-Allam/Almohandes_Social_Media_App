@@ -17,6 +17,13 @@ abstract interface class StoryRepository {
   });
 
   Future<void> createTextStory(String content);
+
+  /// Records the viewer's emoji reaction to a story. The server-side trigger
+  /// `app_story_reactions_after_insert` notifies the creator.
+  Future<void> reactToStory({
+    required String storyId,
+    required String emoji,
+  });
 }
 
 final class SupabaseStoryRepository implements StoryRepository {
@@ -106,6 +113,44 @@ final class SupabaseStoryRepository implements StoryRepository {
       rethrow;
     } catch (error) {
       throw RepositoryFailure('تعذر نشر القصة الآن', error);
+    }
+  }
+
+  @override
+  Future<void> reactToStory({
+    required String storyId,
+    required String emoji,
+  }) async {
+    final remote = client;
+    if (remote == null || storyId.isEmpty || emoji.isEmpty) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return;
+      }
+      await remote.from('story_reactions').upsert({
+        'story_id': storyId,
+        'profile_id': profileId,
+        'emoji': emoji,
+      }, onConflict: 'story_id,profile_id');
+    } catch (error) {
+      // The story_reactions table is created by the social_visibility
+      // migration. If a deployment hasn't applied it yet, fall back to
+      // story_likes so the creator still receives some signal.
+      try {
+        final profileId = await _currentProfileId(remote);
+        if (profileId == null) {
+          return;
+        }
+        await remote.from('story_likes').upsert({
+          'story_id': storyId,
+          'profile_id': profileId,
+        }, onConflict: 'story_id,profile_id');
+      } catch (_) {
+        // Reactions stay best-effort if neither table is available.
+      }
     }
   }
 

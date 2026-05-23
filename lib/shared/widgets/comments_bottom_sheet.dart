@@ -42,6 +42,10 @@ class LinkedCommentsSheet extends StatefulWidget {
 class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
   final _commentController = TextEditingController();
   final List<CommentItem> _optimisticComments = [];
+  final Map<String, int> _likeDeltas = {};
+  final Set<String> _likedLocally = {};
+  final Map<String, int> _replyDeltas = {};
+  CommentItem? _replyTarget;
   late Future<List<CommentItem>> _commentsFuture;
   bool _didStartLoading = false;
 
@@ -61,11 +65,40 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
       return;
     }
     _didStartLoading = true;
-    _commentsFuture = AppScope.read(context).repositories.comments
+    _commentsFuture = _loadAndSeedLikes(forceRefresh: false);
+  }
+
+  Future<List<CommentItem>> _loadAndSeedLikes({
+    required bool forceRefresh,
+  }) async {
+    final comments = await AppScope.read(context).repositories.comments
         .fetchComments(
           targetType: widget.targetType,
           targetId: widget.targetId,
+          forceRefresh: forceRefresh,
         );
+    if (!mounted) {
+      return comments;
+    }
+    // Seed the optimistic like-set from server truth so reopening the
+    // sheet shows the comments that were previously liked already filled
+    // in. Without this, the heart would always start hollow even though
+    // the row exists in `app_comment_likes`.
+    final liked = <String>{
+      for (final comment in comments)
+        if (comment.isLikedByViewer) comment.id,
+    };
+    if (liked.isEmpty && _likedLocally.isEmpty) {
+      return comments;
+    }
+    setState(() {
+      // Preserve any unsent toggles the user just performed and stack the
+      // server snapshot on top of them.
+      _likedLocally
+        ..removeWhere((id) => !liked.contains(id) && !_likeDeltas.containsKey(id))
+        ..addAll(liked);
+    });
+    return comments;
   }
 
   @override
@@ -79,6 +112,7 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
     if (text.isEmpty) {
       return;
     }
+    final replyTo = _replyTarget;
     final profile = AppScope.read(context).profile;
     final optimistic = CommentItem(
       id: 'local-${DateTime.now().microsecondsSinceEpoch}',
@@ -89,35 +123,41 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
       createdAt: DateTime.now(),
       color: AppColors.darkBlue,
       avatarUrl: profile?.avatarUrl,
+      parentId: replyTo?.id,
     );
     _commentController.clear();
-    setState(() => _optimisticComments.insert(0, optimistic));
+    setState(() {
+      _optimisticComments.insert(0, optimistic);
+      if (replyTo != null) {
+        _replyDeltas.update(
+          replyTo.id,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+        _replyTarget = null;
+      }
+    });
     try {
       final comments = AppScope.read(context).repositories.comments;
       await comments.addComment(
         targetType: widget.targetType,
         targetId: widget.targetId,
         content: text,
+        parentId: replyTo?.id,
       );
       if (!mounted) {
         return;
       }
-      final refreshed = comments
-          .fetchComments(
-            targetType: widget.targetType,
-            targetId: widget.targetId,
-            forceRefresh: true,
-          )
-          .then((items) {
-            if (mounted) {
-              setState(() {
-                _optimisticComments.removeWhere(
-                  (item) => item.id == optimistic.id,
-                );
-              });
-            }
-            return items;
+      final refreshed = _loadAndSeedLikes(forceRefresh: true).then((items) {
+        if (mounted) {
+          setState(() {
+            _optimisticComments.removeWhere(
+              (item) => item.id == optimistic.id,
+            );
           });
+        }
+        return items;
+      });
       setState(() {
         _commentsFuture = refreshed;
       });
@@ -140,6 +180,54 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
         ),
       );
     }
+  }
+
+  void _toggleCommentLike(CommentItem comment) {
+    final wasLiked = _isCommentLiked(comment);
+    final shouldLike = !wasLiked;
+    setState(() {
+      if (shouldLike) {
+        _likedLocally.add(comment.id);
+      } else {
+        _likedLocally.remove(comment.id);
+      }
+      _likeDeltas.update(
+        comment.id,
+        (value) => value + (shouldLike ? 1 : -1),
+        ifAbsent: () => shouldLike ? 1 : -1,
+      );
+    });
+    AppScope.read(context).repositories.comments.toggleCommentLike(
+          commentId: comment.id,
+          shouldLike: shouldLike,
+        );
+  }
+
+  bool _isCommentLiked(CommentItem comment) {
+    if (_likedLocally.contains(comment.id)) {
+      return true;
+    }
+    if (_likeDeltas[comment.id] != null && _likeDeltas[comment.id]! < 0) {
+      return false;
+    }
+    return comment.isLikedByViewer;
+  }
+
+  int _effectiveLikes(CommentItem comment) {
+    final delta = _likeDeltas[comment.id] ?? 0;
+    final value = comment.likesCount + delta;
+    return value < 0 ? 0 : value;
+  }
+
+  int _effectiveReplies(CommentItem comment) {
+    final delta = _replyDeltas[comment.id] ?? 0;
+    final value = comment.repliesCount + delta;
+    return value < 0 ? 0 : value;
+  }
+
+  void _startReply(CommentItem comment) {
+    setState(() => _replyTarget = comment);
+    FocusScope.of(context).requestFocus(FocusNode());
   }
 
   @override
@@ -211,35 +299,53 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
                     }
                     return ListView.builder(
                       controller: scrollController,
-                      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                       itemCount: comments.length,
                       itemBuilder: (context, index) {
                         final comment = comments[index];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: AppAvatar(
-                            name: comment.authorName,
-                            radius: 18,
-                            color: comment.color,
-                            imageUrl: comment.avatarUrl,
-                          ),
-                          title: Text(
-                            comment.content,
-                            style: const TextStyle(height: 1.35),
-                          ),
-                          subtitle: Text(
-                            _exactDateTime(comment.createdAt),
-                            style: TextStyle(
-                              color: context.appMuted,
-                              fontSize: 12,
-                            ),
-                          ),
+                        return _CommentTile(
+                          comment: comment,
+                          likesCount: _effectiveLikes(comment),
+                          repliesCount: _effectiveReplies(comment),
+                          isLiked: _isCommentLiked(comment),
+                          onLikePressed: () => _toggleCommentLike(comment),
+                          onReplyPressed: () => _startReply(comment),
                         );
                       },
                     );
                   },
                 ),
               ),
+              if (_replyTarget != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                  color: context.appSurfaceAlt,
+                  child: Row(
+                    children: [
+                      Icon(Icons.reply, color: AppColors.blue, size: 18),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'الرد على ${_replyTarget!.authorName}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () =>
+                            setState(() => _replyTarget = null),
+                        icon: const Icon(Icons.close),
+                        iconSize: 18,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'إلغاء الرد',
+                      ),
+                    ],
+                  ),
+                ),
               Container(
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
                 decoration: BoxDecoration(
@@ -261,7 +367,9 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
                         textDirection: TextDirection.rtl,
                         onSubmitted: (_) => _submitComment(),
                         decoration: InputDecoration(
-                          hintText: 'أضف تعليقا...',
+                          hintText: _replyTarget == null
+                              ? 'أضف تعليقا...'
+                              : 'اكتب ردك...',
                           filled: true,
                           fillColor: context.appSurfaceAlt,
                           contentPadding: const EdgeInsets.symmetric(
@@ -293,15 +401,350 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
       },
     );
   }
-
-  String _exactDateTime(DateTime value) {
-    final local = value.toLocal();
-    String two(int number) => number.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
-  }
 }
 
 const nameForOptimisticComment = 'المستخدم';
+
+class _CommentTile extends StatelessWidget {
+  const _CommentTile({
+    required this.comment,
+    required this.likesCount,
+    required this.repliesCount,
+    required this.isLiked,
+    required this.onLikePressed,
+    required this.onReplyPressed,
+  });
+
+  final CommentItem comment;
+  final int likesCount;
+  final int repliesCount;
+  final bool isLiked;
+  final VoidCallback onLikePressed;
+  final VoidCallback onReplyPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (comment.isReply) {
+      return _ReplyCommentTile(
+        comment: comment,
+        likesCount: likesCount,
+        isLiked: isLiked,
+        onLikePressed: onLikePressed,
+      );
+    }
+    return _TopLevelCommentTile(
+      comment: comment,
+      likesCount: likesCount,
+      repliesCount: repliesCount,
+      isLiked: isLiked,
+      onLikePressed: onLikePressed,
+      onReplyPressed: onReplyPressed,
+    );
+  }
+}
+
+String _exactCommentDateTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+}
+
+class _TopLevelCommentTile extends StatelessWidget {
+  const _TopLevelCommentTile({
+    required this.comment,
+    required this.likesCount,
+    required this.repliesCount,
+    required this.isLiked,
+    required this.onLikePressed,
+    required this.onReplyPressed,
+  });
+
+  final CommentItem comment;
+  final int likesCount;
+  final int repliesCount;
+  final bool isLiked;
+  final VoidCallback onLikePressed;
+  final VoidCallback onReplyPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppAvatar(
+            name: comment.authorName,
+            radius: 18,
+            color: comment.color,
+            imageUrl: comment.avatarUrl,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  comment.authorName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  comment.content,
+                  style: const TextStyle(height: 1.35, fontSize: 14.5),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      _exactCommentDateTime(comment.createdAt),
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: onLikePressed,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isLiked
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              size: 16,
+                              color: isLiked
+                                  ? AppColors.blue
+                                  : context.appMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$likesCount',
+                              style: TextStyle(
+                                color: isLiked
+                                    ? AppColors.blue
+                                    : context.appMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      onTap: onReplyPressed,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.reply,
+                              size: 16,
+                              color: context.appMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              repliesCount > 0
+                                  ? 'رد · $repliesCount'
+                                  : 'رد',
+                              style: TextStyle(
+                                color: context.appMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Reply pill — visually attached to its parent comment via a thread line
+/// on the leading edge, with a softer background and a compact layout.
+class _ReplyCommentTile extends StatelessWidget {
+  const _ReplyCommentTile({
+    required this.comment,
+    required this.likesCount,
+    required this.isLiked,
+    required this.onLikePressed,
+  });
+
+  final CommentItem comment;
+  final int likesCount;
+  final bool isLiked;
+  final VoidCallback onLikePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+        start: 42,
+        top: 2,
+        bottom: 2,
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Thread line linking the reply to its parent comment.
+            Container(
+              width: 2,
+              margin: const EdgeInsetsDirectional.only(end: 10, top: 4, bottom: 4),
+              decoration: BoxDecoration(
+                color: context.appBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                decoration: BoxDecoration(
+                  color: context.appSurfaceAlt,
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                    topLeft: Radius.circular(4),
+                    bottomLeft: Radius.circular(12),
+                  ),
+                  border: Border.all(color: context.appBorder),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.subdirectory_arrow_left,
+                      size: 14,
+                      color: context.appMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    AppAvatar(
+                      name: comment.authorName,
+                      radius: 12,
+                      color: comment.color,
+                      imageUrl: comment.avatarUrl,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  comment.authorName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: context.appText,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '· رد',
+                                style: TextStyle(
+                                  color: context.appMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            comment.content,
+                            style: const TextStyle(
+                              height: 1.35,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Text(
+                                _exactCommentDateTime(comment.createdAt),
+                                style: TextStyle(
+                                  color: context.appMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              InkWell(
+                                onTap: onLikePressed,
+                                borderRadius: BorderRadius.circular(4),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                    vertical: 2,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isLiked
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        size: 13,
+                                        color: isLiked
+                                            ? AppColors.blue
+                                            : context.appMuted,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '$likesCount',
+                                        style: TextStyle(
+                                          color: isLiked
+                                              ? AppColors.blue
+                                              : context.appMuted,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _EmptyCommentsState extends StatelessWidget {
   const _EmptyCommentsState();

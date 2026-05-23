@@ -5,6 +5,7 @@ final class ProfileForm {
     this.coverUrl,
     this.followersCount = 0,
     this.followingCount = 0,
+    this.connectionsCount = 0,
     this.postsCount = 0,
     this.projectsCount = 0,
     this.isPremium = false,
@@ -29,6 +30,7 @@ final class ProfileForm {
   final String? coverUrl;
   final int followersCount;
   final int followingCount;
+  final int connectionsCount;
   final int postsCount;
   final int projectsCount;
   final bool isPremium;
@@ -55,6 +57,7 @@ final class ProfileForm {
     String? coverUrl,
     int? followersCount,
     int? followingCount,
+    int? connectionsCount,
     int? postsCount,
     int? projectsCount,
     bool? isPremium,
@@ -79,6 +82,7 @@ final class ProfileForm {
       coverUrl: coverUrl ?? this.coverUrl,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
+      connectionsCount: connectionsCount ?? this.connectionsCount,
       postsCount: postsCount ?? this.postsCount,
       projectsCount: projectsCount ?? this.projectsCount,
       isPremium: isPremium ?? this.isPremium,

@@ -16,6 +16,12 @@ import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import '../messages/share_contact_screen.dart';
 
+String _exactDateTime(DateTime value) {
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+}
+
 class PostDetailScreen extends StatefulWidget {
   const PostDetailScreen({super.key, required this.post});
 
@@ -505,19 +511,9 @@ class _InlineCommentsSectionState extends State<_InlineCommentsSection> {
               return Column(
                 children: [
                   for (final comment in comments)
-                    ListTile(
-                      leading: AppAvatar(
-                        name: comment.authorName,
-                        radius: 18,
-                        color: comment.color,
-                        imageUrl: comment.avatarUrl,
-                      ),
-                      title: Text(comment.content),
-                      subtitle: Text(
-                        _exactDateTime(comment.createdAt),
-                        style: TextStyle(color: context.appMuted, fontSize: 12),
-                      ),
-                    ),
+                    comment.isReply
+                        ? _InlineReplyRow(comment: comment)
+                        : _InlineTopLevelRow(comment: comment),
                 ],
               );
             },
@@ -574,11 +570,6 @@ class _InlineCommentsSectionState extends State<_InlineCommentsSection> {
     );
   }
 
-  String _exactDateTime(DateTime value) {
-    final local = value.toLocal();
-    String two(int number) => number.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
-  }
 }
 
 class _PostDetailAction extends StatelessWidget {
@@ -629,6 +620,236 @@ class _ReactionCircle extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 1),
       ),
       child: const Icon(Icons.thumb_up, color: Colors.white, size: 10),
+    );
+  }
+}
+
+class _InlineTopLevelRow extends StatelessWidget {
+  const _InlineTopLevelRow({required this.comment});
+
+  final CommentItem comment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+        start: 14,
+        end: 14,
+        top: 8,
+        bottom: 8,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppAvatar(
+            name: comment.authorName,
+            radius: 18,
+            color: comment.color,
+            imageUrl: comment.avatarUrl,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  comment.authorName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  comment.content,
+                  style: const TextStyle(height: 1.35, fontSize: 14.5),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      _exactDateTime(comment.createdAt),
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.favorite_border,
+                      size: 14,
+                      color: context.appMuted,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${comment.likesCount}',
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (comment.repliesCount > 0) ...[
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.reply,
+                        size: 14,
+                        color: context.appMuted,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${comment.repliesCount}',
+                        style: TextStyle(
+                          color: context.appMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineReplyRow extends StatelessWidget {
+  const _InlineReplyRow({required this.comment});
+
+  final CommentItem comment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(
+        start: 56,
+        end: 14,
+        top: 2,
+        bottom: 2,
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 2,
+              margin: const EdgeInsetsDirectional.only(
+                end: 10,
+                top: 4,
+                bottom: 4,
+              ),
+              decoration: BoxDecoration(
+                color: context.appBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                decoration: BoxDecoration(
+                  color: context.appSurfaceAlt,
+                  borderRadius: const BorderRadius.only(
+                    topRight: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                    topLeft: Radius.circular(4),
+                    bottomLeft: Radius.circular(12),
+                  ),
+                  border: Border.all(color: context.appBorder),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.subdirectory_arrow_left,
+                      size: 14,
+                      color: context.appMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    AppAvatar(
+                      name: comment.authorName,
+                      radius: 12,
+                      color: comment.color,
+                      imageUrl: comment.avatarUrl,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  comment.authorName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: context.appText,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '· رد',
+                                style: TextStyle(
+                                  color: context.appMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            comment.content,
+                            style: const TextStyle(
+                              height: 1.35,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Text(
+                                _exactDateTime(comment.createdAt),
+                                style: TextStyle(
+                                  color: context.appMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Icon(
+                                Icons.favorite_border,
+                                size: 13,
+                                color: context.appMuted,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${comment.likesCount}',
+                                style: TextStyle(
+                                  color: context.appMuted,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

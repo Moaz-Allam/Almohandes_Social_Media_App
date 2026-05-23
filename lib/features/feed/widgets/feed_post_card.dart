@@ -237,6 +237,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
                   child: _RepostCredit(name: post.repostOriginalName!),
                 ),
+              if (post.isConnectionsOnly)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  child: _PrivatePostBanner(),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
                 child: Text(
@@ -319,6 +324,34 @@ class _FeedPostCardState extends State<FeedPostCard> {
   }
 }
 
+class _PrivatePostBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: context.appSurfaceAlt,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lock_outline, color: AppColors.blue, size: 17),
+          const SizedBox(width: 7),
+          const Expanded(
+            child: Text(
+              'منشور للاتصالات فقط',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RepostCredit extends StatelessWidget {
   const _RepostCredit({required this.name});
 
@@ -386,7 +419,11 @@ class _PostHeader extends StatelessWidget {
               style: TextStyle(color: context.appMuted, fontSize: 13),
             ),
             const SizedBox(width: 5),
-            Icon(Icons.public, color: context.appMuted, size: 14),
+            Icon(
+              post.isConnectionsOnly ? Icons.lock_outline : Icons.public,
+              color: context.appMuted,
+              size: 14,
+            ),
           ],
         ),
       ],

@@ -1,5 +1,6 @@
 import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
+import '../../models/post_visibility.dart';
 import '../../models/reel_item.dart';
 
 FeedPostModel feedPostFromSupabase(
@@ -25,6 +26,9 @@ FeedPostModel feedPostFromSupabase(
       : imageUrl.isNotEmpty
       ? 'image'
       : 'text';
+  final visibility = PostVisibility.fromStorageValue(
+    '${row['visibility'] ?? row['audience'] ?? ''}',
+  );
 
   return FeedPostModel(
     id: '${row['post_id'] ?? row['id'] ?? ''}',
@@ -55,6 +59,7 @@ FeedPostModel feedPostFromSupabase(
         ? null
         : '$repostOriginalProfileId',
     isLikedByViewer: row['is_liked'] == true,
+    visibility: visibility,
   );
 }
 
