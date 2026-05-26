@@ -17,7 +17,7 @@ class MediaPreview extends StatelessWidget {
     super.key,
     required this.mediaUrl,
     required this.mediaType,
-    this.fit = BoxFit.cover,
+    this.fit = BoxFit.contain,
     this.fallbackLabel,
     this.autoplay = false,
     this.showVideoControls = false,

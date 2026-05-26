@@ -449,15 +449,12 @@ class _ComposerScreenState extends State<ComposerScreen> {
                 const SizedBox(height: 16),
                 Stack(
                   children: [
-                    AspectRatio(
-                      aspectRatio: 1.55,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: MediaPreview(
-                          mediaUrl: _mediaUrl,
-                          mediaType: _mediaType,
-                          fallbackLabel: _mediaType == 'reel' ? 'ريل' : 'صورة',
-                        ),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: MediaPreview(
+                        mediaUrl: _mediaUrl,
+                        mediaType: _mediaType,
+                        fallbackLabel: _mediaType == 'reel' ? 'ريل' : 'صورة',
                       ),
                     ),
                     PositionedDirectional(
