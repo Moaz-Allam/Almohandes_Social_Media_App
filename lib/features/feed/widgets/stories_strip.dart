@@ -3,13 +3,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/storage/media_upload_service.dart';
 import '../../../models/story_item.dart';
 import '../../../shared/widgets/app_snack.dart';
 import '../../../shared/widgets/cached_image.dart';
-import '../../../shared/widgets/media_preview.dart';
 import '../../../state/app_scope.dart';
 import '../../stories/story_viewer_screen.dart';
 
@@ -90,79 +88,87 @@ class _StoriesStripState extends State<StoriesStrip> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('تم نشر القصة')));
-    // Bump the version once. didChangeDependencies will pick it up and
-    // trigger the refresh; no need to also setState locally (would cause
-    // a duplicate fetch).
     AppScope.read(context).notifyStoriesChanged();
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
         color: context.appSurface,
-        border: Border(bottom: BorderSide(color: context.appBorder)),
+        border: Border(bottom: BorderSide(color: context.appBorder.withValues(alpha: 0.5))),
       ),
-      child: FutureBuilder<List<StoryItem>>(
-        future: _storiesFuture,
-        builder: (context, snapshot) {
-          final isLoading =
-              snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData;
-          final stories = snapshot.data ?? const <StoryItem>[];
-          final groups = _storyGroups(stories);
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                // RTL start (visual right): accent bar first, then title.
+                Container(
+                  width: 3,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        context.appPrimary,
+                        context.appPrimary.withValues(alpha: 0.7),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
                   'القصص',
                   style: TextStyle(
                     color: context.appText,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 126,
-                child: isLoading
-                    ? const _StoriesSkeletonList()
-                    : ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: groups.length + 1,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(width: 10),
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return _CreateStoryCard(
-                              onTap: () => _createStory(context),
-                            );
-                          }
-                          final group = groups[index - 1];
-                          return _StoryCard(
-                            cardKey: ValueKey('story-card-${group.id}'),
-                            group: group,
-                            seen: _seenStoryGroups.contains(group.id),
-                            onTap: () => _openStory(context, group, 0),
-                          );
-                        },
-                      ),
-              ),
-              if (!isLoading && stories.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Text(
-                    'لا توجد قصص بعد',
-                    style: TextStyle(color: context.appMuted, fontSize: 13),
-                  ),
-                ),
-            ],
-          );
-        },
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 140,
+            child: FutureBuilder<List<StoryItem>>(
+              future: _storiesFuture,
+              builder: (context, snapshot) {
+                final isLoading =
+                    snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData;
+                final stories = snapshot.data ?? const <StoryItem>[];
+                final groups = _storyGroups(stories);
+                
+                return ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: groups.length + 1,
+                  separatorBuilder: (context, index) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    if (index == 0) {
+                      return _CreateStoryCard(onTap: () => _createStory(context));
+                    }
+                    final group = groups[index - 1];
+                    return _StoryCard(
+                      group: group,
+                      seen: _seenStoryGroups.contains(group.id),
+                      onTap: () => _openStory(context, group, 0),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -180,13 +186,164 @@ class _StoriesStripState extends State<StoriesStrip> {
   }
 }
 
+class _CreateStoryCard extends StatelessWidget {
+  const _CreateStoryCard({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 100,
+        height: 140,
+        decoration: BoxDecoration(
+          color: context.appSurfaceAlt,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: context.appBorder.withValues(alpha: 0.6),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: context.appPrimary.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_rounded,
+                color: context.appPrimary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'قصتك',
+              style: TextStyle(
+                color: context.appText,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoryCard extends StatelessWidget {
+  const _StoryCard({
+    required this.group,
+    required this.seen,
+    required this.onTap,
+  });
+
+  final _StoryGroup group;
+  final bool seen;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final story = group.preview;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 100,
+        height: 140,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: seen
+              ? null
+              : LinearGradient(
+                  colors: [
+                    context.appPrimary,
+                    context.appPrimary.withValues(alpha: 0.5),
+                    const Color(0xFFF43F5E),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+          border: seen
+              ? Border.all(
+                  color: context.appBorder.withValues(alpha: 0.6),
+                  width: 2,
+                )
+              : null,
+        ),
+        padding: seen ? EdgeInsets.zero : const EdgeInsets.all(2),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedImage(
+                url: story.isVideo ? '' : story.mediaUrl,
+                fallback: Container(
+                  color: story.color.withValues(alpha: 0.3),
+                  child: Center(child: Text(story.name[0], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+                ),
+              ),
+              // Name overlay
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Text(
+                  story.name,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+                  ),
+                ),
+              ),
+              // Avatar mini overlay
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black, width: 2),
+                  ),
+                  child: ClipOval(
+                    child: CachedImage(url: story.avatarUrl),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _StoryGroup {
+  const _StoryGroup({required this.id, required this.stories});
+  final String id;
+  final List<StoryItem> stories;
+  StoryItem get preview => stories.first;
+}
+
 final class _StoryDraft {
   const _StoryDraft({
     required this.content,
     required this.mediaUrl,
     required this.mediaType,
   });
-
   final String content;
   final String mediaUrl;
   final String mediaType;
@@ -194,7 +351,6 @@ final class _StoryDraft {
 
 class _StoryComposerDialog extends StatefulWidget {
   const _StoryComposerDialog();
-
   @override
   State<_StoryComposerDialog> createState() => _StoryComposerDialogState();
 }
@@ -212,37 +368,22 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
   }
 
   Future<void> _pickMedia(bool video) async {
-    if (_isUploading) {
-      return;
-    }
+    if (_isUploading) return;
     final XFile? picked;
     final Uint8List bytes;
     try {
       final picker = ImagePicker();
       picked = video
-          ? await picker.pickVideo(
-              source: ImageSource.gallery,
-              maxDuration: const Duration(seconds: 30),
-            )
-          : await picker.pickImage(
-              source: ImageSource.gallery,
-              maxWidth: 1080,
-              imageQuality: 60,
-            );
-      if (picked == null) {
-        return;
-      }
+          ? await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(seconds: 30))
+          : await picker.pickImage(source: ImageSource.gallery, maxWidth: 1080, imageQuality: 60);
+      if (picked == null) return;
       bytes = await picked.readAsBytes();
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       AppSnack.error(context, error, fallback: 'تعذر اختيار القصة الآن');
       return;
     }
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() => _isUploading = true);
     final mimeType = picked.mimeType ?? (video ? 'video/mp4' : 'image/jpeg');
     final media = AppScope.read(context).repositories.media;
@@ -253,387 +394,44 @@ class _StoryComposerDialogState extends State<_StoryComposerDialog> {
         fileName: picked.name,
         mimeType: mimeType,
       );
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       setState(() {
         _mediaUrl = url;
         _mediaType = video ? 'video' : 'image';
       });
     } catch (error) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       AppSnack.error(context, error, fallback: 'تعذر رفع القصة الآن');
     } finally {
-      if (mounted) {
-        setState(() => _isUploading = false);
-      }
+      if (mounted) setState(() => _isUploading = false);
     }
-  }
-
-  void _publish() {
-    if (_mediaUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر صورة أو فيديو للقصة أولا')),
-      );
-      return;
-    }
-    Navigator.of(context).pop(
-      _StoryDraft(
-        content: _controller.text.trim(),
-        mediaUrl: _mediaUrl,
-        mediaType: _mediaType,
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('قصة جديدة'),
-      content: SizedBox(
-        width: 360,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(hintText: 'اكتب النص للقصة'),
+          ),
+          const SizedBox(height: 12),
+          Row(
             children: [
-              TextField(
-                controller: _controller,
-                minLines: 2,
-                maxLines: 4,
-                textDirection: TextDirection.rtl,
-                decoration: const InputDecoration(
-                  hintText: 'اكتب النص الذي سيظهر أسفل الصورة/الفيديو',
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pickMedia(false),
-                      icon: const Icon(Icons.image_outlined),
-                      label: const Text('صورة'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pickMedia(true),
-                      icon: const Icon(Icons.videocam_outlined),
-                      label: const Text('فيديو'),
-                    ),
-                  ),
-                ],
-              ),
-              if (_mediaUrl.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                AspectRatio(
-                  aspectRatio: .72,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        MediaPreview(
-                          mediaUrl: _mediaUrl,
-                          mediaType: _mediaType,
-                          fallbackLabel: _mediaType == 'video'
-                              ? 'فيديو'
-                              : 'صورة',
-                        ),
-                        // Drop the currently-attached media so the user
-                        // can pick another one without cancelling the
-                        // whole dialog.
-                        PositionedDirectional(
-                          top: 8,
-                          end: 8,
-                          child: Material(
-                            color: Colors.black.withValues(alpha: .55),
-                            shape: const CircleBorder(),
-                            child: IconButton(
-                              onPressed: _isUploading
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        _mediaUrl = '';
-                                        _mediaType = 'image';
-                                      });
-                                    },
-                              icon: const Icon(
-                                Icons.close,
-                                color: Colors.white,
-                                size: 18,
-                              ),
-                              tooltip: 'إزالة الوسائط',
-                            ),
-                          ),
-                        ),
-                        // Subscribe just the text overlay to the controller
-                        // so typing doesn't rebuild the whole dialog (and
-                        // re-render the media preview underneath).
-                        PositionedDirectional(
-                          start: 10,
-                          end: 10,
-                          bottom: 10,
-                          child: ListenableBuilder(
-                            listenable: _controller,
-                            builder: (context, _) {
-                              final text = _controller.text.trim();
-                              if (text.isEmpty) {
-                                return const SizedBox.shrink();
-                              }
-                              return _StoryTextOverlay(text: text);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              Expanded(child: OutlinedButton(onPressed: () => _pickMedia(false), child: const Text('صورة'))),
+              const SizedBox(width: 8),
+              Expanded(child: OutlinedButton(onPressed: () => _pickMedia(true), child: const Text('فيديو'))),
             ],
           ),
-        ),
+        ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('إلغاء'),
-        ),
-        FilledButton(onPressed: _publish, child: const Text('نشر')),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Navigator.pop(context, _StoryDraft(content: _controller.text, mediaUrl: _mediaUrl, mediaType: _mediaType)), child: const Text('نشر')),
       ],
-    );
-  }
-}
-
-class _CreateStoryCard extends StatelessWidget {
-  const _CreateStoryCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 82,
-      height: 126,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.appPaleBlue,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.blue, width: 2),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: const BoxDecoration(
-                  color: AppColors.blue,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.add, color: Colors.white, size: 26),
-              ),
-              const SizedBox(height: 10),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
-                  'قصة جديدة',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StoryCard extends StatelessWidget {
-  const _StoryCard({
-    required this.cardKey,
-    required this.group,
-    required this.seen,
-    required this.onTap,
-  });
-
-  final Key cardKey;
-  final _StoryGroup group;
-  final bool seen;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 82,
-      height: 126,
-      child: OutlinedButton(
-        key: cardKey,
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          backgroundColor: context.appSurface,
-          padding: EdgeInsets.zero,
-          side: seen
-              ? BorderSide.none
-              : const BorderSide(color: AppColors.blue, width: 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: _StoryPreview(group: group),
-        ),
-      ),
-    );
-  }
-}
-
-final class _StoryGroup {
-  const _StoryGroup({required this.id, required this.stories});
-
-  final String id;
-  final List<StoryItem> stories;
-
-  StoryItem get preview => stories.first;
-}
-
-class _StoryPreview extends StatelessWidget {
-  const _StoryPreview({required this.group});
-
-  final _StoryGroup group;
-
-  @override
-  Widget build(BuildContext context) {
-    final story = group.preview;
-    if (story.hasVisualMedia) {
-      // For videos we deliberately do NOT spin up a video_player here —
-      // a horizontal strip with N controllers was a big source of jank.
-      // Image stories render the image, video stories fall through to the
-      // avatar tile with a play badge.
-      final mediaUrl = story.isVideo ? '' : story.mediaUrl;
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedImage(
-              url: mediaUrl,
-              cacheWidth: 240,
-              cacheHeight: 360,
-              fallback: _StoryAvatarFill(
-                imageUrl: story.avatarUrl,
-                color: story.color,
-              ),
-            ),
-            if (story.isVideo)
-              const Center(
-                child: Icon(Icons.play_circle, color: Colors.white, size: 28),
-              ),
-          ],
-        ),
-      );
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: story.color,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: _StoryAvatarFill(
-          imageUrl: story.avatarUrl,
-          color: AppColors.darkBlue,
-        ),
-      ),
-    );
-  }
-}
-
-class _StoryAvatarFill extends StatelessWidget {
-  const _StoryAvatarFill({required this.imageUrl, required this.color});
-
-  final String? imageUrl;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return CachedImage(
-      url: imageUrl,
-      cacheWidth: 240,
-      cacheHeight: 360,
-      fallback: ColoredBox(
-        color: color,
-        child: const Center(
-          child: Icon(Icons.person, color: Colors.white, size: 30),
-        ),
-      ),
-    );
-  }
-}
-
-class _StoriesSkeletonList extends StatelessWidget {
-  const _StoriesSkeletonList();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      scrollDirection: Axis.horizontal,
-      itemCount: 5,
-      separatorBuilder: (context, index) => const SizedBox(width: 10),
-      itemBuilder: (context, index) => SizedBox(
-        width: 82,
-        height: 126,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.appSurfaceAlt,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Center(
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StoryTextOverlay extends StatelessWidget {
-  const _StoryTextOverlay({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: .58),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-          height: 1.2,
-        ),
-      ),
     );
   }
 }

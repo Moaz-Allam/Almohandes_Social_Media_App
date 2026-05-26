@@ -1,25 +1,15 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/mappers/feed_mapper.dart';
 import '../../data/repositories/profile_repository.dart';
-import '../../data/storage/media_upload_service.dart';
 import '../../models/feed_post_model.dart';
-import '../../models/project_item.dart';
-import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
-import '../../shared/widgets/skeleton.dart';
-import '../../models/app_tab.dart';
 import '../../state/app_scope.dart';
-import '../feed/post_detail_screen.dart';
-import '../projects/project_requests_screen.dart';
-import 'profile_connections_screen.dart';
+import '../composer/composer_screen.dart';
+import '../composer/project_form_screen.dart';
+import '../home/widgets/home_top_bar.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
@@ -34,6 +24,8 @@ class ProfileScreen extends StatelessWidget {
     this.avatarUrl,
     this.initialConnectionStatus = 'none',
     this.isPrivateProfile = false,
+    this.onMenu,
+    this.onMessages,
   });
 
   const ProfileScreen.me({super.key})
@@ -46,7 +38,9 @@ class ProfileScreen extends StatelessWidget {
       isConnectionRequest = false,
       avatarUrl = null,
       initialConnectionStatus = 'none',
-      isPrivateProfile = false;
+      isPrivateProfile = false,
+      onMenu = null,
+      onMessages = null;
 
   final String name;
   final String headline;
@@ -58,13 +52,11 @@ class ProfileScreen extends StatelessWidget {
   final String? avatarUrl;
   final String initialConnectionStatus;
   final bool isPrivateProfile;
+  final VoidCallback? onMenu;
+  final VoidCallback? onMessages;
 
   @override
   Widget build(BuildContext context) {
-    // Watch AppController ONLY when viewing my own profile. Viewing
-    // anyone else's profile is fully driven by constructor props, so a
-    // notify on AppController (a like elsewhere, a message refresh,
-    // anything) won't repaint the screen at all.
     final currentProfile = isMe ? AppScope.watch(context).profile : null;
     final effectiveName = isMe
         ? ((currentProfile?.fullName.isNotEmpty ?? false)
@@ -87,131 +79,77 @@ class ProfileScreen extends StatelessWidget {
     final effectiveSkills = isMe
         ? (currentProfile?.skills.toList(growable: false) ?? const <String>[])
         : const <String>[];
-    final effectivePrograms = _programsForProfile(
-      headline: effectiveHeadline,
-      skills: effectiveSkills,
-    );
+    
     final effectiveAvatarUrl = isMe ? currentProfile?.avatarUrl : avatarUrl;
     final effectiveCoverUrl = isMe ? currentProfile?.coverUrl : null;
     final effectiveProfileId = isMe ? currentProfile?.id : profileId;
-    final effectiveColor = isMe ? AppColors.darkBlue : color;
+    final effectiveColor = isMe ? context.appPrimary : color;
 
     return Scaffold(
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverAppBar(
-              pinned: true,
-              backgroundColor: context.appSurface,
-              foregroundColor: context.appText,
-              leading: IconButton(
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'رجوع',
-              ),
-              title: Text(
-                effectiveName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
+      backgroundColor: context.appBackground,
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _ProfileHero(
+                  profileId: effectiveProfileId,
+                  name: effectiveName,
+                  headline: effectiveHeadline,
+                  color: effectiveColor,
+                  location: effectiveLocation,
+                  about: effectiveAbout,
+                  avatarUrl: effectiveAvatarUrl,
+                  coverUrl: effectiveCoverUrl,
+                  isMe: isMe,
+                  followersCount: currentProfile?.followersCount ?? 0,
+                  connectionsCount: currentProfile?.followingCount ?? 0,
+                  initialConnectionStatus: initialConnectionStatus,
+                ),
+                const SizedBox(height: 24),
+                _ProfileWorkspace(
+                  profileId: effectiveProfileId,
+                  isMe: isMe,
+                  headline: effectiveHeadline,
+                  about: effectiveAbout,
+                  location: effectiveLocation,
+                  skills: effectiveSkills,
+                ),
+              ],
             ),
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ProfileHero(
-                    profileId: effectiveProfileId,
-                    name: effectiveName,
-                    headline: effectiveHeadline,
-                    color: effectiveColor,
-                    location: effectiveLocation,
-                    about: effectiveAbout,
-                    avatarUrl: effectiveAvatarUrl,
-                    coverUrl: effectiveCoverUrl,
-                    isMe: isMe,
-                    followersCount: currentProfile?.followersCount ?? 0,
-                    connectionsCount: currentProfile?.followingCount ?? 0,
-                    initialConnectionStatus: initialConnectionStatus,
-                    isPrivateProfile: isPrivateProfile,
-                  ),
-                  Divider(height: 10, thickness: 10, color: context.appSoft),
-                  if (_canSeeFullProfile(context))
-                    _ProfileWorkspace(
-                      profileId: effectiveProfileId,
-                      isMe: isMe,
-                      headline: effectiveHeadline,
-                      about: effectiveAbout,
-                      location: effectiveLocation,
-                      skills: effectiveSkills,
-                      programs: effectivePrograms,
-                    )
-                  else
-                    _PrivateProfileLockoutPanel(name: effectiveName),
-                  const SizedBox(height: 28),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButton: isMe
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 16, right: 16),
+              child: FloatingActionButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ComposerScreen(
+                      onClose: () => Navigator.pop(context),
+                    ),
+                  ),
+                ),
+                backgroundColor: context.appPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 4,
+                child: const Icon(Icons.add_rounded, color: Colors.white, size: 32),
+              ),
+            )
+          : null,
     );
   }
 
-  bool _canSeeFullProfile(BuildContext context) {
-    if (isMe) {
-      return true;
-    }
-    if (!isPrivateProfile) {
-      return true;
-    }
-    return initialConnectionStatus == 'accepted';
-  }
-
   String _currentHeadline(dynamic profile) {
-    if (profile == null) {
-      return 'ملفك الشخصي';
-    }
-    if (profile.headline.isNotEmpty) {
-      return profile.headline;
-    }
-    if (profile.role.isNotEmpty) {
-      return profile.role;
-    }
+    if (profile == null) return 'ملفك الشخصي';
+    if (profile.headline.isNotEmpty) return profile.headline;
+    if (profile.role.isNotEmpty) return profile.role;
     return 'ملفك الشخصي';
-  }
-
-  List<String> _programsForProfile({
-    required String headline,
-    required List<String> skills,
-  }) {
-    final source = '$headline ${skills.join(' ')}'.toLowerCase();
-    final programs = <String>{};
-
-    void add(Iterable<String> values) => programs.addAll(values);
-
-    if (source.contains('مدني') || source.contains('civil')) {
-      add(const ['AutoCAD', 'Civil 3D', 'ETABS', 'SAFE', 'Microsoft Excel']);
-    }
-    if (source.contains('معماري') || source.contains('architect')) {
-      add(const ['Revit', 'AutoCAD', 'SketchUp', '3ds Max']);
-    }
-    if (source.contains('كهرب') || source.contains('electrical')) {
-      add(const ['AutoCAD Electrical', 'DIALux', 'ETAP', 'Revit MEP']);
-    }
-    if (source.contains('ميكاني') || source.contains('mechanic')) {
-      add(const ['SolidWorks', 'Revit MEP', 'HAP', 'AutoCAD']);
-    }
-    if (source.contains('مساح') || source.contains('survey')) {
-      add(const ['Civil 3D', 'ArcGIS', 'QGIS', 'Total Station']);
-    }
-    if (source.contains('حاسوب') || source.contains('برمجة')) {
-      add(const ['VS Code', 'Git', 'Figma', 'Postman']);
-    }
-    if (programs.isEmpty) {
-      add(const ['AutoCAD', 'Microsoft Excel', 'Revit']);
-    }
-    return programs.toList(growable: false);
   }
 }
 
@@ -229,7 +167,6 @@ class _ProfileHero extends StatefulWidget {
     required this.followersCount,
     required this.connectionsCount,
     required this.initialConnectionStatus,
-    this.isPrivateProfile = false,
   });
 
   final String? profileId;
@@ -244,7 +181,6 @@ class _ProfileHero extends StatefulWidget {
   final int followersCount;
   final int connectionsCount;
   final String initialConnectionStatus;
-  final bool isPrivateProfile;
 
   @override
   State<_ProfileHero> createState() => _ProfileHeroState();
@@ -253,465 +189,182 @@ class _ProfileHero extends StatefulWidget {
 class _ProfileHeroState extends State<_ProfileHero> {
   late String _connectionStatus;
   bool _isFollowing = false;
-  bool _isSendingFollow = false;
-  bool _isSendingConnection = false;
   ProfileStats _stats = ProfileStats.empty;
 
   @override
   void initState() {
     super.initState();
     _connectionStatus = widget.initialConnectionStatus;
-    _loadConnectionStatus();
-    _loadFollowStatus();
     _loadStats();
   }
 
   Future<void> _loadStats() async {
     final id = widget.profileId;
-    if (id == null || id.isEmpty) {
-      return;
-    }
-    final stats =
-        await AppScope.read(context).repositories.profiles.fetchProfileStats(id);
-    if (mounted) {
-      setState(() => _stats = stats);
-    }
-  }
-
-  Future<void> _loadConnectionStatus() async {
-    final id = widget.profileId;
-    if (widget.isMe || id == null || id.isEmpty) {
-      return;
-    }
-    final status = await AppScope.read(
-      context,
-    ).repositories.profiles.connectionStatus(id);
-    if (mounted && status != 'none') {
-      setState(() => _connectionStatus = status);
-    }
-  }
-
-  Future<void> _loadFollowStatus() async {
-    final id = widget.profileId;
-    if (widget.isMe || id == null || id.isEmpty) {
-      return;
-    }
-    final isFollowing = await AppScope.read(
-      context,
-    ).repositories.profiles.isFollowingProfile(id);
-    if (mounted) {
-      setState(() => _isFollowing = isFollowing);
-    }
-  }
-
-  Future<void> _requestConnection() async {
-    if (_connectionStatus != 'none' || _isSendingConnection) {
-      return;
-    }
-    setState(() {
-      _connectionStatus = 'pending';
-      _isSendingConnection = true;
-    });
-    final id = widget.profileId;
-    try {
-      if (id != null && id.isNotEmpty) {
-        await AppScope.read(
-          context,
-        ).repositories.profiles.requestConnection(id);
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _connectionStatus = 'none');
-      }
-      rethrow;
-    } finally {
-      if (mounted) {
-        setState(() => _isSendingConnection = false);
-      }
-    }
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم إرسال طلب التواصل إلى ${widget.name}')),
-    );
-  }
-
-  Future<void> _openEditAbout() async {
-    final controller = TextEditingController(text: widget.about);
-    final about = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          18,
-          4,
-          18,
-          18 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'تعديل النبذة',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              minLines: 5,
-              maxLines: 8,
-              textDirection: TextDirection.rtl,
-              decoration: const InputDecoration(
-                labelText: 'نبذة تعريفية',
-                hintText: 'اكتب نبذة قصيرة تظهر في ملفك الشخصي',
-              ),
-            ),
-            const SizedBox(height: 14),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(controller.text),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.blue),
-              child: const Text('حفظ'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    if (about == null || !mounted) {
-      return;
-    }
-    await AppScope.read(context).updateMyAbout(about);
-  }
-
-  void _openAvatar() {
-    _openMediaViewer(
-      media: _ProfileMedia.avatar,
-      imageUrl: widget.avatarUrl,
-      title: 'صورة الملف الشخصي',
-    );
-  }
-
-  void _openCover() {
-    _openMediaViewer(
-      media: _ProfileMedia.cover,
-      imageUrl: widget.coverUrl,
-      title: 'صورة الغلاف',
-    );
-  }
-
-  void _openMediaViewer({
-    required _ProfileMedia media,
-    required String? imageUrl,
-    required String title,
-  }) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _ProfileMediaViewer(
-          media: media,
-          title: title,
-          name: widget.name,
-          color: widget.color,
-          imageUrl: imageUrl,
-          canEdit: widget.isMe,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _followProfile() async {
-    if (_isFollowing || _isSendingFollow) {
-      return;
-    }
-    setState(() {
-      _isFollowing = true;
-      _isSendingFollow = true;
-    });
-    final id = widget.profileId;
-    try {
-      if (id != null && id.isNotEmpty) {
-        final app = AppScope.read(context);
-        await app.repositories.profiles.followProfile(id);
-        // Tell the rest of the app that "who I follow" just changed so
-        // the home Following feed and the profile "Following" tab pick
-        // the new entry up on their next view, without waiting for a
-        // pull-to-refresh.
-        app.notifyFollowChanged();
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _isFollowing = false);
-      }
-      rethrow;
-    } finally {
-      if (mounted) {
-        setState(() => _isSendingFollow = false);
-      }
-    }
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تمت المتابعة')));
-  }
-
-  void _openConnections({required int initialTab}) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            ProfileConnectionsScreen(initialTab: initialTab),
-      ),
-    );
+    if (id == null) return;
+    final stats = await AppScope.read(context).repositories.profiles.fetchProfileStats(id);
+    if (mounted) setState(() => _stats = stats);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMe = widget.isMe;
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Stack(
+          alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            GestureDetector(
-              onTap: isMe || (widget.coverUrl?.isNotEmpty ?? false)
-                  ? _openCover
-                  : null,
-              child: SizedBox(
-                width: double.infinity,
-                height: 92,
-                child: widget.coverUrl?.isNotEmpty == true
-                    ? _ProfileImageView(
-                        imageUrl: widget.coverUrl!,
-                        fit: BoxFit.cover,
-                        fallback: _PatternCover(color: widget.color),
-                      )
-                    : _PatternCover(color: widget.color),
-              ),
-            ),
-            if (isMe)
-              PositionedDirectional(
-                top: 12,
-                start: 18,
-                child: _MediaEditHint(
-                  icon: Icons.image_outlined,
-                  label: 'الغلاف',
-                  onTap: _openCover,
-                ),
-              ),
-            PositionedDirectional(
-              top: 42,
-              start: 18,
-              child: GestureDetector(
-                onTap: isMe || (widget.avatarUrl?.isNotEmpty ?? false)
-                    ? _openAvatar
-                    : null,
-                child: AppAvatar(
-                  name: widget.name,
-                  radius: 58,
-                  color: widget.color,
-                  badge: isMe ? 'أنا' : null,
-                  imageUrl: widget.avatarUrl,
+            Container(
+              height: 140,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    widget.color.withValues(alpha: 0.25),
+                    context.appPrimary.withValues(alpha: 0.15),
+                    context.appSurface,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
             ),
-            if (isMe)
-              PositionedDirectional(
-                top: 112,
-                start: 92,
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: context.appSurface,
-                  child: IconButton(
-                    onPressed: _openAvatar,
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(
-                      Icons.camera_alt_outlined,
-                      color: AppColors.blue,
-                      size: 16,
+            Positioned(
+              bottom: -50,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: context.appBackground,
+                  shape: BoxShape.circle,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: context.appPrimary.withValues(alpha: 0.4),
+                      width: 2,
                     ),
-                    tooltip: 'تغيير الصورة',
+                  ),
+                  padding: const EdgeInsets.all(3),
+                  child: AppAvatar(
+                    name: widget.name,
+                    radius: 56,
+                    color: widget.color,
+                    imageUrl: widget.avatarUrl,
                   ),
                 ),
               ),
-            if (isMe)
-              PositionedDirectional(
-                top: 18,
-                end: 18,
-                child: CircleAvatar(
-                  backgroundColor: context.appSurface,
-                  child: IconButton(
-                    onPressed: _openEditAbout,
-                    icon: const Icon(
-                      Icons.edit,
-                      color: AppColors.blue,
-                      size: 18,
-                    ),
-                    tooltip: 'تعديل النبذة',
-                  ),
-                ),
-              ),
+            ),
           ],
         ),
-        const SizedBox(height: 74),
+        const SizedBox(height: 60),
+        Text(
+          widget.name,
+          style: TextStyle(
+            color: context.appText,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              widget.location,
+              style: TextStyle(
+                color: context.appMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.location_on_outlined,
+              size: 14,
+              color: context.appMuted,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _StatItem(label: 'متابع', count: _stats.followers),
+            const SizedBox(width: 24),
+            _StatItem(label: 'يتابع', count: _stats.following),
+            const SizedBox(width: 24),
+            _StatItem(label: 'اتصال', count: _stats.connections),
+          ],
+        ),
+        const SizedBox(height: 24),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
             children: [
-              Text(
-                widget.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
+              Expanded(
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: context.appSurfaceAlt,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: context.appBorder.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    widget.isMe ? 'تعديل الملف الشخصي' : 'الرسائل',
+                    style: TextStyle(
+                      color: context.appText,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 5),
-              Text(
-                widget.headline,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 18, height: 1.3),
-              ),
-              const SizedBox(height: 6),
-              Text(widget.location, style: TextStyle(color: context.appMuted)),
-              const SizedBox(height: 8),
-              if (isMe)
-                Row(
-                  children: [
-                    InkWell(
-                      onTap: () => _openConnections(initialTab: 0),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          '${_stats.followers > 0 ? _stats.followers : widget.followersCount} متابع',
-                          style: const TextStyle(
-                            color: AppColors.blue,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+              if (widget.isMe) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => AppScope.read(context).signOut(),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceAlt,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: context.appBorder.withValues(alpha: 0.6),
                       ),
                     ),
-                    Text(
-                      ' · ',
-                      style: TextStyle(
-                        color: context.appMuted,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    child: Icon(
+                      Icons.logout_rounded,
+                      color: context.appMuted,
+                      size: 20,
                     ),
-                    InkWell(
-                      onTap: () => _openConnections(initialTab: 2),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          '${_stats.following > 0 ? _stats.following : widget.connectionsCount} يتابع',
-                          style: const TextStyle(
-                            color: AppColors.blue,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+                  ),
+                ),
+              ],
+              if (!widget.isMe) ...[
+                const SizedBox(width: 12),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: context.appPrimary,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: context.appPrimary.withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                    ),
-                    Text(
-                      ' · ',
-                      style: TextStyle(
-                        color: context.appMuted,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    InkWell(
-                      onTap: () => _openConnections(initialTab: 1),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          '${_stats.connections} اتصال',
-                          style: const TextStyle(
-                            color: AppColors.blue,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                _OtherProfileStats(stats: _stats),
-              if (!isMe) ...[
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton(
-                        onPressed:
-                            _connectionStatus == 'none' && !_isSendingConnection
-                            ? _requestConnection
-                            : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _connectionStatus == 'none'
-                              ? AppColors.blue
-                              : context.appSoft,
-                          disabledBackgroundColor: context.appSoft,
-                          disabledForegroundColor: context.appMuted,
-                          minimumSize: const Size.fromHeight(46),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                        ),
-                        child: _isSendingConnection
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(switch (_connectionStatus) {
-                                'accepted' => 'متصل',
-                                'pending' => 'قيد الانتظار',
-                                _ => 'تواصل',
-                              }),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isFollowing || _isSendingFollow
-                            ? null
-                            : _followProfile,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _isFollowing
-                              ? context.appMuted
-                              : AppColors.blue,
-                          minimumSize: const Size.fromHeight(46),
-                          side: BorderSide(
-                            color: _isFollowing
-                                ? context.appBorder
-                                : AppColors.blue,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                        ),
-                        child: Text(_isFollowing ? 'متابَع' : 'متابعة'),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.person_add_alt_1_rounded,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ],
@@ -722,9 +375,37 @@ class _ProfileHeroState extends State<_ProfileHero> {
   }
 }
 
-enum _ProfileTab { posts, about, savedOrProjects }
+class _StatItem extends StatelessWidget {
+  const _StatItem({required this.label, required this.count});
+  final String label;
+  final int count;
 
-enum _ProfileViewMode { grid, media, list }
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          '$count',
+          style: TextStyle(
+            color: context.appText,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            color: context.appMuted,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _ProfileWorkspace extends StatefulWidget {
   const _ProfileWorkspace({
@@ -734,7 +415,6 @@ class _ProfileWorkspace extends StatefulWidget {
     required this.about,
     required this.location,
     required this.skills,
-    required this.programs,
   });
 
   final String? profileId;
@@ -743,1449 +423,411 @@ class _ProfileWorkspace extends StatefulWidget {
   final String about;
   final String location;
   final List<String> skills;
-  final List<String> programs;
 
   @override
   State<_ProfileWorkspace> createState() => _ProfileWorkspaceState();
 }
 
 class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
-  _ProfileTab _tab = _ProfileTab.posts;
-  _ProfileViewMode _viewMode = _ProfileViewMode.grid;
+  int _selectedTab = 0;
+  int _selectedSubTab = 0;
+
+  final _tabs = [
+    (label: 'المنشورات', icon: Icons.videocam_outlined),
+    (label: 'نبذة', icon: Icons.description_outlined),
+    (label: 'الأعمال', icon: Icons.image_outlined),
+    (label: 'البرامج والتطبيقات', icon: Icons.memory_outlined),
+  ];
+
+  final _subTabs = [
+    Icons.grid_view_rounded,
+    Icons.image_outlined,
+    Icons.movie_outlined,
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 14, 8, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _ProfileSegmentedTabs(
-            selected: _tab,
-            isMe: widget.isMe,
-            onChanged: (value) => setState(() => _tab = value),
-          ),
-          if (_tab == _ProfileTab.posts) ...[
-            const SizedBox(height: 18),
-            _ProfileViewModeTabs(
-              selected: _viewMode,
-              onChanged: (value) => setState(() => _viewMode = value),
-            ),
-          ],
-          const SizedBox(height: 18),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: _ProfileTabBody(
-              key: ValueKey('${_tab.name}-${_viewMode.name}'),
-              profileId: widget.profileId,
-              tab: _tab,
-              viewMode: _viewMode,
-              isMe: widget.isMe,
-              headline: widget.headline,
-              about: widget.about,
-              location: widget.location,
-              skills: widget.skills,
-              programs: widget.programs,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileSegmentedTabs extends StatelessWidget {
-  const _ProfileSegmentedTabs({
-    required this.selected,
-    required this.isMe,
-    required this.onChanged,
-  });
-
-  final _ProfileTab selected;
-  final bool isMe;
-  final ValueChanged<_ProfileTab> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: context.appSurfaceAlt,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: context.appBorder),
-      ),
-      child: Row(
-        children: [
-          for (final tab in _ProfileTab.values) ...[
-            Expanded(
-              child: _ProfileSegmentTab(
-                label: _tabLabel(tab, isMe),
-                icon: _tabIcon(tab, isMe),
-                selected: selected == tab,
-                onTap: () => onChanged(tab),
-              ),
-            ),
-            if (tab != _ProfileTab.values.last) const SizedBox(width: 4),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _tabLabel(_ProfileTab tab, bool isMe) {
-    return switch (tab) {
-      _ProfileTab.posts => 'المنشورات',
-      _ProfileTab.about => 'نبذة',
-      _ProfileTab.savedOrProjects => isMe ? 'مشاريعي' : 'المشاريع',
-    };
-  }
-
-  IconData _tabIcon(_ProfileTab tab, bool isMe) {
-    return switch (tab) {
-      _ProfileTab.posts => Icons.videocam_outlined,
-      _ProfileTab.about => Icons.description_outlined,
-      _ProfileTab.savedOrProjects =>
-        isMe ? Icons.folder_special_outlined : Icons.folder_special_outlined,
-    };
-  }
-}
-
-class _ProfileSegmentTab extends StatelessWidget {
-  const _ProfileSegmentTab({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected ? AppColors.white : context.appMuted;
-    final background = selected ? AppColors.blue : Colors.transparent;
-
-    return SizedBox.expand(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 170),
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 11),
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(18),
+            color: const Color(0xFF0F1115),
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: foreground, size: 16),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileViewModeTabs extends StatelessWidget {
-  const _ProfileViewModeTabs({required this.selected, required this.onChanged});
-
-  final _ProfileViewMode selected;
-  final ValueChanged<_ProfileViewMode> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: context.appBorder)),
-      ),
-      child: Row(
-        children: [
-          for (final mode in _ProfileViewMode.values)
-            Expanded(
-              child: _ProfileViewModeButton(
-                mode: mode,
-                selected: selected == mode,
-                onTap: () => onChanged(mode),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileViewModeButton extends StatelessWidget {
-  const _ProfileViewModeButton({
-    required this.mode,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _ProfileViewMode mode;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? context.appText : context.appMuted;
-    return InkWell(
-      onTap: onTap,
-      child: Column(
-        children: [
-          SizedBox(
-            height: 44,
-            child: Tooltip(
-              message: _modeLabel(mode),
-              child: Icon(_modeIcon(mode), color: color, size: 24),
-            ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 2,
-            margin: const EdgeInsets.symmetric(horizontal: 10),
-            color: selected ? AppColors.blue : Colors.transparent,
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _modeIcon(_ProfileViewMode mode) {
-    return switch (mode) {
-      _ProfileViewMode.grid => Icons.grid_on,
-      _ProfileViewMode.media => Icons.image_outlined,
-      _ProfileViewMode.list => Icons.view_module_outlined,
-    };
-  }
-
-  String _modeLabel(_ProfileViewMode mode) {
-    return switch (mode) {
-      _ProfileViewMode.grid => 'شبكة',
-      _ProfileViewMode.media => 'وسائط',
-      _ProfileViewMode.list => 'قائمة',
-    };
-  }
-}
-
-class _ProfileTabBody extends StatelessWidget {
-  const _ProfileTabBody({
-    super.key,
-    required this.profileId,
-    required this.tab,
-    required this.viewMode,
-    required this.isMe,
-    required this.headline,
-    required this.about,
-    required this.location,
-    required this.skills,
-    required this.programs,
-  });
-
-  final String? profileId;
-  final _ProfileTab tab;
-  final _ProfileViewMode viewMode;
-  final bool isMe;
-  final String headline;
-  final String about;
-  final String location;
-  final List<String> skills;
-  final List<String> programs;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (tab) {
-      _ProfileTab.posts =>
-        _ProfilePosts(profileId: profileId, mode: viewMode, isMe: isMe),
-      _ProfileTab.about => _ProfileAboutPanel(
-        headline: headline,
-        about: about,
-        location: location,
-        skills: skills,
-        programs: programs,
-      ),
-      _ProfileTab.savedOrProjects => _ProfileProjects(
-        profileId: profileId,
-        showRequests: isMe,
-      ),
-    };
-  }
-}
-
-class _ProfilePosts extends StatefulWidget {
-  const _ProfilePosts({
-    required this.profileId,
-    required this.mode,
-    required this.isMe,
-  });
-
-  final String? profileId;
-  final _ProfileViewMode mode;
-  final bool isMe;
-
-  @override
-  State<_ProfilePosts> createState() => _ProfilePostsState();
-}
-
-class _ProfilePostsState extends State<_ProfilePosts> {
-  Future<List<FeedPostModel>>? _future;
-  String? _futureProfileId;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final id = widget.profileId;
-    if (id != null && id.isNotEmpty && _futureProfileId != id) {
-      _futureProfileId = id;
-      _future = _loadCombinedContent(id);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProfilePosts oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final id = widget.profileId;
-    if (id != null && id.isNotEmpty && _futureProfileId != id) {
-      setState(() {
-        _futureProfileId = id;
-        _future = _loadCombinedContent(id);
-      });
-    }
-  }
-
-  /// Fetch posts AND reels created by the profile, then merge them in
-  /// reverse-chronological order. `posts` table doesn't store reels, so
-  /// querying it alone always hides the user's video content.
-  Future<List<FeedPostModel>> _loadCombinedContent(String profileId) async {
-    final repositories = AppScope.read(context).repositories;
-    final results = await (
-      repositories.feed.fetchProfilePosts(profileId),
-      repositories.reels.fetchReelsForProfile(profileId),
-    ).wait;
-    final posts = results.$1;
-    final reels = results.$2;
-    final reelEntries = [
-      for (var i = 0; i < reels.length; i++)
-        feedPostFromReel(reels[i], colorIndex: i),
-    ];
-    // Sort by `time` string (ISO-like "yyyy-MM-dd HH:mm") descending.
-    // Both mappers use the same format, so lexicographic sort works.
-    final combined = <FeedPostModel>[...posts, ...reelEntries]
-      ..sort((a, b) => b.time.compareTo(a.time));
-    return combined;
-  }
-
-  Future<void> _refresh() async {
-    final id = widget.profileId;
-    if (id == null || id.isEmpty) {
-      return;
-    }
-    final repositories = AppScope.read(context).repositories;
-    // Force-refresh both sources before reloading.
-    await (
-      repositories.feed.fetchProfilePosts(id, forceRefresh: true),
-      repositories.reels.fetchReelsForProfile(id, forceRefresh: true),
-    ).wait;
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _future = _loadCombinedContent(id);
-    });
-    await _future;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final id = widget.profileId;
-    if (id == null || id.isEmpty) {
-      return const _EmptyProfileGrid(
-        icon: Icons.grid_on,
-        message: 'لا توجد منشورات بعد',
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: FutureBuilder<List<FeedPostModel>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const FeedPostSkeleton();
-          }
-          final posts = snapshot.data ?? const <FeedPostModel>[];
-          if (posts.isEmpty) {
-            return const _EmptyProfileGrid(
-              icon: Icons.grid_on,
-              message: 'لا توجد منشورات بعد',
-            );
-          }
-          return _ProfilePostsGrid(
-            posts: posts,
-            mode: widget.mode,
-            isMe: widget.isMe,
-            onDeleted: _refresh,
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ProfilePostsGrid extends StatelessWidget {
-  const _ProfilePostsGrid({
-    required this.posts,
-    required this.mode,
-    required this.isMe,
-    required this.onDeleted,
-  });
-
-  final List<FeedPostModel> posts;
-  final _ProfileViewMode mode;
-  final bool isMe;
-  final Future<void> Function() onDeleted;
-
-  void _openPost(BuildContext context, FeedPostModel post) {
-    if (post.isReel) {
-      // Reels live on the reels tab. Drop the navigation stack back to
-      // the shell, then switch to the reels tab so the user sees the
-      // reels feed.
-      final app = AppScope.read(context);
-      Navigator.of(context).popUntil((route) => route.isFirst);
-      app.selectTab(AppTab.reels);
-      return;
-    }
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)));
-  }
-
-  Future<void> _confirmAndDelete(
-    BuildContext context,
-    FeedPostModel post,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(post.isReel ? 'حذف الريل' : 'حذف المنشور'),
-        content: const Text(
-          'سيتم حذف هذا المحتوى نهائيا. هل تريد المتابعة؟',
-          textDirection: TextDirection.rtl,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('حذف'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) {
-      return;
-    }
-    final app = AppScope.read(context);
-    try {
-      // Reel post ids are prefixed by the mapper (see feedPostFromReel) so
-      // we strip the prefix before passing to the reels repo.
-      if (post.isReel) {
-        final rawId = post.id.startsWith('reel:')
-            ? post.id.substring('reel:'.length)
-            : post.id;
-        await app.repositories.reels.deleteReel(rawId);
-        app.notifyReelsChanged();
-      } else {
-        await app.repositories.feed.deletePost(post.id);
-        app.notifyFeedChanged();
-      }
-      if (!context.mounted) {
-        return;
-      }
-      AppSnack.success(
-        context,
-        post.isReel ? 'تم حذف الريل' : 'تم حذف المنشور',
-      );
-      await onDeleted();
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      AppSnack.error(
-        context,
-        error,
-        fallback: 'تعذر الحذف الآن. حاول مرة أخرى',
-      );
-    }
-  }
-
-  Widget _ownerMenu(BuildContext context, FeedPostModel post) {
-    return PopupMenuButton<String>(
-      tooltip: 'خيارات',
-      icon: const Icon(Icons.more_vert, color: Colors.white),
-      onSelected: (value) {
-        if (value == 'delete') {
-          _confirmAndDelete(context, post);
-        }
-      },
-      itemBuilder: (context) => const [
-        PopupMenuItem(
-          value: 'delete',
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline, color: Colors.redAccent),
-            title: Text('حذف'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final visiblePosts = mode == _ProfileViewMode.media
-        ? posts.where((post) => post.showMedia).toList(growable: false)
-        : posts;
-    if (visiblePosts.isEmpty) {
-      return const _EmptyProfileGrid(
-        icon: Icons.image_outlined,
-        message: 'لا توجد وسائط بعد',
-      );
-    }
-    if (mode == _ProfileViewMode.list) {
-      return Column(
-        children: [
-          for (var index = 0; index < visiblePosts.length; index++) ...[
-            Builder(
-              builder: (context) {
-                final post = visiblePosts[index];
-                return ListTile(
-                  onTap: () => _openPost(context, post),
-                  contentPadding: EdgeInsets.zero,
-                  leading: _ProfilePostThumb(post: post, size: 48),
-                  title: Text(
-                    post.body.trim().isEmpty ? _postKindLabel(post) : post.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  subtitle: Text(
-                    '${_postKindLabel(post)} · ${post.reactions} تفاعل · ${post.comments}',
-                  ),
-                  trailing: isMe
-                      ? IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.redAccent,
-                          ),
-                          tooltip: 'حذف',
-                          onPressed: () => _confirmAndDelete(context, post),
-                        )
-                      : null,
-                );
-              },
-            ),
-            if (index != visiblePosts.length - 1)
-              Divider(height: 18, color: context.appBorder),
-          ],
-        ],
-      );
-    }
-
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 1,
-        ),
-        itemCount: visiblePosts.length,
-        itemBuilder: (context, index) {
-          final post = visiblePosts[index];
-          return InkWell(
-            key: ValueKey('profile-post-card-${post.id}'),
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => _openPost(context, post),
-            // Long-press also surfaces the delete confirmation for users
-            // who would expect Instagram-style deletion on photos.
-            onLongPress: isMe ? () => _confirmAndDelete(context, post) : null,
-            child: Stack(
-              fit: StackFit.expand,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
               children: [
-                _ProfilePostThumb(post: post),
-                if (isMe)
-                  PositionedDirectional(
-                    top: 2,
-                    end: 2,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: .45),
-                        shape: BoxShape.circle,
+                for (int i = 0; i < _tabs.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: GestureDetector(
+                      onTap: () => setState(() {
+                        _selectedTab = i;
+                        _selectedSubTab = 0;
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _selectedTab == i
+                              ? const Color(0xFF1A1D23)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _tabs[i].icon,
+                              size: 18,
+                              color: _selectedTab == i
+                                  ? Colors.white
+                                  : context.appMuted,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _tabs[i].label,
+                              style: TextStyle(
+                                color: _selectedTab == i
+                                    ? Colors.white
+                                    : context.appMuted,
+                                fontWeight: _selectedTab == i
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: _ownerMenu(context, post),
                     ),
                   ),
               ],
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  String _postKindLabel(FeedPostModel post) {
-    if (post.isReel) {
-      return 'ريل';
-    }
-    if (post.isImagePost || post.showMedia) {
-      return 'صورة';
-    }
-    return 'منشور';
-  }
-}
-
-class _ProfilePostThumb extends StatelessWidget {
-  const _ProfilePostThumb({required this.post, this.size});
-
-  final FeedPostModel post;
-  final double? size;
-
-  @override
-  Widget build(BuildContext context) {
-    final Widget child;
-    if (post.showMedia) {
-      child = Stack(
-        fit: StackFit.expand,
-        children: [
-          MediaPreview(
-            mediaUrl: post.mediaUrl,
-            mediaType: post.mediaType,
-            fallbackLabel: post.isReel ? 'ريل' : 'صورة',
-          ),
-          if (post.isReel)
-            const PositionedDirectional(
-              top: 6,
-              end: 6,
-              child: Icon(
-                Icons.smart_display,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-        ],
-      );
-    } else {
-      // Text-only post: show the first few lines of the content over a
-      // gradient so it's recognisable in the grid (not just "منشور").
-      final preview = post.body.trim();
-      child = Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              post.avatarColor.withValues(alpha: .85),
-              post.avatarColor.withValues(alpha: .55),
-            ],
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.short_text, color: Colors.white70, size: 18),
-            const SizedBox(height: 6),
-            Expanded(
-              child: Text(
-                preview.isEmpty ? 'منشور نصي' : preview,
-                maxLines: 6,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.start,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  height: 1.35,
+        if (_selectedTab == 0) ...[
+          const SizedBox(height: 16),
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: context.appBorder.withValues(alpha: 0.1),
                 ),
               ),
             ),
-          ],
-        ),
-      );
-    }
-    return SizedBox(
-      width: size,
-      height: size,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.appSurfaceAlt,
-            border: Border.all(color: context.appBorder),
+            child: Row(
+              children: [
+                for (int i = 0; i < _subTabs.length; i++)
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedSubTab = i),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Icon(
+                              _subTabs[i],
+                              color: _selectedSubTab == i
+                                  ? Colors.white
+                                  : context.appMuted,
+                              size: 22,
+                            ),
+                          ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            height: 2,
+                            width: 60,
+                            decoration: BoxDecoration(
+                              color: _selectedSubTab == i
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          child: child,
-        ),
-      ),
+        ],
+        const SizedBox(height: 20),
+        _buildContent(),
+      ],
     );
+  }
+
+  Widget _buildContent() {
+    switch (_selectedTab) {
+      case 0: // المنشورات
+        if (_selectedSubTab == 0) {
+          return _ProfilePostsGrid(profileId: widget.profileId);
+        } else if (_selectedSubTab == 2) {
+          return _ProfileReelsGrid(profileId: widget.profileId);
+        }
+        // Gallery sub-tab or default
+        return _ProfilePostsGrid(profileId: widget.profileId);
+      case 1: // نبذة
+        return _ProfileAbout(about: widget.about, skills: widget.skills);
+      case 2: // الأعمال
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              children: [
+                Icon(Icons.work_outline_rounded, size: 48, color: context.appMuted),
+                const SizedBox(height: 16),
+                Text(
+                  'لا توجد أعمال لعرضها حالياً',
+                  style: TextStyle(color: context.appMuted),
+                ),
+                if (widget.isMe) ...[
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProjectFormScreen()),
+                    ),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('إضافة مشروع جديد'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: context.appPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      case 3: // البرامج والتطبيقات
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              children: [
+                Icon(Icons.developer_mode_rounded, size: 48, color: context.appMuted),
+                const SizedBox(height: 16),
+                Text(
+                  'لا توجد برامج أو تطبيقات لعرضها حالياً',
+                  style: TextStyle(color: context.appMuted),
+                ),
+                if (widget.isMe) ...[
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProjectFormScreen()),
+                    ),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('إضافة برنامج/تطبيق'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: context.appPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      default:
+        return const SizedBox();
+    }
   }
 }
 
-class _ProfileProjects extends StatefulWidget {
-  const _ProfileProjects({required this.profileId, required this.showRequests});
-
+class _ProfilePostsGrid extends StatelessWidget {
+  const _ProfilePostsGrid({required this.profileId});
   final String? profileId;
-  final bool showRequests;
-
-  @override
-  State<_ProfileProjects> createState() => _ProfileProjectsState();
-}
-
-class _ProfileProjectsState extends State<_ProfileProjects> {
-  Future<List<ProjectItem>>? _future;
-  String? _futureProfileId;
-
-  void _openProject(BuildContext context, ProjectItem project) {
-    if (!widget.showRequests) {
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProjectRequestsScreen(project: project),
-      ),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final id = widget.profileId;
-    if (id != null && id.isNotEmpty && _futureProfileId != id) {
-      _futureProfileId = id;
-      _future = AppScope.read(context).repositories.projects.fetchProjectsForProfile(id);
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProfileProjects oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final id = widget.profileId;
-    if (id != null && id.isNotEmpty && _futureProfileId != id) {
-      setState(() {
-        _futureProfileId = id;
-        _future = AppScope.read(context).repositories.projects.fetchProjectsForProfile(id);
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final id = widget.profileId;
-    if (id == null || id.isEmpty) {
-      return const _EmptyProfileGrid(
-        icon: Icons.folder_special_outlined,
-        message: 'لا توجد مشاريع بعد',
-      );
-    }
-    return FutureBuilder<List<ProjectItem>>(
-      future: _future,
+    if (profileId == null) return const SizedBox();
+    return FutureBuilder<List<FeedPostModel>>(
+      future: AppScope.read(context).repositories.feed.fetchProfilePosts(profileId!),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const ProjectCardSkeleton();
-        }
-        final projects = snapshot.data ?? const <ProjectItem>[];
-        if (projects.isEmpty) {
-          return const _EmptyProfileGrid(
-            icon: Icons.folder_special_outlined,
-            message: 'لا توجد مشاريع بعد',
+        final posts = snapshot.data ?? [];
+        if (posts.isEmpty) {
+          return Center(
+            child: Text(
+              'لا توجد منشورات',
+              style: TextStyle(color: context.appMuted),
+            ),
           );
         }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < projects.length; i++) ...[
-              _ProfileProjectRow(
-                project: projects[i],
-                showRequests: widget.showRequests,
-                onTap: widget.showRequests
-                    ? () => _openProject(context, projects[i])
-                    : null,
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final post = posts[index];
+            return Container(
+              decoration: BoxDecoration(
+                color: context.appSurfaceAlt,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: context.appBorder.withValues(alpha: 0.5),
+                ),
               ),
-              if (i != projects.length - 1)
-                Divider(height: 1, color: context.appBorder),
-            ],
-          ],
+              clipBehavior: Clip.antiAlias,
+              child: MediaPreview(
+                mediaUrl: post.mediaUrl,
+                mediaType: post.mediaType,
+                fallbackLabel: '',
+              ),
+            );
+          },
         );
       },
     );
   }
 }
 
-class _ProfileProjectRow extends StatelessWidget {
-  const _ProfileProjectRow({
-    required this.project,
-    required this.showRequests,
-    this.onTap,
-  });
-
-  final ProjectItem project;
-  final bool showRequests;
-  final VoidCallback? onTap;
+class _ProfileReelsGrid extends StatelessWidget {
+  const _ProfileReelsGrid({required this.profileId});
+  final String? profileId;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.appSurface,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      project.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.appText,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        height: 1.3,
-                      ),
-                    ),
-                    if (project.tagline.trim().isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        project.tagline,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: context.appMuted,
-                          fontSize: 13.5,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 6),
-                    Text(
-                      showRequests
-                          ? 'اضغط لعرض طلبات المشروع'
-                          : 'مشروع',
-                      style: const TextStyle(
-                        color: AppColors.blue,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+    if (profileId == null) return const SizedBox();
+    return FutureBuilder(
+      future: AppScope.read(context).repositories.reels.fetchReelsForProfile(profileId!),
+      builder: (context, snapshot) {
+        final reels = snapshot.data ?? [];
+        if (reels.isEmpty) {
+          return Center(
+            child: Text(
+              'لا توجد ريلز',
+              style: TextStyle(color: context.appMuted),
+            ),
+          );
+        }
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.7,
+          ),
+          itemCount: reels.length,
+          itemBuilder: (context, index) {
+            final reel = reels[index];
+            return Container(
+              decoration: BoxDecoration(
+                color: context.appSurfaceAlt,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: context.appBorder.withValues(alpha: 0.5),
                 ),
               ),
-              if (showRequests) ...[
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.chevron_left,
-                  color: context.appMuted,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+              clipBehavior: Clip.antiAlias,
+              child: MediaPreview(
+                mediaUrl: reel.videoUrl ?? '',
+                mediaType: 'video',
+                fallbackLabel: '',
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
 
-class _EmptyProfileGrid extends StatelessWidget {
-  const _EmptyProfileGrid({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
+class _ProfileAbout extends StatelessWidget {
+  const _ProfileAbout({required this.about, required this.skills});
+  final String about;
+  final List<String> skills;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 210,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Container(
-              width: 126,
-              height: 126,
-              decoration: BoxDecoration(color: context.appSurfaceAlt),
-              child: Icon(icon, color: context.appMuted, size: 34),
-            ),
-          ),
-          const Spacer(),
           Text(
-            message,
-            textAlign: TextAlign.center,
+            'نبذة تعريفية',
             style: TextStyle(
-              color: context.appMuted,
+              color: context.appText,
               fontSize: 16,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
             ),
           ),
           const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileAboutPanel extends StatelessWidget {
-  const _ProfileAboutPanel({
-    required this.headline,
-    required this.about,
-    required this.location,
-    required this.skills,
-    required this.programs,
-  });
-
-  final String headline;
-  final String about;
-  final String location;
-  final List<String> skills;
-  final List<String> programs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _ProfileInfoCard(
-          icon: Icons.description_outlined,
-          title: 'نبذة تعريفية',
-          subtitle: about.isEmpty ? 'لا توجد نبذة بعد' : about,
-        ),
-        const SizedBox(height: 10),
-        _ProfileInfoCard(
-          icon: Icons.badge_outlined,
-          title: 'المسمى',
-          subtitle: headline.isEmpty ? 'غير محدد' : headline,
-        ),
-        const SizedBox(height: 10),
-        _ProfileInfoCard(
-          icon: Icons.location_on_outlined,
-          title: 'الموقع',
-          subtitle: location,
-        ),
-        const SizedBox(height: 10),
-        _ProfileChipCard(
-          icon: Icons.lightbulb_outline,
-          title: 'المهارات',
-          emptyLabel: 'لم تتم إضافة مهارات بعد',
-          values: skills,
-        ),
-        const SizedBox(height: 10),
-        _ProfileChipCard(
-          icon: Icons.apps_outlined,
-          title: 'البرامج',
-          emptyLabel: 'لم تتم إضافة برامج بعد',
-          values: programs,
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileChipCard extends StatelessWidget {
-  const _ProfileChipCard({
-    required this.icon,
-    required this.title,
-    required this.emptyLabel,
-    required this.values,
-  });
-
-  final IconData icon;
-  final String title;
-  final String emptyLabel;
-  final List<String> values;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: AppColors.blue),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
+          Text(
+            about.isEmpty ? 'لا توجد نبذة بعد' : about,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: context.appMuted,
+              fontSize: 14,
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'المهارات',
+            style: TextStyle(
+              color: context.appText,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
           ),
           const SizedBox(height: 12),
-          if (values.isEmpty)
-            Text(
-              emptyLabel,
-              style: TextStyle(
-                color: context.appMuted,
-                fontWeight: FontWeight.w800,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final value in values)
-                  Chip(
-                    label: Text(value),
-                    backgroundColor: context.appSurfaceAlt,
-                    side: BorderSide(color: context.appBorder),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    labelStyle: TextStyle(
-                      color: context.appText,
-                      fontWeight: FontWeight.w800,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            textDirection: TextDirection.rtl,
+            children: [
+              for (final skill in skills)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.appPrimary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: context.appPrimary.withValues(alpha: 0.25),
                     ),
                   ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileInfoCard extends StatelessWidget {
-  const _ProfileInfoCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.appBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.blue),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  child: Text(
+                    skill,
+                    style: TextStyle(
+                      color: context.appPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: TextStyle(color: context.appMuted, height: 1.35),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PatternCover extends StatelessWidget {
-  const _PatternCover({required Color color});
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(color: context.appSurfaceAlt),
-      child: const SizedBox.expand(),
-    );
-  }
-}
-
-class _ProfileImageView extends StatelessWidget {
-  const _ProfileImageView({
-    required this.imageUrl,
-    required this.fit,
-    required this.fallback,
-  });
-
-  final String imageUrl;
-  final BoxFit fit;
-  final Widget fallback;
-
-  @override
-  Widget build(BuildContext context) {
-    final bytes = _bytesFromDataUrl(imageUrl);
-    if (bytes != null) {
-      return Image.memory(
-        bytes,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => fallback,
-      );
-    }
-    return Image.network(
-      imageUrl,
-      fit: fit,
-      errorBuilder: (context, error, stackTrace) => fallback,
-    );
-  }
-
-  Uint8List? _bytesFromDataUrl(String value) {
-    if (!value.startsWith('data:')) {
-      return null;
-    }
-    final comma = value.indexOf(',');
-    if (comma == -1) {
-      return null;
-    }
-    try {
-      return base64Decode(value.substring(comma + 1));
-    } catch (_) {
-      return null;
-    }
-  }
-}
-
-class _MediaEditHint extends StatelessWidget {
-  const _MediaEditHint({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: .55),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 16),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-enum _ProfileMedia { avatar, cover }
-
-class _ProfileMediaViewer extends StatefulWidget {
-  const _ProfileMediaViewer({
-    required this.media,
-    required this.title,
-    required this.name,
-    required this.color,
-    required this.imageUrl,
-    required this.canEdit,
-  });
-
-  final _ProfileMedia media;
-  final String title;
-  final String name;
-  final Color color;
-  final String? imageUrl;
-  final bool canEdit;
-
-  @override
-  State<_ProfileMediaViewer> createState() => _ProfileMediaViewerState();
-}
-
-class _ProfileMediaViewerState extends State<_ProfileMediaViewer> {
-  String? _imageUrl;
-  bool _isPicking = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _imageUrl = widget.imageUrl;
-  }
-
-  Future<void> _pickImage() async {
-    if (_isPicking) {
-      return;
-    }
-    setState(() => _isPicking = true);
-    try {
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: widget.media == _ProfileMedia.cover ? 1080 : 480,
-        imageQuality: 60,
-      );
-      if (picked == null) {
-        return;
-      }
-      final bytes = await picked.readAsBytes();
-      final mimeType = picked.mimeType ?? _mimeTypeFromPath(picked.path);
-      if (!mounted) {
-        return;
-      }
-      final app = AppScope.read(context);
-      final bucket = widget.media == _ProfileMedia.avatar
-          ? MediaBucket.avatars
-          : MediaBucket.covers;
-      final uploadedUrl = await app.repositories.media.uploadBytes(
-        bucket: bucket,
-        bytes: bytes,
-        fileName: picked.name,
-        mimeType: mimeType,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() => _imageUrl = uploadedUrl);
-      if (widget.media == _ProfileMedia.avatar) {
-        await app.updateMyAvatar(uploadedUrl);
-      } else {
-        await app.updateMyCover(uploadedUrl);
-      }
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      AppSnack.error(context, error, fallback: 'تعذر تغيير الصورة الآن');
-    } finally {
-      if (mounted) {
-        setState(() => _isPicking = false);
-      }
-    }
-  }
-
-  String _mimeTypeFromPath(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) {
-      return 'image/png';
-    }
-    if (lower.endsWith('.webp')) {
-      return 'image/webp';
-    }
-    return 'image/jpeg';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hasImage = _imageUrl != null && _imageUrl!.trim().isNotEmpty;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: Text(widget.title),
-        actions: [
-          if (widget.canEdit)
-            IconButton(
-              onPressed: _isPicking ? null : _pickImage,
-              icon: const Icon(Icons.add_photo_alternate_outlined),
-              tooltip: 'اختيار صورة',
-            ),
-        ],
-      ),
-      body: Center(
-        child: hasImage
-            ? InteractiveViewer(
-                child: _ProfileImageView(
-                  imageUrl: _imageUrl!,
-                  fit: BoxFit.contain,
-                  fallback: _MediaPlaceholder(viewer: widget),
-                ),
-              )
-            : _MediaPlaceholder(viewer: widget),
-      ),
-      floatingActionButton: widget.canEdit
-          ? FloatingActionButton.extended(
-              onPressed: _isPicking ? null : _pickImage,
-              backgroundColor: AppColors.blue,
-              icon: _isPicking
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.add_photo_alternate_outlined),
-              label: Text(_isPicking ? 'جاري الاختيار...' : 'تغيير الصورة'),
-            )
-          : null,
-    );
-  }
-}
-
-class _MediaPlaceholder extends StatelessWidget {
-  const _MediaPlaceholder({required this.viewer});
-
-  final _ProfileMediaViewer viewer;
-
-  @override
-  Widget build(BuildContext context) {
-    if (viewer.media == _ProfileMedia.avatar) {
-      return AppAvatar(name: viewer.name, radius: 88, color: viewer.color);
-    }
-    return SizedBox(
-      height: 220,
-      width: double.infinity,
-      child: _PatternCover(color: viewer.color),
-    );
-  }
-}
-
-class _OtherProfileStats extends StatelessWidget {
-  const _OtherProfileStats({required this.stats});
-
-  final ProfileStats stats;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _StatChip(value: stats.followers, label: 'متابع'),
-        _StatChipDivider(),
-        _StatChip(value: stats.following, label: 'يتابع'),
-        _StatChipDivider(),
-        _StatChip(value: stats.connections, label: 'اتصال'),
-      ],
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({required this.value, required this.label});
-
-  final int value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$value',
-            style: const TextStyle(
-              color: AppColors.blue,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: context.appMuted,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatChipDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      ' · ',
-      style: TextStyle(
-        color: context.appMuted,
-        fontWeight: FontWeight.w900,
-      ),
-    );
-  }
-}
-
-class _PrivateProfileLockoutPanel extends StatelessWidget {
-  const _PrivateProfileLockoutPanel({required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
-      child: Column(
-        children: [
-          Icon(Icons.lock_outline, color: context.appMuted, size: 46),
-          const SizedBox(height: 14),
-          const Text(
-            'هذا الحساب خاص',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'تواصل مع $name لرؤية منشوراته ومشاريعه ونشاطه.',
-            style: TextStyle(color: context.appMuted, height: 1.45),
-            textAlign: TextAlign.center,
+            ],
           ),
         ],
       ),

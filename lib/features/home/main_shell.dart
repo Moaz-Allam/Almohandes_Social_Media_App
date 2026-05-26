@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/layout_breakpoints.dart';
 import '../../models/app_tab.dart';
 import '../../state/app_scope.dart';
 import '../composer/composer_screen.dart';
 import '../feed/home_feed_screen.dart';
-import '../menu/linked_in_menu_drawer.dart';
 import '../messages/messages_screen.dart';
 import '../network/network_screen.dart';
+import '../premium/premium_dashboard_screen.dart';
 import '../projects/projects_screen.dart';
 import '../reels/reels_screen.dart';
+import '../profile/profile_screen.dart';
 import '../settings/settings_screen.dart';
 import 'web_shell.dart';
 import 'widgets/linked_bottom_navigation.dart';
@@ -44,7 +46,7 @@ class _MainShellState extends State<_MobileShell> {
   final Set<AppTab> _visitedTabs = {AppTab.feed};
 
   void _openDrawer() {
-    _scaffoldKey.currentState?.openDrawer();
+    AppScope.read(context).selectTab(AppTab.profile);
   }
 
   void _openMessages() {
@@ -62,10 +64,10 @@ class _MainShellState extends State<_MobileShell> {
   int _indexOf(AppTab tab) {
     return switch (tab) {
       AppTab.feed => 0,
-      AppTab.network => 1,
-      AppTab.composer => 2,
+      AppTab.search => 1,
+      AppTab.dashboard => 2,
       AppTab.reels => 3,
-      AppTab.projects => 4,
+      AppTab.profile => 4,
     };
   }
 
@@ -73,26 +75,25 @@ class _MainShellState extends State<_MobileShell> {
     if (!_visitedTabs.contains(tab)) {
       return const SizedBox.shrink();
     }
+    final controller = AppScope.read(context);
     return switch (tab) {
       AppTab.feed => HomeFeedScreen(onMenu: _openDrawer, onMessages: _openMessages),
-      AppTab.network => NetworkScreen(onMenu: _openDrawer, onMessages: _openMessages),
-      AppTab.composer => ComposerScreen(
-          onClose: () => AppScope.read(context).selectTab(AppTab.feed),
-        ),
+      AppTab.search => NetworkScreen(onMenu: _openDrawer, onMessages: _openMessages),
+      AppTab.dashboard => PremiumDashboardScreen(onMenu: _openDrawer, onMessages: _openMessages),
       AppTab.reels => ReelsScreen(onMenu: _openDrawer, onMessages: _openMessages),
-      AppTab.projects => ProjectsScreen(onMenu: _openDrawer, onMessages: _openMessages),
+      AppTab.profile => ProfileScreen(
+        name: controller.profile?.fullName ?? '',
+        headline: controller.profile?.headline ?? '',
+        color: context.appPrimary,
+        onMenu: _openDrawer,
+        isMe: true,
+      ),
     };
   }
 
   void _onTabChanged(AppTab tab) {
     if (!_visitedTabs.contains(tab)) {
       setState(() => _visitedTabs.add(tab));
-    } else if (tab == AppTab.composer) {
-      // Composer should always start fresh — drop and re-create.
-      setState(() {
-        _visitedTabs.remove(AppTab.composer);
-        _visitedTabs.add(AppTab.composer);
-      });
     }
     AppScope.read(context).selectTab(tab);
   }
@@ -102,7 +103,6 @@ class _MainShellState extends State<_MobileShell> {
     final controller = AppScope.watch(context);
     return Scaffold(
       key: _scaffoldKey,
-      drawer: LinkedInMenuDrawer(onSettings: _openSettings),
       body: IndexedStack(
         index: _indexOf(controller.selectedTab),
         children: [

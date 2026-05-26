@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/app_tab.dart';
 
+/// Bottom navigation styled after the web dashboard's footer/nav:
+/// translucent surface, rounded pill-shaped active indicator, and
+/// Lucide-equivalent Material icons.
 class LinkedBottomNavigation extends StatelessWidget {
   const LinkedBottomNavigation({
     super.key,
@@ -16,46 +18,60 @@ class LinkedBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
         color: context.appSurface,
-        border: Border(top: BorderSide(color: context.appBorder)),
+        border: Border(
+          top: BorderSide(color: context.appBorder.withValues(alpha: 0.6)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: context.isDarkMode ? 0.35 : 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 62,
+          height: 68,
           child: Row(
             children: [
               _NavItem(
-                icon: Icons.home,
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
                 label: 'الرئيسية',
                 selected: selectedTab == AppTab.feed,
                 onTap: () => onChanged(AppTab.feed),
               ),
               _NavItem(
-                icon: Icons.people_alt,
-                label: 'شبكتي',
-                selected: selectedTab == AppTab.network,
-                onTap: () => onChanged(AppTab.network),
+                icon: Icons.search_rounded,
+                activeIcon: Icons.search_rounded,
+                label: 'البحث',
+                selected: selectedTab == AppTab.search,
+                onTap: () => onChanged(AppTab.search),
               ),
               _NavItem(
-                icon: Icons.add_box,
-                label: 'نشر',
-                selected: selectedTab == AppTab.composer,
-                onTap: () => onChanged(AppTab.composer),
+                icon: Icons.grid_view_outlined,
+                activeIcon: Icons.grid_view_rounded,
+                label: 'لوحة التحكم',
+                selected: selectedTab == AppTab.dashboard,
+                onTap: () => onChanged(AppTab.dashboard),
               ),
               _NavItem(
-                icon: Icons.smart_display,
-                label: 'ريلز',
+                icon: Icons.play_circle_outline_rounded,
+                activeIcon: Icons.play_circle_rounded,
+                label: 'الريلز',
                 selected: selectedTab == AppTab.reels,
                 onTap: () => onChanged(AppTab.reels),
               ),
               _NavItem(
-                icon: Icons.work,
-                label: 'مشاريع',
-                selected: selectedTab == AppTab.projects,
-                onTap: () => onChanged(AppTab.projects),
+                icon: Icons.person_outline_rounded,
+                activeIcon: Icons.person_rounded,
+                label: 'حسابي',
+                selected: selectedTab == AppTab.profile,
+                onTap: () => onChanged(AppTab.profile),
               ),
             ],
           ),
@@ -68,47 +84,55 @@ class LinkedBottomNavigation extends StatelessWidget {
 class _NavItem extends StatelessWidget {
   const _NavItem({
     required this.icon,
+    required this.activeIcon,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
   final IconData icon;
+  final IconData activeIcon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? context.appText : context.appMuted;
+    final color = selected ? context.appPrimary : context.appMuted;
     return Expanded(
       child: InkWell(
         onTap: onTap,
+        splashColor: context.appPrimary.withValues(alpha: 0.08),
+        highlightColor: context.appPrimary.withValues(alpha: 0.04),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              height: 3,
-              color: selected ? AppColors.blue : Colors.transparent,
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected
+                    ? context.appPrimary.withValues(alpha: 0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(
+                selected ? activeIcon : icon,
+                color: color,
+                size: 24,
+              ),
             ),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: color, size: 26),
-                  const SizedBox(height: 2),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      height: 1.1,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                letterSpacing: -0.1,
               ),
             ),
           ],

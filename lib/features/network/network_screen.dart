@@ -35,6 +35,13 @@ class _NetworkScreenState extends State<NetworkScreen> {
   final Set<String> _connectingIds = {};
   Future<List<NetworkPerson>>? _profilesFuture;
   String? _profilesFutureKey;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   List<_NetworkCategory> _categoriesFor(AccountType accountType) {
     return switch (accountType) {
@@ -256,9 +263,14 @@ class _NetworkScreenState extends State<NetworkScreen> {
                     // future schema changes shouldn't be allowed to slip
                     // your own card in.
                     final rawProfiles = snapshot.data ?? const <NetworkPerson>[];
+                    final query = _searchController.text.trim().toLowerCase();
                     final profiles = [
                       for (final p in rawProfiles)
-                        if (!_isCurrentUser(p, myProfileId)) p,
+                        if (!_isCurrentUser(p, myProfileId) &&
+                            (query.isEmpty ||
+                                p.name.toLowerCase().contains(query) ||
+                                p.title.toLowerCase().contains(query)))
+                          p,
                     ];
 
                     return RefreshIndicator(
@@ -288,8 +300,31 @@ class _NetworkScreenState extends State<NetworkScreen> {
                             ),
                           ),
                           SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (value) => setState(() {}), // Local filter
+                                decoration: InputDecoration(
+                                  hintText: 'البحث بالاسم أو المنصب...',
+                                  prefixIcon: const Icon(Icons.search_rounded),
+                                  filled: true,
+                                  fillColor: context.appSurfaceAlt,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SliverToBoxAdapter(
                             child: Divider(
-                              height: 9,
+                              height: 1,
                               thickness: 8,
                               color: context.appSoft,
                             ),

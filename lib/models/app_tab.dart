@@ -1,1 +1,1 @@
-enum AppTab { feed, network, composer, reels, projects }
+enum AppTab { feed, search, dashboard, reels, profile }

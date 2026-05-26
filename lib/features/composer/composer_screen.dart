@@ -14,6 +14,7 @@ import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import 'project_form_screen.dart';
+import 'job_form_screen.dart';
 import 'widgets/composer_top_bar.dart';
 
 class ComposerScreen extends StatefulWidget {
@@ -46,6 +47,11 @@ class _ComposerScreenState extends State<ComposerScreen> {
       'إضافة مشروع',
       _ComposerAction.project,
     ),
+    _ComposerOption(
+      Icons.work_outline_rounded,
+      'إضافة وظيفة',
+      _ComposerAction.job,
+    ),
   ];
 
   @override
@@ -55,10 +61,15 @@ class _ComposerScreenState extends State<ComposerScreen> {
   }
 
   List<_ComposerOption> _optionsFor(AccountType accountType) {
+    final canPostSpecial = accountType == AccountType.engineer ||
+        accountType == AccountType.company ||
+        accountType == AccountType.admin;
+
     return [
       for (final option in _allOptions)
-        if (option.action != _ComposerAction.project ||
-            accountType.canPostProjects)
+        if ((option.action != _ComposerAction.project &&
+                option.action != _ComposerAction.job) ||
+            canPostSpecial)
           option,
     ];
   }
@@ -305,6 +316,16 @@ class _ComposerScreenState extends State<ComposerScreen> {
           widget.onClose();
         }
         return;
+      case _ComposerAction.job:
+        // For now jobs use the same form or a simplified one, 
+        // but user asked for different inputs. I will create a JobFormScreen.
+        final createdJob = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => const JobFormScreen()),
+        );
+        if (createdJob == true && mounted) {
+          widget.onClose();
+        }
+        return;
     }
   }
 
@@ -318,29 +339,31 @@ class _ComposerScreenState extends State<ComposerScreen> {
         : 'المستخدم';
     final role = profile?.role.isNotEmpty == true ? profile!.role : null;
 
-    return Column(
-      children: [
-        // The publish button enable-state is the only thing that depends on
-        // the text field, so subscribe just the top bar to the controller
-        // instead of rebuilding the whole composer on every keystroke.
-        ListenableBuilder(
-          listenable: _contentController,
-          builder: (context, _) {
-            return ComposerTopBar(
-              title: 'مشاركة منشور',
-              onClose: widget.onClose,
-              onAction: _publishPost,
-              actionEnabled:
-                  (_contentController.text.trim().isNotEmpty ||
-                      _mediaUrl.isNotEmpty) &&
-                  !_isPublishing,
-            );
-          },
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-            children: [
+    return Scaffold(
+      backgroundColor: context.appBackground,
+      body: Column(
+        children: [
+          // The publish button enable-state is the only thing that depends on
+          // the text field, so subscribe just the top bar to the controller
+          // instead of rebuilding the whole composer on every keystroke.
+          ListenableBuilder(
+            listenable: _contentController,
+            builder: (context, _) {
+              return ComposerTopBar(
+                title: 'مشاركة منشور',
+                onClose: widget.onClose,
+                onAction: _publishPost,
+                actionEnabled:
+                    (_contentController.text.trim().isNotEmpty ||
+                        _mediaUrl.isNotEmpty) &&
+                    !_isPublishing,
+              );
+            },
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+              children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -484,6 +507,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
           onSelected: (option) => _handleOption(context, option, accountType),
         ),
       ],
+    ),
     );
   }
 }
@@ -551,4 +575,4 @@ final class _ComposerOption {
   final _ComposerAction action;
 }
 
-enum _ComposerAction { photo, reel, project }
+enum _ComposerAction { photo, reel, project, job }

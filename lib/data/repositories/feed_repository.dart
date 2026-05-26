@@ -15,6 +15,9 @@ abstract interface class FeedRepository {
   /// Returns home-feed posts authored by profiles the viewer follows.
   Future<List<FeedPostModel>> fetchFollowingFeed({bool forceRefresh = false});
 
+  /// Returns home-feed posts authored by craftsmen and workers.
+  Future<List<FeedPostModel>> fetchProfessionalsFeed({bool forceRefresh = false});
+
   Future<List<FeedPostModel>> fetchProfilePosts(
     String profileId, {
     bool forceRefresh = false,
@@ -47,6 +50,9 @@ final class SupabaseFeedRepository implements FeedRepository {
     ttl: const Duration(minutes: 1),
   );
   final _followingCache = TimedMemoryCache<List<FeedPostModel>>(
+    ttl: const Duration(minutes: 1),
+  );
+  final _professionalsCache = TimedMemoryCache<List<FeedPostModel>>(
     ttl: const Duration(minutes: 1),
   );
   // LRU cap: per-profile post caches are useful for the recently-viewed
@@ -175,6 +181,50 @@ final class SupabaseFeedRepository implements FeedRepository {
               'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
             )
             .inFilter('profile_id', followedIds.toList())
+            .eq('is_active', true)
+            .order('created_at', ascending: false)
+            .limit(_feedPageSize);
+        return _enforceVisibility(remote, _postsFromRows(rows));
+      } catch (_) {
+        return const [];
+      }
+    }
+  }
+
+  @override
+  Future<List<FeedPostModel>> fetchProfessionalsFeed({
+    bool forceRefresh = false,
+  }) {
+    return _professionalsCache.read(
+      _fetchProfessionalsFeed,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  Future<List<FeedPostModel>> _fetchProfessionalsFeed() async {
+    final remote = client;
+    if (remote == null) {
+      return const [];
+    }
+    try {
+      final rows = await remote
+          .from('posts')
+          .select(
+            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles!inner(full_name,role,avatar_url)',
+          )
+          .inFilter('profiles.role', ['craftsman', 'worker'])
+          .eq('is_active', true)
+          .order('created_at', ascending: false)
+          .limit(_feedPageSize);
+      return _enforceVisibility(remote, _postsFromRows(rows));
+    } catch (_) {
+      try {
+        final rows = await remote
+            .from('posts')
+            .select(
+              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles!inner(full_name,role,avatar_url)',
+            )
+            .inFilter('profiles.role', ['craftsman', 'worker'])
             .eq('is_active', true)
             .order('created_at', ascending: false)
             .limit(_feedPageSize);

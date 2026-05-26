@@ -7,6 +7,7 @@ import 'package:screen_protector/screen_protector.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../state/app_scope.dart';
+import '../home/widgets/home_top_bar.dart';
 import 'engineer_ai_chat_screen.dart';
 import 'models/premium_course.dart';
 import 'premium_access_screen.dart';
@@ -15,7 +16,14 @@ import 'premium_info_screen.dart';
 import 'premium_notes_screen.dart';
 
 class PremiumDashboardScreen extends StatefulWidget {
-  const PremiumDashboardScreen({super.key});
+  const PremiumDashboardScreen({
+    super.key,
+    this.onMenu,
+    this.onMessages,
+  });
+
+  final VoidCallback? onMenu;
+  final VoidCallback? onMessages;
 
   @override
   State<PremiumDashboardScreen> createState() => _PremiumDashboardScreenState();
@@ -178,71 +186,73 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
       return const PremiumAccessScreen();
     }
     return Scaffold(
-      backgroundColor: context.appBackground,
-      appBar: AppBar(
-        title: const Text(
-          'لوحة Premium',
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ),
-      body: FutureBuilder<List<PremiumCourse>>(
-        future: _coursesFuture,
-        builder: (context, snapshot) {
-          final courses = snapshot.data ?? const <PremiumCourse>[];
-          final isLoading = snapshot.connectionState == ConnectionState.waiting;
-          final cards = _cards(courses);
+      backgroundColor: Colors.black,
+      body: Column(
+        children: [
+          HomeTopBar(
+            onMenu: widget.onMenu ?? () => Navigator.pop(context), 
+            onMessages: widget.onMessages ?? () {}, // Provide fallback if null
+          ),
+          Expanded(
+            child: FutureBuilder<List<PremiumCourse>>(
+              future: _coursesFuture,
+              builder: (context, snapshot) {
+                final courses = snapshot.data ?? const <PremiumCourse>[];
+                final isLoading = snapshot.connectionState == ConnectionState.waiting;
+                final cards = _cards(courses);
 
-          return RefreshIndicator(
-            onRefresh: _refreshCourses,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-              children: [
-                Text(
-                  'مركز المهندس',
-                  style: TextStyle(
-                    color: context.appText,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'مكتبات فيديو، ملاحظات، شؤون قانونية، ومساعدة إنجي الذكية في مكان واحد.',
-                  style: TextStyle(color: context.appMuted, height: 1.45),
-                ),
-                if (isLoading) ...[
-                  const SizedBox(height: 14),
-                  const LinearProgressIndicator(minHeight: 3),
-                ],
-                const SizedBox(height: 16),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = constraints.maxWidth >= 720 ? 2 : 1;
-                    final spacing = columns == 1 ? 12.0 : 14.0;
-                    final itemWidth =
-                        (constraints.maxWidth - spacing * (columns - 1)) /
-                        columns;
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      children: [
-                        for (final card in cards)
-                          SizedBox(
-                            width: itemWidth,
-                            child: _DashboardCard(card: card),
-                          ),
+                return RefreshIndicator(
+                  onRefresh: _refreshCourses,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                    children: [
+                      const Text(
+                        'مركز المهندس',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'مكتبات فيديو، ملاحظات، شؤون قانونية، ومساعدة إنجي الذكية في مكان واحد.',
+                        textAlign: TextAlign.right,
+                        style: TextStyle(color: Colors.white70, height: 1.5, fontSize: 14),
+                      ),
+                      if (isLoading) ...[
+                        const SizedBox(height: 14),
+                        const LinearProgressIndicator(minHeight: 2, backgroundColor: Colors.transparent),
                       ],
-                    );
-                  },
-                ),
-              ],
+                      const SizedBox(height: 32),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = constraints.maxWidth >= 720 ? 2 : 1;
+                          final spacing = 16.0;
+                          final itemWidth =
+                              (constraints.maxWidth - spacing * (columns - 1)) /
+                              columns;
+                          return Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              for (final card in cards)
+                                SizedBox(
+                                  width: itemWidth,
+                                  child: _DashboardCard(card: card),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -315,21 +325,21 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
         title: 'طلب استشارة قانونية',
         subtitle: 'خطوات حل النزاعات القانونية',
         icon: Icons.phone_in_talk_outlined,
-        color: const Color(0xFF9957E8),
+        color: const Color(0xFFEF4444),
         onTap: _openLegalRequest,
       ),
       _DashboardCardData(
         title: 'الشؤون القانونية',
         subtitle: 'حقوق المهندس والقوانين',
         icon: Icons.balance_outlined,
-        color: const Color(0xFF9957E8),
+        color: const Color(0xFFEF4444),
         onTap: _openLegalAffairs,
       ),
       _DashboardCardData(
         title: 'المكتبة الهندسية',
         subtitle: 'قريباً...',
         icon: Icons.library_books_outlined,
-        color: context.appMuted,
+        color: Colors.white24,
         locked: true,
         onTap: _showComingSoon,
       ),
@@ -366,50 +376,49 @@ class _DashboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: context.appSurface,
-      borderRadius: BorderRadius.circular(8),
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.appBorder.withValues(alpha: 0.5)),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
         onTap: card.onTap,
         child: Container(
-          height: 164,
+          height: 180,
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: context.appBorder),
-          ),
           child: Stack(
             children: [
               PositionedDirectional(
-                end: 0,
+                start: 0,
                 top: 0,
                 child: _CardIcon(card: card),
               ),
               PositionedDirectional(
-                start: 0,
+                end: 0,
                 top: 0,
                 child: card.locked
-                    ? Icon(
+                    ? const Icon(
                         Icons.lock_outline,
-                        size: 21,
-                        color: context.appMuted,
+                        size: 20,
+                        color: Colors.white24,
                       )
                     : card.badge == null
                     ? const SizedBox.shrink()
                     : Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 3,
+                          horizontal: 10,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.blue,
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${card.badge}',
                           style: const TextStyle(
-                            color: AppColors.white,
+                            color: Colors.white,
                             fontWeight: FontWeight.w900,
                             fontSize: 12,
                           ),
@@ -429,21 +438,22 @@ class _DashboardCard extends StatelessWidget {
                       textDirection: TextDirection.rtl,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.appText,
-                        fontSize: 17,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       card.subtitle,
                       textDirection: TextDirection.rtl,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.appMuted,
-                        fontWeight: FontWeight.w800,
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -466,15 +476,15 @@ class _CardIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final avatarAsset = card.avatarAsset;
     return Container(
-      width: 60,
-      height: 60,
+      width: 56,
+      height: 56,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: card.color.withValues(alpha: .18),
-        borderRadius: BorderRadius.circular(18),
+        color: card.color.withValues(alpha: .15),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: avatarAsset == null
-          ? Icon(card.icon, color: card.color, size: 30)
+          ? Icon(card.icon, color: card.color, size: 28)
           : Image.asset(avatarAsset, fit: BoxFit.cover),
     );
   }

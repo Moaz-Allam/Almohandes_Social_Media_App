@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/layout_breakpoints.dart';
 import '../../../models/message_item.dart';
 import '../../../shared/widgets/app_avatar.dart';
-import '../../../shared/widgets/search_pill.dart';
 import '../../../state/app_scope.dart';
-import '../../search/search_screen.dart';
 
+/// Mobile top bar styled after the web dashboard's header:
+/// avatar + name/location block on the right (RTL), action icons on the
+/// left, surface-tinted background with a soft bottom divider.
 class HomeTopBar extends StatelessWidget {
   const HomeTopBar({
     super.key,
@@ -21,44 +21,95 @@ class HomeTopBar extends StatelessWidget {
   final VoidCallback onMessages;
   final String hint;
 
-  void _openSearch(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
-  }
-
   @override
   Widget build(BuildContext context) {
-    // On wide / desktop layouts the WebShell renders its own top bar
-    // (logo + search + icon nav), so screens that embed HomeTopBar
-    // shouldn't render a second one stacked under it.
     if (LayoutBreakpoints.isDesktop(context)) {
       return const SizedBox.shrink();
     }
-    // Stateless wrt. AppController. Each interactive piece (avatar, unread
-    // icon) subscribes only to the slice of state it actually needs, so
-    // a notify on one (e.g. unread count) doesn't repaint the rest.
+    final profile = AppScope.watch(context).profile;
+    final name = (profile?.fullName.isNotEmpty ?? false)
+        ? profile!.fullName
+        : 'المستخدم';
+
     return SafeArea(
       bottom: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        height: 68,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: context.appSurface,
-          border: Border(bottom: BorderSide(color: context.appBorder)),
+          border: Border(
+            bottom: BorderSide(color: context.appBorder.withValues(alpha: 0.6)),
+          ),
         ),
         child: Row(
           children: [
-            _TopBarAvatar(onMenu: onMenu),
-            const SizedBox(width: 10),
-            Expanded(
-              child: InkWell(
-                onTap: () => _openSearch(context),
-                borderRadius: BorderRadius.circular(4),
-                child: SearchPill(hint: hint),
+            // RTL start (visual right): avatar + name.
+            GestureDetector(
+              onTap: onMenu,
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: context.appPrimary.withValues(alpha: 0.25),
+                    width: 1.5,
+                  ),
+                ),
+                padding: const EdgeInsets.all(2),
+                child: AppAvatar(
+                  name: name,
+                  radius: 20,
+                  color: context.appPrimary,
+                  imageUrl: profile?.avatarUrl,
+                ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: context.appText,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 12,
+                      color: context.appMuted,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      'بغداد',
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const Spacer(),
+            // RTL end (visual left): live, messages, notifications.
+            const _LivePill(),
+            const SizedBox(width: 6),
             _MessagesIcon(onMessages: onMessages),
+            const SizedBox(width: 6),
+            _CircleIconButton(
+              icon: Icons.notifications_none_rounded,
+              onPressed: () {},
+              tooltip: 'الإشعارات',
+            ),
           ],
         ),
       ),
@@ -66,36 +117,72 @@ class HomeTopBar extends StatelessWidget {
   }
 }
 
-class _TopBarAvatar extends StatelessWidget {
-  const _TopBarAvatar({required this.onMenu});
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+  });
 
-  final VoidCallback onMenu;
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    // Subscribe only here — the rest of the bar doesn't need to rebuild
-    // when the profile updates.
-    final profile = AppScope.watch(context).profile;
-    final name = (profile?.fullName.isNotEmpty ?? false)
-        ? profile!.fullName
-        : 'المستخدم';
-    final badge = profile?.role.isNotEmpty == true ? profile!.role : null;
-    return GestureDetector(
-      key: const ValueKey('home-menu-avatar'),
-      onTap: onMenu,
-      child: AppAvatar(
-        name: name,
-        radius: 20,
-        color: AppColors.darkBlue,
-        badge: badge,
-        imageUrl: profile?.avatarUrl,
+    return Material(
+      color: context.appSurfaceAlt.withValues(alpha: 0.6),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const CircleBorder(),
+        child: Tooltip(
+          message: tooltip ?? '',
+          child: Padding(
+            padding: const EdgeInsets.all(9),
+            child: Icon(icon, size: 22, color: context.appText),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Holds the unread-conversations Future in state so the top bar doesn't
-/// fire a new query on every keyboard / tab rebuild.
+class _LivePill extends StatelessWidget {
+  const _LivePill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.podcasts_rounded, size: 14, color: Color(0xFFEF4444)),
+          SizedBox(width: 5),
+          Text(
+            'LIVE',
+            style: TextStyle(
+              color: Color(0xFFEF4444),
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MessagesIcon extends StatefulWidget {
   const _MessagesIcon({required this.onMessages});
 
@@ -141,51 +228,41 @@ class _MessagesIconState extends State<_MessagesIcon> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            IconButton(
+            _CircleIconButton(
+              icon: Icons.chat_bubble_outline_rounded,
               onPressed: widget.onMessages,
-              icon: const Icon(
-                Icons.chat_bubble,
-                color: AppColors.muted,
-              ),
               tooltip: 'الرسائل',
             ),
             if (unreadCount > 0)
               PositionedDirectional(
-                top: 3,
+                top: 2,
                 end: 2,
-                child: _UnreadBadge(count: unreadCount),
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF43F5E), Color(0xFFEC4899)],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: context.appSurface, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
               ),
           ],
         );
       },
-    );
-  }
-}
-
-class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-      padding: const EdgeInsets.symmetric(horizontal: 5),
-      decoration: BoxDecoration(
-        color: AppColors.blue,
-        borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: context.appSurface, width: 2),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        count > 99 ? '99+' : '$count',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
     );
   }
 }

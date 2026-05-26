@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/theme/app_theme.dart';
@@ -175,7 +176,18 @@ class _AppShell extends StatelessWidget {
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           title: 'المهندس',
+          // Force the entire app into Arabic / RTL. Material widgets
+          // (date pickers, snackbars, dialogs, tooltips) pick up the right
+          // strings + direction from these delegates; the explicit
+          // Directionality wrapper guarantees RTL even for widgets that
+          // ignore Localizations.
           locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           builder: (context, child) {
             return Directionality(
               textDirection: TextDirection.rtl,

@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 
 class LinkedInLogo extends StatelessWidget {
-  const LinkedInLogo({super.key, this.scale = 1});
+  const LinkedInLogo({
+    super.key,
+    this.scale = 1,
+    this.showText = true,
+  });
 
   final double scale;
+  final bool showText;
 
   @override
   Widget build(BuildContext context) {
@@ -23,16 +28,18 @@ class LinkedInLogo extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-          SizedBox(width: 7 * scale),
-          Text(
-            'المهندس',
-            style: TextStyle(
-              color: AppColors.blue,
-              fontSize: 22 * scale,
-              fontWeight: FontWeight.w900,
-              height: 1,
+          if (showText) ...[
+            SizedBox(width: 7 * scale),
+            Text(
+              'المهندس',
+              style: TextStyle(
+                color: AppColors.blue,
+                fontSize: 22 * scale,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
