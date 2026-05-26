@@ -374,6 +374,13 @@ final class _ControlledFeedRepository implements FeedRepository {
   }
 
   @override
+  Future<List<FeedPostModel>> fetchProfessionalsFeed({
+    bool forceRefresh = false,
+  }) async {
+    return _testPosts;
+  }
+
+  @override
   Future<List<FeedPostModel>> fetchProfilePosts(
     String profileId, {
     bool forceRefresh = false,
@@ -420,6 +427,13 @@ final class _ImmediateFeedRepository implements FeedRepository {
 
   @override
   Future<List<FeedPostModel>> fetchFollowingFeed({
+    bool forceRefresh = false,
+  }) async {
+    return _testPosts;
+  }
+
+  @override
+  Future<List<FeedPostModel>> fetchProfessionalsFeed({
     bool forceRefresh = false,
   }) async {
     return _testPosts;

@@ -459,6 +459,13 @@ final class _FakeFeedRepository implements FeedRepository {
   }
 
   @override
+  Future<List<FeedPostModel>> fetchProfessionalsFeed({
+    bool forceRefresh = false,
+  }) async {
+    return posts;
+  }
+
+  @override
   Future<List<FeedPostModel>> fetchProfilePosts(
     String profileId, {
     bool forceRefresh = false,
