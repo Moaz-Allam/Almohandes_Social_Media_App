@@ -290,6 +290,18 @@ final class _FakeAuthRepository implements AuthRepository {
   }) async {}
 
   @override
+  Future<void> sendPasswordResetOtp({required String phone}) async {}
+
+  @override
+  Future<void> verifyPasswordResetOtp({
+    required String phone,
+    required String code,
+  }) async {}
+
+  @override
+  Future<void> resetPassword({required String newPassword}) async {}
+
+  @override
   Future<void> signOut() async {}
 }
 

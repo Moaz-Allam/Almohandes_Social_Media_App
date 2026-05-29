@@ -62,6 +62,21 @@ abstract interface class AuthRepository {
     required String phone,
   });
 
+  /// Sends an OTP to [phone] for password recovery. The number must already
+  /// be registered (`shouldCreateUser: false`).
+  Future<void> sendPasswordResetOtp({required String phone});
+
+  /// Verifies the password-reset OTP and establishes a session so the caller
+  /// can update the password next.
+  Future<void> verifyPasswordResetOtp({
+    required String phone,
+    required String code,
+  });
+
+  /// Resets the password for the currently-signed-in user (just verified via
+  /// OTP). Requires an active session.
+  Future<void> resetPassword({required String newPassword});
+
   Future<void> signOut();
 }
 
@@ -408,6 +423,125 @@ final class SupabaseAuthRepository implements AuthRepository {
           error,
           fallback:
               'تعذر إنشاء الحساب. تحقق من البيانات أو من الاتصال بالإنترنت وحاول مرة أخرى',
+        ),
+        error,
+      );
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetOtp({required String phone}) async {
+    final remote = client;
+    if (remote == null) {
+      throw const RepositoryFailure(
+        'الخدمة غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
+    }
+    final normalized = _normalizePhone(phone);
+    if (!_looksLikePhone(normalized)) {
+      throw const RepositoryFailure(
+        'رقم الهاتف غير صحيح. تحقق من الرقم وأعد المحاولة',
+      );
+    }
+    try {
+      await remote.auth.signInWithOtp(
+        phone: normalized,
+        channel: OtpChannel.sms,
+        shouldCreateUser: false,
+      );
+    } catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر إرسال رمز التحقق. تأكد أن الرقم مسجل ثم حاول مرة أخرى',
+        ),
+        error,
+      );
+    }
+  }
+
+  @override
+  Future<void> verifyPasswordResetOtp({
+    required String phone,
+    required String code,
+  }) async {
+    final remote = client;
+    if (remote == null) {
+      throw const RepositoryFailure(
+        'الخدمة غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
+    }
+    final trimmedCode = code.trim();
+    if (trimmedCode.isEmpty) {
+      throw const RepositoryFailure('أدخل رمز التحقق المرسل إلى هاتفك');
+    }
+    if (!RegExp(r'^\d{4,8}$').hasMatch(trimmedCode)) {
+      throw const RepositoryFailure('رمز التحقق يجب أن يتكون من أرقام فقط');
+    }
+    final normalized = _normalizePhone(phone);
+    try {
+      final auth = await remote.auth.verifyOTP(
+        phone: normalized,
+        token: trimmedCode,
+        type: OtpType.sms,
+      );
+      if (auth.session == null || auth.user == null) {
+        throw const RepositoryFailure(
+          'تعذر التحقق من الرمز. اطلب رمزا جديدا ثم حاول مرة أخرى',
+        );
+      }
+    } on AuthException catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'رمز التحقق غير صحيح أو منتهي الصلاحية. اطلب رمزا جديدا',
+        ),
+        error,
+      );
+    } catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر التحقق من الرمز. تحقق من الاتصال أو اطلب رمزا جديدا',
+        ),
+        error,
+      );
+    }
+  }
+
+  @override
+  Future<void> resetPassword({required String newPassword}) async {
+    final remote = client;
+    if (remote == null) {
+      throw const RepositoryFailure(
+        'الخدمة غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
+    }
+    final value = newPassword.trim();
+    if (value.isEmpty) {
+      throw const RepositoryFailure('أدخل كلمة المرور الجديدة');
+    }
+    if (value.length < 6) {
+      throw const RepositoryFailure(
+        'كلمة المرور قصيرة جدا. استخدم 6 أحرف على الأقل',
+      );
+    }
+    if (remote.auth.currentSession == null) {
+      throw const RepositoryFailure(
+        'انتهت جلسة التحقق. أعد إدخال رقم هاتفك ورمز التحقق',
+      );
+    }
+    try {
+      await remote.auth.updateUser(UserAttributes(password: value));
+    } catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر تعيين كلمة المرور الجديدة. تحقق من الاتصال وحاول مرة أخرى',
         ),
         error,
       );

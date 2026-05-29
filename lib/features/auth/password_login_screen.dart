@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../shared/errors/user_error_message.dart';
 import '../../state/app_scope.dart';
+import 'reset_password_phone_screen.dart';
 import 'widgets/auth_inputs.dart';
 import 'widgets/auth_scaffold.dart';
 
@@ -84,7 +85,28 @@ class _PasswordLoginScreenState extends State<PasswordLoginScreen> {
             ),
           ),
           if (_error != null) AuthErrorText(message: _error!),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton(
+              onPressed: _loading
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ResetPasswordPhoneScreen(),
+                        ),
+                      ),
+              child: const Text(
+                'نسيت كلمة المرور؟',
+                style: TextStyle(
+                  color: AppColors.primaryGlow,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           AuthPrimaryButton(
             label: 'دخول',
             loading: _loading,
