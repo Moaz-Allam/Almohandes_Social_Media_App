@@ -41,7 +41,8 @@ supabase secrets set \
 
 In the Twilio console (one-time, per Verify service):
 
-1. **Channels:** enable SMS. WhatsApp is optional.
+1. **Channels:** enable SMS. The app now defaults to **WhatsApp** delivery —
+   to enable that channel see `supabase/WHATSAPP_AUTH_SETUP.md`.
 2. **Code length:** 6 digits (matches the 6-box OTP UI).
 3. **Code lifetime:** 10 minutes is fine.
 4. **Friendly name:** `Almohandes` (used in the SMS body).
