@@ -724,6 +724,9 @@ final class _FakeMessageRepository implements MessageRepository {
   }) async {}
 
   @override
+  Future<void> markConversationRead(String conversationId) async {}
+
+  @override
   Future<void> blockConnection(String profileId) async {}
 
   @override

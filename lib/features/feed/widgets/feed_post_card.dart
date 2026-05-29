@@ -168,6 +168,15 @@ class _FeedPostCardState extends State<FeedPostCard> {
         _effectiveAvatarUrlFrom(AppScope.read(context).profile);
     final borderColor = context.appBorder.withValues(alpha: 0.6);
 
+    // Decode media at the card's on-screen pixel width (card is full width
+    // minus the 16px horizontal margin on each side) so full-res photos don't
+    // decode into the 360px box at native resolution.
+    final media = MediaQuery.of(context);
+    final mediaCacheWidth =
+        ((media.size.width - 32).clamp(1.0, double.infinity) *
+                media.devicePixelRatio)
+            .round();
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       clipBehavior: Clip.antiAlias,
@@ -327,6 +336,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   // Fill the container so there are no empty bands above/below
                   // the image (contain would letterbox off-ratio media).
                   fit: BoxFit.cover,
+                  cacheWidth: mediaCacheWidth,
                   fallbackLabel: post.isReel ? 'ريل' : 'صورة',
                 ),
               ),

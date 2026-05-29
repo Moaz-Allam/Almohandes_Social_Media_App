@@ -34,6 +34,8 @@ abstract interface class MessageRepository {
     required String fileUrl,
   });
 
+  Future<void> markConversationRead(String conversationId);
+
   Future<void> blockConnection(String profileId);
 
   Future<void> removeConnection(String profileId);
@@ -303,6 +305,31 @@ final class SupabaseMessageRepository implements MessageRepository {
       rethrow;
     } catch (error) {
       throw RepositoryFailure(failureMessage, error);
+    }
+  }
+
+  @override
+  Future<void> markConversationRead(String conversationId) async {
+    final remote = client;
+    if (remote == null || conversationId.isEmpty) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return;
+      }
+      final actualConversationId = await _actualConversationId(
+        remote,
+        conversationId,
+        profileId,
+      );
+      if (actualConversationId == null) {
+        return;
+      }
+      await _markConversationRead(remote, actualConversationId, profileId);
+    } catch (_) {
+      // Read tracking is best-effort; never surface failures to the chat.
     }
   }
 

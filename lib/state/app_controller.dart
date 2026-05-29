@@ -42,6 +42,8 @@ final class AppController extends ChangeNotifier {
   // never by the user's own actions. Message/chat/notification screens watch
   // these to refetch live, without re-firing on their own self-refreshes.
   int _realtimeMessageVersion = 0;
+  int _realtimeMessageRowVersion = 0;
+  Map<String, dynamic>? _latestMessageRow;
   int _realtimeNotificationVersion = 0;
   int _feedVersion = 0;
   int _reelsVersion = 0;
@@ -81,6 +83,15 @@ final class AppController extends ChangeNotifier {
   /// Screens watch this to refetch live; it never fires for the viewer's own
   /// sends, avoiding refetch loops.
   int get realtimeMessageVersion => _realtimeMessageVersion;
+
+  /// Bumped for each individual `messages` row pushed over realtime, paired
+  /// with [latestMessageRow]. An open chat watches this to append the single
+  /// new row to the right conversation instead of refetching the whole thread.
+  int get realtimeMessageRowVersion => _realtimeMessageRowVersion;
+
+  /// The most recent realtime `messages` row (raw columns), or null before any
+  /// arrives. Read alongside [realtimeMessageRowVersion].
+  Map<String, dynamic>? get latestMessageRow => _latestMessageRow;
 
   /// Bumped when the server pushes a notification change over realtime.
   int get realtimeNotificationVersion => _realtimeNotificationVersion;
@@ -383,6 +394,15 @@ final class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Called by [RealtimeService] for each individual inserted message row.
+  /// Stores the row and bumps the per-row counter so an open chat can append
+  /// just this message to its conversation without a full refetch.
+  void notifyRealtimeMessageRow(Map<String, dynamic> row) {
+    _latestMessageRow = row;
+    _realtimeMessageRowVersion += 1;
+    notifyListeners();
+  }
+
   /// Called by [RealtimeService] when a notification row changes remotely.
   /// [latest] is the changed row (title/message/is_read) when available, so we
   /// can pop a local notification without a second fetch.
@@ -436,6 +456,7 @@ final class AppController extends ChangeNotifier {
     }
     realtime.start(
       onMessagesChanged: notifyRealtimeMessage,
+      onMessageRow: notifyRealtimeMessageRow,
       onNotificationsChanged: notifyRealtimeNotification,
     );
     // Register this device for background push (FCM / Web Push).

@@ -35,11 +35,17 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final List<ChatMessage> _optimisticMessages = [];
+  // Messages pushed live over realtime and appended directly (no refetch).
+  // Cleared whenever an authoritative full fetch arrives and adopts them.
+  final List<ChatMessage> _realtimeMessages = [];
+  // Ids already shown (from the last full fetch + appended realtime rows) so a
+  // duplicate realtime push for the same row is ignored.
+  final Set<String> _seenMessageIds = {};
   final _voiceRecorder = AudioRecorder();
   StreamSubscription<Uint8List>? _voiceSubscription;
   BytesBuilder? _voiceBytes;
   bool _didStartLoading = false;
-  int _lastRealtimeVersion = 0;
+  int _lastRealtimeRowVersion = 0;
   bool _isSendingText = false;
   bool _isSendingVoice = false;
   bool _isRecordingVoice = false;
@@ -55,29 +61,107 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Watch the realtime counter: when the server pushes a new message for
-    // this conversation, refetch (force-bypassing the cache) so it appears
-    // live. The viewer's own sends bump a different counter, so they don't
-    // trigger a redundant refetch loop here.
     final controller = AppScope.watch(context);
-    final version = controller.realtimeMessageVersion;
-    if (_didStartLoading && _lastRealtimeVersion == version) {
+    // First build: load the thread once.
+    if (!_didStartLoading) {
+      _didStartLoading = true;
+      _lastRealtimeRowVersion = controller.realtimeMessageRowVersion;
+      _messagesFuture = controller.repositories.messages
+          .fetchMessages(widget.contact.conversationId)
+          .then((items) {
+            _adoptFetchedMessages(items);
+            if (mounted) {
+              AppScope.read(context).notifyMessageStateChanged();
+            }
+            return items;
+          });
       return;
     }
-    final isLiveUpdate = _didStartLoading;
-    _didStartLoading = true;
-    _lastRealtimeVersion = version;
-    _messagesFuture = controller.repositories.messages
-        .fetchMessages(
+    // Live update: the server pushed a new message row. Append it directly
+    // when it belongs to this conversation — no full refetch — and ignore
+    // rows for other conversations entirely.
+    final rowVersion = controller.realtimeMessageRowVersion;
+    if (rowVersion == _lastRealtimeRowVersion) {
+      return;
+    }
+    _lastRealtimeRowVersion = rowVersion;
+    final row = controller.latestMessageRow;
+    if (row != null) {
+      _appendRealtimeRowIfRelevant(row);
+    }
+  }
+
+  /// Reconciles the id/realtime bookkeeping with an authoritative full fetch.
+  /// Realtime rows the fetch already contains are dropped (now redundant); any
+  /// that arrived after the query snapshot are kept so a live message isn't
+  /// lost to the race.
+  void _adoptFetchedMessages(List<ChatMessage> items) {
+    final fetchedIds = items.map((message) => message.id).toSet();
+    _realtimeMessages.removeWhere((message) => fetchedIds.contains(message.id));
+    _seenMessageIds
+      ..clear()
+      ..addAll(fetchedIds)
+      ..addAll(_realtimeMessages.map((message) => message.id));
+  }
+
+  void _appendRealtimeRowIfRelevant(Map<String, dynamic> row) {
+    final messageId = '${row['id'] ?? ''}';
+    if (messageId.isEmpty || _seenMessageIds.contains(messageId)) {
+      return;
+    }
+    final conversationId = '${row['conversation_id'] ?? ''}';
+    final senderId = '${row['sender_id'] ?? ''}';
+    final contactProfileId = widget.contact.profileId ?? '';
+    final isRealConversation =
+        !widget.contact.conversationId.startsWith('connection:');
+    final matchesConversation =
+        isRealConversation && conversationId == widget.contact.conversationId;
+    final fromCounterpart =
+        contactProfileId.isNotEmpty && senderId == contactProfileId;
+
+    if (fromCounterpart) {
+      // An incoming message from the person we're chatting with: append it.
+      final message = ChatMessage(
+        id: messageId,
+        text: '${row['content'] ?? ''}',
+        incoming: true,
+        createdAt:
+            DateTime.tryParse('${row['created_at']}')?.toLocal() ??
+            DateTime.now(),
+        type: '${row['message_type'] ?? 'text'}',
+      );
+      _seenMessageIds.add(messageId);
+      setState(() => _realtimeMessages.add(message));
+      _scrollToLatest();
+      // Mark it read (we're looking at it) without refetching the thread.
+      unawaited(
+        AppScope.read(context).repositories.messages.markConversationRead(
           widget.contact.conversationId,
-          forceRefresh: isLiveUpdate,
-        )
+        ),
+      );
+      return;
+    }
+
+    // Same conversation but we can't attribute the sender (rare: a thread with
+    // no known counterpart profile). Fall back to an authoritative refetch so
+    // nothing is missed; our own echoes are skipped (handled optimistically).
+    if (matchesConversation && contactProfileId.isEmpty) {
+      _refreshThisConversation();
+    }
+  }
+
+  void _refreshThisConversation() {
+    final messages = AppScope.read(context).repositories.messages;
+    final refreshed = messages
+        .fetchMessages(widget.contact.conversationId, forceRefresh: true)
         .then((items) {
           if (mounted) {
+            setState(() => _adoptFetchedMessages(items));
             AppScope.read(context).notifyMessageStateChanged();
           }
           return items;
         });
+    setState(() => _messagesFuture = refreshed);
   }
 
   @override
@@ -417,6 +501,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .then((items) {
           if (mounted) {
             setState(() {
+              _adoptFetchedMessages(items);
               _optimisticMessages.removeWhere(
                 (message) => message.id == completedOptimisticId,
               );
@@ -585,6 +670,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   }
                   final messages = [
                     ...(snapshot.data ?? const <ChatMessage>[]),
+                    ..._realtimeMessages,
                     ..._optimisticMessages,
                   ];
                   if (messages.isEmpty) {

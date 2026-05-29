@@ -31,13 +31,20 @@ class RealtimeService {
   RealtimeChannel? _channel;
   bool _starting = false;
   void Function()? _onMessages;
+  void Function(Map<String, dynamic> row)? _onMessageRow;
   void Function(Map<String, dynamic>? latest)? _onNotifications;
 
   /// Opens the realtime channel. Safe to call repeatedly — a no-op if a
   /// channel is already open or one is being set up. Never throws: realtime is
   /// a live-update nicety and must not break the app if it fails to connect.
+  ///
+  /// [onMessageRow] receives each inserted `messages` row immediately (it is
+  /// deliberately NOT debounced, so an open chat can append every new row
+  /// without dropping any in a burst). [onMessagesChanged] stays debounced and
+  /// drives the coarse conversations-list refresh.
   Future<void> start({
     required void Function() onMessagesChanged,
+    required void Function(Map<String, dynamic> row) onMessageRow,
     required void Function(Map<String, dynamic>? latest) onNotificationsChanged,
   }) async {
     final remote = client;
@@ -46,6 +53,7 @@ class RealtimeService {
     }
     _starting = true;
     _onMessages = onMessagesChanged;
+    _onMessageRow = onMessageRow;
     _onNotifications = onNotificationsChanged;
     try {
       final profileId = await CurrentProfileResolver.instance.resolve(
@@ -57,7 +65,20 @@ class RealtimeService {
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'messages',
-            callback: (_) => _messagesDebouncer(() => _onMessages?.call()),
+            callback: (payload) {
+              // Immediate, un-debounced per-row delivery so an open chat can
+              // append the exact new message (a debounce would collapse a
+              // burst and drop all but the last row).
+              if (payload.eventType == PostgresChangeEvent.insert) {
+                final record = payload.newRecord;
+                if (record.isNotEmpty) {
+                  _onMessageRow?.call(Map<String, dynamic>.from(record));
+                }
+              }
+              // Coarse, debounced signal for the conversations list (preview +
+              // unread counts).
+              _messagesDebouncer(() => _onMessages?.call());
+            },
           )
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
@@ -98,6 +119,7 @@ class RealtimeService {
     final channel = _channel;
     _channel = null;
     _onMessages = null;
+    _onMessageRow = null;
     _onNotifications = null;
     _messagesDebouncer.cancel();
     _notificationsDebouncer.cancel();
