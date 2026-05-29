@@ -1,3 +1,4 @@
+import '../realtime/realtime_service.dart';
 import '../session/session_store.dart';
 import '../storage/media_upload_service.dart';
 import '../supabase/supabase_bootstrap.dart';
@@ -31,6 +32,7 @@ final class AppRepositories {
     required this.stories,
     required this.subscriptions,
     required this.media,
+    this.realtime,
   });
 
   factory AppRepositories.production({required SessionStore sessionStore}) {
@@ -50,6 +52,7 @@ final class AppRepositories {
       stories: SupabaseStoryRepository(client: client),
       subscriptions: SupabaseSubscriptionRepository(client: client),
       media: MediaUploadService(client: client),
+      realtime: RealtimeService(client: client),
     );
   }
 
@@ -67,4 +70,8 @@ final class AppRepositories {
   final StoryRepository stories;
   final SubscriptionRepository subscriptions;
   final MediaUploadService media;
+
+  /// Live message + notification updates. Null in tests / when Supabase is
+  /// not configured; the app still works via manual refresh.
+  final RealtimeService? realtime;
 }

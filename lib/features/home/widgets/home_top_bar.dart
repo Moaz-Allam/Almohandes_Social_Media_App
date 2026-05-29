@@ -1,10 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/layout_breakpoints.dart';
 import '../../../models/message_item.dart';
+import '../../../models/notification_item_model.dart';
 import '../../../shared/widgets/app_avatar.dart';
 import '../../../state/app_scope.dart';
+import '../../messages/messages_screen.dart';
+import '../../notifications/notification_action_router.dart';
+import '../../notifications/notifications_screen.dart';
 
 /// Mobile top bar styled after the web dashboard's header:
 /// avatar + name/location block on the right (RTL), action icons on the
@@ -30,6 +37,9 @@ class HomeTopBar extends StatelessWidget {
     final name = (profile?.fullName.isNotEmpty ?? false)
         ? profile!.fullName
         : 'المستخدم';
+    final location = (profile?.location.isNotEmpty ?? false)
+        ? profile!.location
+        : 'العراق';
 
     return SafeArea(
       bottom: false,
@@ -88,7 +98,7 @@ class HomeTopBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 3),
                     Text(
-                      'بغداد',
+                      location,
                       style: TextStyle(
                         color: context.appMuted,
                         fontSize: 12,
@@ -105,11 +115,7 @@ class HomeTopBar extends StatelessWidget {
             const SizedBox(width: 6),
             _MessagesIcon(onMessages: onMessages),
             const SizedBox(width: 6),
-            _CircleIconButton(
-              icon: Icons.notifications_none_rounded,
-              onPressed: () {},
-              tooltip: 'الإشعارات',
-            ),
+            const _NotificationsIcon(),
           ],
         ),
       ),
@@ -208,9 +214,12 @@ class _MessagesIconState extends State<_MessagesIcon> {
     super.didChangeDependencies();
     final controller = AppScope.watch(context);
     if (!_didStart || _lastVersion != controller.messageStateVersion) {
+      final isLiveUpdate = _didStart;
       _didStart = true;
       _lastVersion = controller.messageStateVersion;
-      _unreadFuture = controller.repositories.messages.fetchConversations();
+      _unreadFuture = controller.repositories.messages.fetchConversations(
+        forceRefresh: isLiveUpdate,
+      );
     }
   }
 
@@ -263,6 +272,284 @@ class _MessagesIconState extends State<_MessagesIcon> {
           ],
         );
       },
+    );
+  }
+}
+
+/// Bell icon with a live unread badge. Tapping it opens a sheet showing the
+/// latest 4 notifications plus a button to view the full notifications page.
+class _NotificationsIcon extends StatefulWidget {
+  const _NotificationsIcon();
+
+  @override
+  State<_NotificationsIcon> createState() => _NotificationsIconState();
+}
+
+class _NotificationsIconState extends State<_NotificationsIcon> {
+  late Future<List<NotificationItemModel>> _future;
+  bool _didStart = false;
+  int? _lastVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = Future.value(const <NotificationItemModel>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = AppScope.watch(context);
+    if (!_didStart || _lastVersion != controller.realtimeNotificationVersion) {
+      final isLiveUpdate = _didStart;
+      _didStart = true;
+      _lastVersion = controller.realtimeNotificationVersion;
+      _future = controller.repositories.notifications.fetchNotifications(
+        forceRefresh: isLiveUpdate,
+      );
+    }
+  }
+
+  Future<void> _openSheet() async {
+    final navigator = Navigator.of(context);
+    final controller = AppScope.read(context);
+    final surface = context.appSurface;
+    // Use a fresh fetch so the sheet always shows the latest.
+    final future = controller.repositories.notifications.fetchNotifications();
+    final result = await showModalBottomSheet<Object?>(
+      context: context,
+      backgroundColor: surface,
+      showDragHandle: true,
+      // Size to content (and allow growth) so the sheet never clips its
+      // children at the default half-screen cap.
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _NotificationsSheet(future: future),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result == 'all') {
+      navigator.push(
+        MaterialPageRoute(
+          builder: (routeContext) => Scaffold(
+            body: NotificationsScreen(
+              onMenu: () => Navigator.of(routeContext).maybePop(),
+              onMessages: () => Navigator.of(routeContext).push(
+                MaterialPageRoute(builder: (_) => const MessagesScreen()),
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (result is NotificationItemModel) {
+      // Tapping a notification in the dropdown marks it read and routes to
+      // its target, mirroring the full notifications screen.
+      if (result.unread) {
+        unawaited(
+          controller.repositories.notifications.markRead(result.id),
+        );
+        controller.notifyNotificationStateChanged();
+      }
+      await openNotificationAction(context, result.actionUrl);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<NotificationItemModel>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final unread = (snapshot.data ?? const <NotificationItemModel>[])
+            .where((item) => item.unread)
+            .length;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _CircleIconButton(
+              icon: Icons.notifications_none_rounded,
+              onPressed: _openSheet,
+              tooltip: 'الإشعارات',
+            ),
+            if (unread > 0)
+              PositionedDirectional(
+                top: 2,
+                end: 2,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFF43F5E), Color(0xFFEC4899)],
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: context.appSurface, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _NotificationsSheet extends StatelessWidget {
+  const _NotificationsSheet({required this.future});
+
+  final Future<List<NotificationItemModel>> future;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                'آخر الإشعارات',
+                style: TextStyle(
+                  color: context.appText,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<List<NotificationItemModel>>(
+              future: future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final items = (snapshot.data ?? const <NotificationItemModel>[])
+                    .take(4)
+                    .toList();
+                if (items.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 22),
+                    child: Text(
+                      'لا توجد إشعارات بعد',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: context.appMuted),
+                    ),
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final item in items)
+                      _SheetNotificationTile(
+                        item: item,
+                        onTap: () => Navigator.of(context).pop(item),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop('all'),
+              icon: const Icon(Icons.notifications_active_outlined, size: 18),
+              label: const Text('عرض كل الإشعارات'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.blue,
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetNotificationTile extends StatelessWidget {
+  const _SheetNotificationTile({required this.item, this.onTap});
+
+  final NotificationItemModel item;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: context.appSurfaceAlt.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.appBorder.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+        children: [
+          Icon(
+            item.unread
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_none,
+            color: item.unread ? AppColors.blue : context.appMuted,
+            size: 22,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: context.appText,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                if (item.preview.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.preview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.appMuted, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (item.time.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(
+              item.time,
+              style: TextStyle(color: context.appMuted, fontSize: 11),
+            ),
+          ],
+        ],
+        ),
+      ),
     );
   }
 }

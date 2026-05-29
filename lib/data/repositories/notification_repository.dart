@@ -13,6 +13,10 @@ abstract interface class NotificationRepository {
 
   Future<void> markRead(String notificationId);
 
+  /// Marks every unread notification for the current user as read in a single
+  /// round trip, so the unread badge clears without paging through each row.
+  Future<void> markAllRead();
+
   Future<void> delete(String notificationId);
 }
 
@@ -47,6 +51,28 @@ final class SupabaseNotificationRepository implements NotificationRepository {
       _cache.clear();
     } catch (_) {
       // Optional table operation; the list will refresh when the backend allows it.
+    }
+  }
+
+  @override
+  Future<void> markAllRead() async {
+    final remote = client;
+    if (remote == null) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        return;
+      }
+      await remote
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('profile_id', profileId)
+          .eq('is_read', false);
+      _cache.clear();
+    } catch (_) {
+      // Optional table operation; the list refreshes when the backend allows it.
     }
   }
 

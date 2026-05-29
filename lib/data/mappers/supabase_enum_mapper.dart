@@ -69,6 +69,29 @@ String machinerySpecializationToSupabase(String value) {
   return 'other';
 }
 
+/// The 18 Iraqi governorates in Arabic, ordered to match the signup picker.
+/// Single source of truth for any dropdown that lets the user pick a location.
+const List<String> iraqiGovernorates = [
+  'بغداد',
+  'البصرة',
+  'نينوى',
+  'أربيل',
+  'السليمانية',
+  'دهوك',
+  'كركوك',
+  'ديالى',
+  'الأنبار',
+  'بابل',
+  'كربلاء',
+  'النجف',
+  'واسط',
+  'صلاح الدين',
+  'ذي قار',
+  'ميسان',
+  'المثنى',
+  'القادسية',
+];
+
 String governorateToSupabase(String value) {
   return switch (value) {
     'بغداد' => 'baghdad',

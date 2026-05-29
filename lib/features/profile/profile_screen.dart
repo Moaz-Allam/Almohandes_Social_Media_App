@@ -4,12 +4,18 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../models/feed_post_model.dart';
+import '../../models/message_item.dart';
+import '../../models/network_person.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import '../composer/composer_screen.dart';
 import '../composer/project_form_screen.dart';
-import '../home/widgets/home_top_bar.dart';
+import '../feed/post_detail_screen.dart';
+import '../messages/chat_screen.dart';
+import '../settings/settings_screen.dart';
+import 'edit_profile_screen.dart';
+import 'people_list_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
@@ -189,6 +195,8 @@ class _ProfileHero extends StatefulWidget {
 class _ProfileHeroState extends State<_ProfileHero> {
   late String _connectionStatus;
   bool _isFollowing = false;
+  bool _busyFollow = false;
+  bool _busyConnect = false;
   ProfileStats _stats = ProfileStats.empty;
 
   @override
@@ -196,6 +204,9 @@ class _ProfileHeroState extends State<_ProfileHero> {
     super.initState();
     _connectionStatus = widget.initialConnectionStatus;
     _loadStats();
+    if (!widget.isMe) {
+      _loadRelationship();
+    }
   }
 
   Future<void> _loadStats() async {
@@ -203,6 +214,139 @@ class _ProfileHeroState extends State<_ProfileHero> {
     if (id == null) return;
     final stats = await AppScope.read(context).repositories.profiles.fetchProfileStats(id);
     if (mounted) setState(() => _stats = stats);
+  }
+
+  Future<void> _loadRelationship() async {
+    final id = widget.profileId;
+    if (id == null) return;
+    final repo = AppScope.read(context).repositories.profiles;
+    final (status, following) = await (
+      repo.connectionStatus(id),
+      repo.isFollowingProfile(id),
+    ).wait;
+    if (!mounted) return;
+    setState(() {
+      _connectionStatus = status;
+      _isFollowing = following;
+    });
+  }
+
+  Future<void> _toggleFollow() async {
+    final id = widget.profileId;
+    if (id == null || _busyFollow) return;
+    setState(() => _busyFollow = true);
+    final app = AppScope.read(context);
+    final wasFollowing = _isFollowing;
+    try {
+      if (wasFollowing) {
+        await app.repositories.profiles.unfollowProfile(id);
+      } else {
+        await app.repositories.profiles.followProfile(id);
+      }
+      if (mounted) setState(() => _isFollowing = !wasFollowing);
+      app.notifyFollowChanged();
+    } finally {
+      if (mounted) setState(() => _busyFollow = false);
+    }
+  }
+
+  Future<void> _connect() async {
+    final id = widget.profileId;
+    if (id == null ||
+        _busyConnect ||
+        _connectionStatus == 'accepted' ||
+        _connectionStatus == 'pending') {
+      return;
+    }
+    setState(() => _busyConnect = true);
+    try {
+      await AppScope.read(context).repositories.profiles.requestConnection(id);
+      if (mounted) setState(() => _connectionStatus = 'pending');
+    } finally {
+      if (mounted) setState(() => _busyConnect = false);
+    }
+  }
+
+  void _openChat() {
+    final id = widget.profileId;
+    if (id == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          contact: MessageItem(
+            conversationId: 'connection:$id',
+            profileId: id,
+            name: widget.name,
+            preview: widget.headline,
+            time: '',
+            unread: false,
+            color: widget.color,
+            avatarUrl: widget.avatarUrl,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openPeople(String title, Future<List<NetworkPerson>> future) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PeopleListScreen(title: title, future: future),
+      ),
+    );
+  }
+
+  Widget _actionPill({
+    required String label,
+    IconData? icon,
+    bool filled = false,
+    bool busy = false,
+    VoidCallback? onTap,
+  }) {
+    final disabled = onTap == null;
+    return GestureDetector(
+      onTap: busy ? null : onTap,
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: filled ? context.appPrimary : context.appSurfaceAlt,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.appBorder.withValues(alpha: 0.6)),
+        ),
+        alignment: Alignment.center,
+        child: busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(
+                      icon,
+                      size: 18,
+                      color: filled
+                          ? Colors.white
+                          : (disabled ? context.appMuted : context.appText),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: filled
+                          ? Colors.white
+                          : (disabled ? context.appMuted : context.appText),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
   }
 
   @override
@@ -228,8 +372,9 @@ class _ProfileHeroState extends State<_ProfileHero> {
                 ),
               ),
             ),
-            Positioned(
+            PositionedDirectional(
               bottom: -50,
+              start: 24,
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -257,76 +402,149 @@ class _ProfileHeroState extends State<_ProfileHero> {
           ],
         ),
         const SizedBox(height: 60),
-        Text(
-          widget.name,
-          style: TextStyle(
-            color: context.appText,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
+        SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.name,
+                  style: TextStyle(
+                    color: context.appText,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: context.appMuted,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.location,
+                      style: TextStyle(
+                        color: context.appMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Builder(
+                  builder: (context) {
+                    final repo =
+                        AppScope.read(context).repositories.profiles;
+                    final mine = widget.isMe;
+                    return Row(
+                      children: [
+                        _StatItem(
+                          label: 'متابع',
+                          count: _stats.followers,
+                          onTap: mine
+                              ? () => _openPeople(
+                                  'المتابِعون', repo.fetchMyFollowers())
+                              : null,
+                        ),
+                        const SizedBox(width: 24),
+                        _StatItem(
+                          label: 'يتابع',
+                          count: _stats.following,
+                          onTap: mine
+                              ? () => _openPeople(
+                                  'يتابع', repo.fetchMyFollowing())
+                              : null,
+                        ),
+                        const SizedBox(width: 24),
+                        _StatItem(
+                          label: 'اتصال',
+                          count: _stats.connections,
+                          onTap: mine
+                              ? () => _openPeople(
+                                  'الاتصالات', repo.fetchMyConnections())
+                              : null,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              widget.location,
-              style: TextStyle(
-                color: context.appMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.location_on_outlined,
-              size: 14,
-              color: context.appMuted,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _StatItem(label: 'متابع', count: _stats.followers),
-            const SizedBox(width: 24),
-            _StatItem(label: 'يتابع', count: _stats.following),
-            const SizedBox(width: 24),
-            _StatItem(label: 'اتصال', count: _stats.connections),
-          ],
         ),
         const SizedBox(height: 24),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
             children: [
-              Expanded(
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: context.appSurfaceAlt,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: context.appBorder.withValues(alpha: 0.6),
+              if (widget.isMe) ...[
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EditProfileScreen(),
+                      ),
                     ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    widget.isMe ? 'تعديل الملف الشخصي' : 'الرسائل',
-                    style: TextStyle(
-                      color: context.appText,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                    child: Container(
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: context.appSurfaceAlt,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: context.appBorder.withValues(alpha: 0.6),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'تعديل الملف الشخصي',
+                        style: TextStyle(
+                          color: context.appText,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (widget.isMe) ...[
                 const SizedBox(width: 12),
                 GestureDetector(
-                  onTap: () => AppScope.read(context).signOut(),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SettingsScreen(),
+                    ),
+                  ),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: context.appSurfaceAlt,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: context.appBorder.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.settings_outlined,
+                      color: context.appMuted,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () async {
+                    final nav = Navigator.of(context);
+                    await AppScope.read(context).signOut();
+                    nav.popUntil((route) => route.isFirst);
+                  },
                   child: Container(
                     width: 48,
                     height: 48,
@@ -344,27 +562,35 @@ class _ProfileHeroState extends State<_ProfileHero> {
                     ),
                   ),
                 ),
-              ],
-              if (!widget.isMe) ...[
+              ] else ...[
+                Expanded(
+                  child: _actionPill(
+                    label: _isFollowing ? 'متابَع' : 'متابعة',
+                    icon: _isFollowing
+                        ? Icons.check_rounded
+                        : Icons.person_add_alt_1_rounded,
+                    filled: !_isFollowing,
+                    busy: _busyFollow,
+                    onTap: _toggleFollow,
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: context.appPrimary,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.appPrimary.withValues(alpha: 0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.person_add_alt_1_rounded,
-                    color: Colors.white,
-                  ),
+                Expanded(
+                  child: _connectionStatus == 'accepted'
+                      ? _actionPill(
+                          label: 'رسالة',
+                          icon: Icons.chat_bubble_outline_rounded,
+                          onTap: _openChat,
+                        )
+                      : _connectionStatus == 'pending'
+                      ? _actionPill(label: 'بانتظار القبول')
+                      : _actionPill(
+                          label: 'تواصل',
+                          icon: Icons.handshake_outlined,
+                          filled: true,
+                          busy: _busyConnect,
+                          onTap: _connect,
+                        ),
                 ),
               ],
             ],
@@ -376,14 +602,18 @@ class _ProfileHeroState extends State<_ProfileHero> {
 }
 
 class _StatItem extends StatelessWidget {
-  const _StatItem({required this.label, required this.count});
+  const _StatItem({required this.label, required this.count, this.onTap});
   final String label;
   final int count;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
         Text(
           '$count',
           style: TextStyle(
@@ -393,16 +623,17 @@ class _StatItem extends StatelessWidget {
             letterSpacing: -0.3,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(
-            color: context.appMuted,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: context.appMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -682,19 +913,42 @@ class _ProfilePostsGrid extends StatelessWidget {
           itemCount: posts.length,
           itemBuilder: (context, index) {
             final post = posts[index];
-            return Container(
-              decoration: BoxDecoration(
-                color: context.appSurfaceAlt,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: context.appBorder.withValues(alpha: 0.5),
+            return GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PostDetailScreen(post: post),
                 ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: MediaPreview(
-                mediaUrl: post.mediaUrl,
-                mediaType: post.mediaType,
-                fallbackLabel: '',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.appSurfaceAlt,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: context.appBorder.withValues(alpha: 0.5),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: post.mediaUrl.trim().isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          post.body,
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
+                          textDirection: TextDirection.rtl,
+                          style: TextStyle(
+                            color: context.appText,
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                      )
+                    : MediaPreview(
+                        mediaUrl: post.mediaUrl,
+                        mediaType: post.mediaType,
+                        fit: BoxFit.cover,
+                        fallbackLabel: '',
+                      ),
               ),
             );
           },

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_colors.dart';
 
@@ -20,6 +19,7 @@ abstract final class AppTheme {
     final base = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      fontFamily: 'Cairo',
       scaffoldBackgroundColor: AppColors.white,
       cardColor: AppColors.white,
       dividerColor: AppColors.borderLight,
@@ -34,8 +34,8 @@ abstract final class AppTheme {
       ),
     );
     return base.copyWith(
-      textTheme: GoogleFonts.cairoTextTheme(base.textTheme),
-      primaryTextTheme: GoogleFonts.cairoTextTheme(base.primaryTextTheme),
+      textTheme: base.textTheme.apply(fontFamily: 'Cairo'),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'Cairo'),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.white,
         foregroundColor: AppColors.inkLight,
@@ -62,7 +62,11 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusSm),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -73,13 +77,20 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusSm),
           ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
-          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -122,7 +133,10 @@ abstract final class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceAltLight,
         selectedColor: AppColors.primary,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        labelStyle: const TextStyle(
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.w600,
+        ),
         side: const BorderSide(color: AppColors.borderLight),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
@@ -135,6 +149,7 @@ abstract final class AppTheme {
     final base = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      fontFamily: 'Cairo',
       scaffoldBackgroundColor: AppColors.backgroundDark,
       cardColor: AppColors.surfaceDark,
       dividerColor: AppColors.borderDark,
@@ -150,8 +165,8 @@ abstract final class AppTheme {
       ),
     );
     return base.copyWith(
-      textTheme: GoogleFonts.cairoTextTheme(base.textTheme),
-      primaryTextTheme: GoogleFonts.cairoTextTheme(base.primaryTextTheme),
+      textTheme: base.textTheme.apply(fontFamily: 'Cairo'),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'Cairo'),
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.backgroundDark,
         foregroundColor: AppColors.inkDark,
@@ -178,7 +193,11 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusSm),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -189,13 +208,20 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(radiusSm),
           ),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primaryGlow,
-          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          textStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -238,7 +264,10 @@ abstract final class AppTheme {
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.surfaceAltDark,
         selectedColor: AppColors.primaryGlow,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        labelStyle: const TextStyle(
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.w600,
+        ),
         side: BorderSide(color: AppColors.borderDark.withValues(alpha: 0.6)),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),

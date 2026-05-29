@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "851572571996",
+    "project_id": "almohandes-engineer-2026",
+    "storage_bucket": "almohandes-engineer-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:851572571996:android:370987dff44e3231e90b99",
+        "android_client_info": {
+          "package_name": "com.almohandes.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwDw3EJf2ahckQ3xVq_EOnD42zAp1_iIY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../models/account_type.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/network_person.dart';
 import '../../models/project_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
+import '../home/widgets/home_top_bar.dart';
+import '../network/network_screen.dart';
 import '../profile/profile_screen.dart';
 import '../projects/project_application_screen.dart';
 
@@ -25,9 +26,22 @@ enum SearchFilter {
 }
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.initialQuery = ''});
+  const SearchScreen({
+    super.key,
+    this.initialQuery = '',
+    this.onMenu,
+    this.onMessages,
+  });
 
   final String initialQuery;
+
+  /// When both [onMenu] and [onMessages] are provided the screen renders in
+  /// "embedded" mode for the bottom-nav search tab: a [HomeTopBar] instead of
+  /// a back button, no autofocus, and no surrounding [Scaffold] (the shell
+  /// supplies it). When omitted it renders as a standalone pushed route
+  /// (the desktop search field), with a back button and autofocus.
+  final VoidCallback? onMenu;
+  final VoidCallback? onMessages;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -35,11 +49,14 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   late final TextEditingController _query;
-  // Debounced mirror of _query.text. Results re-filter against this, not
-  // every keystroke — keeps the input responsive on long lists.
+  // Debounced mirror of _query.text. The result queries fire against this, not
+  // every keystroke — keeps the input responsive and avoids a network round
+  // trip per character.
   final ValueNotifier<String> _debouncedQuery = ValueNotifier('');
   Timer? _debounceTimer;
   SearchFilter _filter = SearchFilter.people;
+
+  bool get _embedded => widget.onMenu != null && widget.onMessages != null;
 
   @override
   void initState() {
@@ -60,109 +77,144 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onQueryChanged() {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
       _debouncedQuery.value = _query.text;
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-              decoration: BoxDecoration(
-                color: context.appSurface,
-                border: Border(bottom: BorderSide(color: context.appBorder)),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'رجوع',
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _query,
-                      autofocus: true,
-                      textDirection: TextDirection.rtl,
-                      decoration: InputDecoration(
-                        hintText: 'ابحث في المهندس',
-                        prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        fillColor: context.appSurfaceAlt,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 0,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(color: AppColors.blue),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 58,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (context, index) {
-                  final filter = SearchFilter.values[index];
-                  return ChoiceChip(
-                    label: Text(filter.label),
-                    selected: _filter == filter,
-                    selectedColor: AppColors.paleBlue,
-                    side: BorderSide(
-                      color: _filter == filter
-                          ? AppColors.blue
-                          : context.appBorder,
-                    ),
-                    labelStyle: TextStyle(
-                      color: _filter == filter
-                          ? AppColors.darkBlue
-                          : context.appText,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    showCheckmark: false,
-                    onSelected: (_) => setState(() => _filter = filter),
-                  );
-                },
-                separatorBuilder: (context, index) => const SizedBox(width: 8),
-                itemCount: SearchFilter.values.length,
-              ),
-            ),
-            Expanded(
-              // Subscribes to the debounced query, not the raw controller,
-              // so result filtering happens at most every 150 ms even on
-              // fast typists. Input itself remains instantly responsive.
-              child: ValueListenableBuilder<String>(
-                valueListenable: _debouncedQuery,
-                builder: (context, query, _) {
-                  return _SearchResults(filter: _filter, query: query);
-                },
-              ),
-            ),
-          ],
+  void _openNetwork() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (routeContext) => Scaffold(
+          body: NetworkScreen(
+            onMenu: () => Navigator.of(routeContext).maybePop(),
+            onMessages: widget.onMessages ?? () {},
+          ),
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Column(
+      children: [
+        if (_embedded)
+          HomeTopBar(onMenu: widget.onMenu!, onMessages: widget.onMessages!),
+        _SearchHeader(
+          controller: _query,
+          autofocus: !_embedded,
+          showBackButton: !_embedded,
+        ),
+        SizedBox(
+          height: 58,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            scrollDirection: Axis.horizontal,
+            itemBuilder: (context, index) {
+              final filter = SearchFilter.values[index];
+              return ChoiceChip(
+                label: Text(filter.label),
+                selected: _filter == filter,
+                selectedColor: AppColors.paleBlue,
+                side: BorderSide(
+                  color: _filter == filter ? AppColors.blue : context.appBorder,
+                ),
+                labelStyle: TextStyle(
+                  color: _filter == filter
+                      ? AppColors.darkBlue
+                      : context.appText,
+                  fontWeight: FontWeight.w800,
+                ),
+                showCheckmark: false,
+                onSelected: (_) => setState(() => _filter = filter),
+              );
+            },
+            separatorBuilder: (context, index) => const SizedBox(width: 8),
+            itemCount: SearchFilter.values.length,
+          ),
+        ),
+        Expanded(
+          child: ValueListenableBuilder<String>(
+            valueListenable: _debouncedQuery,
+            builder: (context, query, _) {
+              if (query.trim().isEmpty) {
+                return _SearchPrompt(
+                  onBrowseNetwork: _embedded ? _openNetwork : null,
+                );
+              }
+              return _SearchResults(filter: _filter, query: query);
+            },
+          ),
+        ),
+      ],
+    );
+
+    if (_embedded) {
+      return body;
+    }
+    return Scaffold(body: SafeArea(child: body));
+  }
+}
+
+class _SearchHeader extends StatelessWidget {
+  const _SearchHeader({
+    required this.controller,
+    required this.autofocus,
+    required this.showBackButton,
+  });
+
+  final TextEditingController controller;
+  final bool autofocus;
+  final bool showBackButton;
+
+  @override
+  Widget build(BuildContext context) {
+    final field = TextField(
+      controller: controller,
+      autofocus: autofocus,
+      textDirection: TextDirection.rtl,
+      decoration: InputDecoration(
+        hintText: 'ابحث في المهندس',
+        prefixIcon: const Icon(Icons.search),
+        filled: true,
+        fillColor: context.appSurfaceAlt,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: const BorderSide(color: AppColors.blue),
+        ),
+      ),
+    );
+
+    return Container(
+      padding: showBackButton
+          ? const EdgeInsets.fromLTRB(8, 8, 12, 8)
+          : const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        border: Border(bottom: BorderSide(color: context.appBorder)),
+      ),
+      child: showBackButton
+          ? Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'رجوع',
+                ),
+                Expanded(child: field),
+              ],
+            )
+          : field,
     );
   }
 }
@@ -198,9 +250,20 @@ class _PeopleResultsState extends State<_PeopleResults> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= AppScope.read(context).repositories.profiles.fetchNetworkProfiles(
-      viewerType: accountTypeFromProfile(AppScope.read(context).profile),
-      companies: false,
+    _future ??= _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PeopleResults oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) {
+      setState(() => _future = _load());
+    }
+  }
+
+  Future<List<NetworkPerson>> _load() {
+    return AppScope.read(context).repositories.profiles.searchPeople(
+      widget.query,
     );
   }
 
@@ -209,14 +272,10 @@ class _PeopleResultsState extends State<_PeopleResults> {
     return FutureBuilder<List<NetworkPerson>>(
       future: _future,
       builder: (context, snapshot) {
-        final rows = _filterPeople(
-          snapshot.data ?? const <NetworkPerson>[],
-          widget.query,
-        );
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        final rows = snapshot.data ?? const <NetworkPerson>[];
         if (rows.isEmpty) {
           return const _EmptySearchResult(label: 'أشخاص');
         }
@@ -263,18 +322,6 @@ class _PeopleResultsState extends State<_PeopleResults> {
       },
     );
   }
-
-  List<NetworkPerson> _filterPeople(List<NetworkPerson> rows, String query) {
-    final normalized = query.trim();
-    if (normalized.isEmpty) {
-      return rows;
-    }
-    return [
-      for (final row in rows)
-        if (row.name.contains(normalized) || row.title.contains(normalized))
-          row,
-    ];
-  }
 }
 
 class _ProjectResults extends StatefulWidget {
@@ -292,7 +339,21 @@ class _ProjectResultsState extends State<_ProjectResults> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= AppScope.read(context).repositories.projects.fetchProjects();
+    _future ??= _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProjectResults oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) {
+      setState(() => _future = _load());
+    }
+  }
+
+  Future<List<ProjectItem>> _load() {
+    return AppScope.read(context).repositories.projects.searchJobs(
+      widget.query,
+    );
   }
 
   @override
@@ -300,14 +361,10 @@ class _ProjectResultsState extends State<_ProjectResults> {
     return FutureBuilder<List<ProjectItem>>(
       future: _future,
       builder: (context, snapshot) {
-        final rows = _filterProjects(
-          snapshot.data ?? const <ProjectItem>[],
-          widget.query,
-        );
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        final rows = snapshot.data ?? const <ProjectItem>[];
         if (rows.isEmpty) {
           return const _EmptySearchResult(label: 'مشاريع');
         }
@@ -345,18 +402,6 @@ class _ProjectResultsState extends State<_ProjectResults> {
       },
     );
   }
-
-  List<ProjectItem> _filterProjects(List<ProjectItem> rows, String query) {
-    final normalized = query.trim();
-    if (normalized.isEmpty) {
-      return rows;
-    }
-    return [
-      for (final row in rows)
-        if (row.title.contains(normalized) || row.tagline.contains(normalized))
-          row,
-    ];
-  }
 }
 
 class _PostResults extends StatefulWidget {
@@ -374,7 +419,19 @@ class _PostResultsState extends State<_PostResults> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= AppScope.read(context).repositories.feed.fetchHomeFeed();
+    _future ??= _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PostResults oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) {
+      setState(() => _future = _load());
+    }
+  }
+
+  Future<List<FeedPostModel>> _load() {
+    return AppScope.read(context).repositories.feed.searchPosts(widget.query);
   }
 
   @override
@@ -382,14 +439,10 @@ class _PostResultsState extends State<_PostResults> {
     return FutureBuilder<List<FeedPostModel>>(
       future: _future,
       builder: (context, snapshot) {
-        final rows = _filterPosts(
-          snapshot.data ?? const <FeedPostModel>[],
-          widget.query,
-        );
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        final rows = snapshot.data ?? const <FeedPostModel>[];
         if (rows.isEmpty) {
           return const _EmptySearchResult(label: 'منشورات');
         }
@@ -425,16 +478,53 @@ class _PostResultsState extends State<_PostResults> {
       },
     );
   }
+}
 
-  List<FeedPostModel> _filterPosts(List<FeedPostModel> rows, String query) {
-    final normalized = query.trim();
-    if (normalized.isEmpty) {
-      return rows;
-    }
-    return [
-      for (final row in rows)
-        if (row.body.contains(normalized) || row.name.contains(normalized)) row,
-    ];
+class _SearchPrompt extends StatelessWidget {
+  const _SearchPrompt({this.onBrowseNetwork});
+
+  /// When provided, shows an entry to browse the full network screen — keeps
+  /// people/companies browsing and invitations reachable from the search tab.
+  final VoidCallback? onBrowseNetwork;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search, size: 44, color: context.appMuted),
+            const SizedBox(height: 12),
+            Text(
+              'ابحث عن الأشخاص والمشاريع والمنشورات',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.appText,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            if (onBrowseNetwork != null) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: onBrowseNetwork,
+                icon: const Icon(Icons.groups_outlined),
+                label: const Text('تصفح الشبكة'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.blue,
+                  side: const BorderSide(color: AppColors.blue),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -447,7 +537,7 @@ class _EmptySearchResult extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        'لا توجد $label بعد',
+        'لا توجد $label مطابقة',
         style: const TextStyle(
           color: AppColors.muted,
           fontWeight: FontWeight.w800,

@@ -14,11 +14,23 @@ import 'repository_failure.dart';
 abstract interface class ProfileRepository {
   Future<ProfileForm?> currentProfile({bool forceRefresh = false});
 
+  /// Persists the editable profile fields. Every parameter is optional; only
+  /// the non-null ones are written. [governorate] must already be the storage
+  /// slug (use [governorateToSupabase]); [skills] replaces the stored set.
   Future<void> updateCurrentProfile({
     String? about,
     String? avatarUrl,
     String? coverUrl,
+    String? fullName,
+    String? governorate,
+    List<String>? skills,
   });
+
+  /// Flip the current user's profile between public and private.
+  Future<void> setProfilePrivacy(bool isPrivate);
+
+  /// Whether the given profile is private (its posts are connection-only).
+  Future<bool> isProfilePrivate(String profileId);
 
   Future<void> deleteCurrentProfile();
 
@@ -27,6 +39,11 @@ abstract interface class ProfileRepository {
     required bool companies,
     bool forceRefresh = false,
   });
+
+  /// Server-side search across all profiles by name / username / bio. Returns
+  /// up to a page of matches (excluding the current user); empty when [query]
+  /// is blank.
+  Future<List<NetworkPerson>> searchPeople(String query);
 
   Future<List<NetworkPerson>> fetchIncomingConnectionRequests({
     bool forceRefresh = false,
@@ -46,6 +63,8 @@ abstract interface class ProfileRepository {
   Future<String> connectionStatus(String otherProfileId);
 
   Future<void> followProfile(String followingProfileId);
+
+  Future<void> unfollowProfile(String followingProfileId);
 
   Future<bool> isFollowingProfile(String followingProfileId);
 
@@ -81,6 +100,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
   SupabaseProfileRepository({required this.client});
 
   static const _networkPageSize = 30;
+  static const _searchPageSize = 30;
   static const _incomingRequestsPageSize = 30;
 
   final SupabaseClient? client;
@@ -113,6 +133,20 @@ final class SupabaseProfileRepository implements ProfileRepository {
       return null;
     }
 
+    // Owner read goes through the SECURITY DEFINER `get_my_profile` RPC so it
+    // can include the email/phone columns that are no longer granted to
+    // `authenticated` for direct table reads (see the profile_contact_privacy
+    // migration). Falls back to a direct select on older backends that don't
+    // have the RPC yet.
+    try {
+      final row = _firstRowOrNull(await remote.rpc('get_my_profile'));
+      if (row != null) {
+        return _profileFormFromRow(row);
+      }
+    } catch (_) {
+      // RPC missing/failed — fall through to the legacy direct read.
+    }
+
     try {
       final row = await remote
           .from('profiles')
@@ -125,11 +159,30 @@ final class SupabaseProfileRepository implements ProfileRepository {
     }
   }
 
+  /// Normalizes a Supabase RPC result (which may be a `List` of rows or a
+  /// single `Map`) into the first row as a `Map<String, dynamic>`, or null.
+  Map<String, dynamic>? _firstRowOrNull(dynamic result) {
+    if (result is List) {
+      if (result.isEmpty) {
+        return null;
+      }
+      final first = result.first;
+      return first is Map ? Map<String, dynamic>.from(first) : null;
+    }
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return null;
+  }
+
   @override
   Future<void> updateCurrentProfile({
     String? about,
     String? avatarUrl,
     String? coverUrl,
+    String? fullName,
+    String? governorate,
+    List<String>? skills,
   }) async {
     final remote = client;
     final userId = remote?.auth.currentUser?.id;
@@ -152,6 +205,15 @@ final class SupabaseProfileRepository implements ProfileRepository {
       values['cover_url'] = coverUrl;
       values['cover_photo_url'] = coverUrl;
     }
+    if (fullName != null) {
+      values['full_name'] = fullName;
+    }
+    if (governorate != null) {
+      values['governorate'] = governorate;
+    }
+    if (skills != null) {
+      values['skills'] = skills;
+    }
     if (values.isEmpty) {
       return;
     }
@@ -160,12 +222,18 @@ final class SupabaseProfileRepository implements ProfileRepository {
     try {
       await remote.from('profiles').update(values).eq('user_id', userId);
       _cache.clear();
+      return;
     } catch (_) {
-      if (coverUrl == null || values.length <= 2) {
+      // Some deployments lack optional columns (cover_url, skills) or have a
+      // server trigger that conflicts with a partial update. Retry once with
+      // the most fragile columns dropped so the core edits still persist.
+      final fallbackValues = Map<String, dynamic>.from(values)
+        ..remove('cover_url')
+        ..remove('skills');
+      // Only updated_at left → nothing meaningful to retry.
+      if (fallbackValues.length <= 1) {
         return;
       }
-      final fallbackValues = Map<String, dynamic>.from(values)
-        ..remove('cover_url');
       try {
         await remote
             .from('profiles')
@@ -175,6 +243,46 @@ final class SupabaseProfileRepository implements ProfileRepository {
       } catch (_) {
         // Local optimistic profile state remains authoritative for the session.
       }
+    }
+  }
+
+  @override
+  Future<void> setProfilePrivacy(bool isPrivate) async {
+    final remote = client;
+    final userId = remote?.auth.currentUser?.id;
+    if (remote == null || userId == null) {
+      return;
+    }
+    try {
+      await remote
+          .from('profiles')
+          .update({
+            'is_private': isPrivate,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId);
+      _cache.clear();
+    } catch (_) {
+      // Privacy column may be missing on older deployments; the local
+      // session flag still drives the UI toggle.
+    }
+  }
+
+  @override
+  Future<bool> isProfilePrivate(String profileId) async {
+    final remote = client;
+    if (remote == null || profileId.isEmpty) {
+      return false;
+    }
+    try {
+      final row = await remote
+          .from('profiles')
+          .select('is_private')
+          .eq('id', profileId)
+          .maybeSingle();
+      return row?['is_private'] == true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -309,6 +417,43 @@ final class SupabaseProfileRepository implements ProfileRepository {
     }
   }
 
+  @override
+  Future<List<NetworkPerson>> searchPeople(String query) async {
+    final remote = client;
+    final term = _sanitizeSearchTerm(query);
+    if (remote == null || term.isEmpty) {
+      return const [];
+    }
+    try {
+      final pattern = '%$term%';
+      final currentProfileId = await _currentProfileId(remote);
+      final rows = await remote
+          .from('profiles')
+          .select(
+            'id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified',
+          )
+          .or('full_name.ilike.$pattern,username.ilike.$pattern,bio.ilike.$pattern')
+          .order('is_verified', ascending: false)
+          .limit(_searchPageSize);
+      return [
+        for (var i = 0; i < rows.length; i++)
+          if ('${(rows[i] as Map)['id'] ?? ''}' != currentProfileId)
+            _networkPersonFromRow(
+              Map<String, dynamic>.from(rows[i] as Map),
+              colorIndex: i,
+            ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Strips SQL `LIKE` wildcards (`%`, `_`) and PostgREST `or()` structural
+  /// characters (`,`, `(`, `)`) from raw user input so a query can't break the
+  /// filter syntax or inject unintended wildcards.
+  String _sanitizeSearchTerm(String query) =>
+      query.replaceAll(RegExp(r'[%_,()]'), ' ').trim();
+
   ProfileForm _profileFormFromRow(Map<String, dynamic> row) {
     final fullName = '${row['full_name'] ?? ''}'.trim();
     final parts = fullName.split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
@@ -343,7 +488,7 @@ final class SupabaseProfileRepository implements ProfileRepository {
       skills: skills,
       languages: const {},
       openToWork: type != AccountType.company,
-      profilePublic: true,
+      profilePublic: !(row['is_private'] == true),
       jobAlerts: false,
     );
   }
@@ -570,25 +715,30 @@ final class SupabaseProfileRepository implements ProfileRepository {
         return const [];
       }
       // Connection rows can be either direction (I requested OR I received).
-      // Pull both, then take the *other party* on each row.
-      final requestedRows = await remote
-          .from('connection_requests')
-          .select(
-            'updated_at,receiver_profile_id,profiles!connection_requests_receiver_profile_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
-          )
-          .eq('requester_profile_id', profileId)
-          .eq('status', 'accepted')
-          .order('updated_at', ascending: false)
-          .limit(_networkPageSize);
-      final receivedRows = await remote
-          .from('connection_requests')
-          .select(
-            'updated_at,requester_profile_id,profiles!connection_requests_requester_profile_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
-          )
-          .eq('receiver_profile_id', profileId)
-          .eq('status', 'accepted')
-          .order('updated_at', ascending: false)
-          .limit(_networkPageSize);
+      // Pull both directions concurrently, then take the *other party* on each
+      // row. The two queries are independent, so run them in parallel.
+      final results = await Future.wait([
+        remote
+            .from('connection_requests')
+            .select(
+              'updated_at,receiver_profile_id,profiles!connection_requests_receiver_profile_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
+            )
+            .eq('requester_profile_id', profileId)
+            .eq('status', 'accepted')
+            .order('updated_at', ascending: false)
+            .limit(_networkPageSize),
+        remote
+            .from('connection_requests')
+            .select(
+              'updated_at,requester_profile_id,profiles!connection_requests_requester_profile_id_fkey(id,full_name,username,role,governorate,bio,experience_years,projects_count,followers_count,avatar_url,is_verified)',
+            )
+            .eq('receiver_profile_id', profileId)
+            .eq('status', 'accepted')
+            .order('updated_at', ascending: false)
+            .limit(_networkPageSize),
+      ]);
+      final requestedRows = results[0];
+      final receivedRows = results[1];
       final all = <NetworkPerson>[];
       final seen = <String>{};
       var colorIndex = 0;
@@ -746,6 +896,30 @@ final class SupabaseProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<void> unfollowProfile(String followingProfileId) async {
+    final remote = client;
+    if (remote == null || followingProfileId.isEmpty) {
+      return;
+    }
+
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null || profileId == followingProfileId) {
+        return;
+      }
+      await remote
+          .from('followers')
+          .delete()
+          .eq('follower_id', profileId)
+          .eq('following_id', followingProfileId);
+      _networkCaches.clear();
+      _followingCache.clear();
+    } catch (_) {
+      // Unfollow stays best-effort when the optional relation is unavailable.
+    }
+  }
+
+  @override
   Future<bool> isFollowingProfile(String followingProfileId) async {
     final remote = client;
     if (remote == null || followingProfileId.isEmpty) {
@@ -816,17 +990,19 @@ final class SupabaseProfileRepository implements ProfileRepository {
     }
     if (connections == 0) {
       try {
-        final asRequester = await remote
-            .from('connection_requests')
-            .select('id')
-            .eq('requester_profile_id', profileId)
-            .eq('status', 'accepted');
-        final asReceiver = await remote
-            .from('connection_requests')
-            .select('id')
-            .eq('receiver_profile_id', profileId)
-            .eq('status', 'accepted');
-        connections = asRequester.length + asReceiver.length;
+        final counts = await Future.wait([
+          remote
+              .from('connection_requests')
+              .select('id')
+              .eq('requester_profile_id', profileId)
+              .eq('status', 'accepted'),
+          remote
+              .from('connection_requests')
+              .select('id')
+              .eq('receiver_profile_id', profileId)
+              .eq('status', 'accepted'),
+        ]);
+        connections = counts[0].length + counts[1].length;
       } catch (_) {
         // connection_requests table is optional in older deployments.
       }

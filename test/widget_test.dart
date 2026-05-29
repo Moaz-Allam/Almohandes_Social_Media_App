@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:tradeflow/app/linked_arabic_app.dart';
 import 'package:tradeflow/core/constants/app_colors.dart';
+import 'package:tradeflow/data/mappers/supabase_enum_mapper.dart';
 import 'package:tradeflow/data/repositories/app_repositories.dart';
 import 'package:tradeflow/data/storage/media_upload_service.dart';
 import 'package:tradeflow/data/repositories/auth_repository.dart';
@@ -20,7 +21,6 @@ import 'package:tradeflow/data/repositories/story_repository.dart';
 import 'package:tradeflow/data/repositories/subscription_repository.dart';
 import 'package:tradeflow/data/session/session_store.dart';
 import 'package:tradeflow/models/app_theme_mode.dart';
-import 'package:tradeflow/features/home/widgets/linked_bottom_navigation.dart';
 import 'package:tradeflow/features/premium/models/premium_course.dart';
 import 'package:tradeflow/models/account_type.dart';
 import 'package:tradeflow/models/comment_item.dart';
@@ -37,7 +37,7 @@ import 'package:tradeflow/models/project_item.dart';
 import 'package:tradeflow/models/reel_item.dart';
 import 'package:tradeflow/models/saved_content.dart';
 import 'package:tradeflow/models/story_item.dart';
-import 'package:tradeflow/shared/widgets/primary_button.dart';
+import 'package:tradeflow/state/app_controller.dart';
 import 'package:tradeflow/state/signup_controller.dart';
 
 void main() {
@@ -58,68 +58,54 @@ void main() {
     expect(SignupController.isSupportedPhoneNumber('05512345678'), isFalse);
   });
 
-  testWidgets('registration shows success then opens the signed-in shell', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      LinkedArabicApp(
-        sessionStore: _MemorySessionStore(signedIn: false),
-        repositories: _repositories(currentProfile: _profile()),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    Future<void> dismissSnacks() async {
-      // AppSnack toasts auto-dismiss after a few seconds, but the SnackBar
-      // timer doesn't schedule frames, so pumpAndSettle returns while the
-      // snackbar is still visible (and can overlap bottom buttons).
-      // Advance the clock manually past its duration.
-      await tester.pump(const Duration(seconds: 6));
+  test('governorate slug round-trips for all 18 governorates', () {
+    // Edit-profile (#7) writes the slug via governorateToSupabase and reads it
+    // back via governorateFromSupabase. Every governorate must round-trip.
+    expect(iraqiGovernorates, hasLength(18));
+    for (final arabic in iraqiGovernorates) {
+      final slug = governorateToSupabase(arabic);
+      expect(slug, isNotEmpty, reason: '$arabic must map to a slug');
+      expect(
+        governorateFromSupabase(slug),
+        arabic,
+        reason: '$arabic → $slug must map back to $arabic',
+      );
     }
+    // Unknown slugs fall back gracefully to Baghdad (signup default).
+    expect(governorateToSupabase('غير معروف'), 'baghdad');
+    expect(governorateFromSupabase('totally-unknown'), 'totally-unknown');
+    expect(governorateFromSupabase(null), 'بغداد');
+  });
 
-    await tester.tap(find.byType(PrimaryButton).first);
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).at(0), 'Current User');
-    await tester.enterText(find.byType(TextField).at(1), 'user@example.com');
-    await tester.enterText(find.byType(TextField).at(2), '07712345678');
-    await tester.enterText(find.byType(TextField).at(3), 'secret123');
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -460));
-    await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsNWidgets(5));
-    await tester.enterText(find.byType(TextField).last, 'secret123');
-    await tester.tap(find.byType(PrimaryButton).last);
-    await tester.pumpAndSettle();
-    await dismissSnacks();
-
-    await tester.enterText(find.byType(TextField).last, '123456');
-    await tester.tap(find.byType(PrimaryButton).last);
-    await tester.pumpAndSettle();
-    await dismissSnacks();
-
-    await tester.tap(find.byType(PrimaryButton).last);
-    await tester.pumpAndSettle();
-    await dismissSnacks();
-    await tester.tap(find.byType(PrimaryButton).last);
-    await tester.pumpAndSettle();
-    await dismissSnacks();
-    await tester.tap(find.byType(PrimaryButton).last);
-    await tester.pumpAndSettle();
-    await dismissSnacks();
-    await tester.enterText(
-      find.byType(TextField).first,
-      'مهندس متخصص في المشاريع السكنية والتجارية.',
+  test('updateMyProfileDetails maps name, governorate, skills correctly',
+      () async {
+    final repo = _RecordingProfileRepository(profile: _profile());
+    final controller = AppController(
+      sessionStore: _MemorySessionStore(),
+      repositories: _repositoriesWith(profiles: repo),
     );
-    await tester.tap(find.byType(PrimaryButton).last);
-    await tester.pumpAndSettle();
-    await dismissSnacks();
+    await controller.bootstrap();
 
-    expect(find.byIcon(Icons.check), findsOneWidget);
+    await controller.updateMyProfileDetails(
+      fullName: '  أحمد  علي حسن ',
+      governorate: 'البصرة',
+      skills: ['حدادة', ' حدادة ', '', 'نجارة'],
+      about: '  نبذة قصيرة  ',
+    );
 
-    await tester.pump(const Duration(milliseconds: 1500));
-    await tester.pump();
+    // Repository received the storage slug + trimmed name + de-duped skills.
+    expect(repo.lastFullName, 'أحمد  علي حسن'.trim());
+    expect(repo.lastGovernorate, 'basra');
+    expect(repo.lastSkills, ['حدادة', 'نجارة']);
+    expect(repo.lastAbout, 'نبذة قصيرة');
 
-    expect(find.byType(LinkedBottomNavigation), findsOneWidget);
+    // In-memory profile updated optimistically (name split + Arabic location).
+    final profile = controller.profile!;
+    expect(profile.firstName, 'أحمد');
+    expect(profile.lastName, 'علي حسن');
+    expect(profile.location, 'البصرة');
+    expect(profile.skills, {'حدادة', 'نجارة'});
+    expect(profile.about, 'نبذة قصيرة');
   });
 
   testWidgets('signed-in app uses current profile and empty remote states', (
@@ -133,19 +119,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // Empty feed renders its empty-state, never a remote default profile.
     expect(find.byIcon(Icons.article_outlined), findsOneWidget);
     expect(find.text('Remote Demo User'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('home-menu-avatar')).first);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Current User'), findsOneWidget);
-
-    await tester.tap(find.text('Current User'));
-    await tester.pumpAndSettle();
-
+    // The mobile top bar greets the *current* signed-in profile by name,
+    // proving the app reads currentProfile() rather than a baked-in demo user.
     expect(find.text('Current User'), findsWidgets);
-    expect(find.text('Remote Demo User'), findsNothing);
   });
 
   testWidgets('post like toggles primary color and reaction count', (
@@ -175,44 +155,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    const likeKey = ValueKey('post-like-action-Remote Poster');
-    final likeAction = find.byKey(likeKey);
-
+    // Unliked: outline heart + the initial reaction count.
     expect(find.text('77'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: likeAction,
-        matching: find.byIcon(Icons.thumb_up_alt_outlined),
-      ),
-      findsOneWidget,
-    );
+    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
 
-    await tester.tap(likeAction);
+    await tester.tap(find.byIcon(Icons.favorite_border_rounded));
     await tester.pump();
 
+    // Liked: filled heart in the brand "like" colour + incremented count.
     final likedIcon = tester.widget<Icon>(
-      find.descendant(
-        of: likeAction,
-        matching: find.byIcon(Icons.thumb_up_alt),
-      ),
+      find.byIcon(Icons.favorite_rounded),
     );
     expect(find.text('78'), findsOneWidget);
-    expect(likedIcon.color, AppColors.blue);
+    expect(likedIcon.color, const Color(0xFFF43F5E));
 
-    await tester.tap(likeAction);
+    await tester.tap(find.byIcon(Icons.favorite_rounded));
     await tester.pump();
 
-    final unlikedIcon = tester.widget<Icon>(
-      find.descendant(
-        of: likeAction,
-        matching: find.byIcon(Icons.thumb_up_alt_outlined),
-      ),
-    );
+    // Back to the outline heart and original count.
+    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
     expect(find.text('77'), findsOneWidget);
-    expect(unlikedIcon.color, AppColors.muted);
   });
 
-  testWidgets('network page loads repository people and uses right chevron', (
+  testWidgets('search tab queries repository people and shows results', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -235,11 +200,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.people_alt));
+    // The search experience lives behind the bottom-nav "search" tab.
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.pumpAndSettle();
+
+    // An empty query shows the prompt, not results.
+    expect(find.text('Repository Engineer'), findsNothing);
+    expect(find.text('تصفح الشبكة'), findsOneWidget);
+
+    // Typing runs searchPeople (the default filter) after the debounce.
+    await tester.enterText(find.byType(TextField), 'Repo');
+    await tester.pump(const Duration(milliseconds: 350));
     await tester.pumpAndSettle();
 
     expect(find.text('Repository Engineer'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsAtLeastNWidgets(1));
   });
 }
 
@@ -271,6 +245,54 @@ AppRepositories _repositories({
   );
 }
 
+/// Like [_repositories] but lets a test inject a custom profile repository so
+/// it can observe what the controller writes.
+AppRepositories _repositoriesWith({required ProfileRepository profiles}) {
+  return AppRepositories(
+    auth: _FakeAuthRepository(),
+    comments: _FakeCommentRepository(),
+    courses: _FakeCourseRepository(),
+    engineerAi: _FakeEngineerAiRepository(),
+    feed: _FakeFeedRepository(const []),
+    messages: _FakeMessageRepository(),
+    notifications: _FakeNotificationRepository(),
+    profiles: profiles,
+    projects: _FakeProjectRepository(),
+    reels: _FakeReelRepository(),
+    savedContent: _FakeSavedContentRepository(),
+    stories: _FakeStoryRepository(),
+    subscriptions: _FakeSubscriptionRepository(),
+    media: MediaUploadService(),
+  );
+}
+
+/// Records the arguments of the most recent [updateCurrentProfile] call so the
+/// #7 edit-profile flow can be asserted without a live backend.
+final class _RecordingProfileRepository extends _FakeProfileRepository {
+  _RecordingProfileRepository({super.profile})
+    : super(people: const [], companies: const []);
+
+  String? lastAbout;
+  String? lastFullName;
+  String? lastGovernorate;
+  List<String>? lastSkills;
+
+  @override
+  Future<void> updateCurrentProfile({
+    String? about,
+    String? avatarUrl,
+    String? coverUrl,
+    String? fullName,
+    String? governorate,
+    List<String>? skills,
+  }) async {
+    lastAbout = about;
+    lastFullName = fullName;
+    lastGovernorate = governorate;
+    lastSkills = skills;
+  }
+}
+
 ProfileForm _profile({
   String firstName = 'Current',
   String lastName = 'User',
@@ -296,9 +318,9 @@ ProfileForm _profile({
 }
 
 final class _MemorySessionStore implements SessionStore {
-  _MemorySessionStore({this.signedIn = true});
+  _MemorySessionStore();
 
-  bool signedIn;
+  bool signedIn = true;
   AppThemeMode themeMode = AppThemeMode.system;
   bool profilePrivate = false;
 
@@ -337,39 +359,42 @@ final class _FakeAuthRepository implements AuthRepository {
   bool get isRemoteConfigured => false;
 
   @override
-  Future<void> completeSignUp({
-    required ProfileForm profile,
-    required AccountType accountType,
-    required String specialization,
+  Future<bool> phoneExists(String phone) async => false;
+
+  @override
+  Future<void> signInWithPassword({
     required String phone,
     required String password,
   }) async {}
 
   @override
-  Future<void> sendPasswordReset({required String email}) async {}
+  Future<void> sendSignupOtp({required String phone}) async {}
 
   @override
-  Future<void> updatePassword({required String password}) async {}
+  Future<void> resendSignupOtp({required String phone}) async {}
 
   @override
-  Future<String?> sendOtp({required String phone}) async => null;
+  Future<void> verifySignupOtp({
+    required String phone,
+    required String code,
+  }) async {}
 
   @override
-  Future<void> signInWithPassword({
-    required String login,
-    required String password,
+  Future<void> setPasswordForCurrentUser({required String password}) async {}
+
+  @override
+  Future<void> setFullNameForCurrentUser({required String fullName}) async {}
+
+  @override
+  Future<void> completeSignUp({
+    required ProfileForm profile,
+    required AccountType accountType,
+    required String specialization,
+    required String phone,
   }) async {}
 
   @override
   Future<void> signOut() async {}
-
-  @override
-  Future<bool> verifyOtp({required String phone, required String code}) async {
-    return code == '123456';
-  }
-
-  @override
-  Future<void> checkExistence({String? email, String? phone}) async {}
 }
 
 final class _FakeCourseRepository implements CourseRepository {
@@ -425,6 +450,13 @@ final class _FakeCommentRepository implements CommentRepository {
     required String commentId,
     required bool shouldLike,
   }) async {}
+
+  @override
+  Future<({String targetType, String targetId})?> resolveCommentTarget(
+    String commentId,
+  ) async {
+    return null;
+  }
 }
 
 final class _FakeFeedRepository implements FeedRepository {
@@ -447,22 +479,37 @@ final class _FakeFeedRepository implements FeedRepository {
   Future<void> repost(String postId) async {}
 
   @override
-  Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) async {
-    return posts;
+  Future<List<FeedPostModel>> fetchHomeFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  }) async {
+    return offset > 0 ? const [] : posts;
+  }
+
+  @override
+  Future<FeedPostModel?> fetchPostById(String postId) async {
+    for (final post in posts) {
+      if (post.id == postId) {
+        return post;
+      }
+    }
+    return null;
   }
 
   @override
   Future<List<FeedPostModel>> fetchFollowingFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) async {
-    return posts;
+    return offset > 0 ? const [] : posts;
   }
 
   @override
   Future<List<FeedPostModel>> fetchProfessionalsFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) async {
-    return posts;
+    return offset > 0 ? const [] : posts;
   }
 
   @override
@@ -484,6 +531,9 @@ final class _FakeFeedRepository implements FeedRepository {
     required String postId,
     required bool shouldLike,
   }) async {}
+
+  @override
+  Future<List<FeedPostModel>> searchPosts(String query) async => posts;
 }
 
 final class _FakeProfileRepository implements ProfileRepository {
@@ -509,6 +559,12 @@ final class _FakeProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<void> setProfilePrivacy(bool isPrivate) async {}
+
+  @override
+  Future<bool> isProfilePrivate(String profileId) async => false;
+
+  @override
   Future<void> deleteCurrentProfile() async {}
 
   @override
@@ -516,6 +572,9 @@ final class _FakeProfileRepository implements ProfileRepository {
     String? about,
     String? avatarUrl,
     String? coverUrl,
+    String? fullName,
+    String? governorate,
+    List<String>? skills,
   }) async {}
 
   @override
@@ -571,12 +630,18 @@ final class _FakeProfileRepository implements ProfileRepository {
   Future<void> followProfile(String followingProfileId) async {}
 
   @override
+  Future<void> unfollowProfile(String followingProfileId) async {}
+
+  @override
   Future<void> requestConnection(String receiverProfileId) async {}
 
   @override
   Future<ProfileStats> fetchProfileStats(String profileId) async {
     return ProfileStats.empty;
   }
+
+  @override
+  Future<List<NetworkPerson>> searchPeople(String query) async => people;
 }
 
 final class _FakeProjectRepository implements ProjectRepository {
@@ -618,6 +683,9 @@ final class _FakeProjectRepository implements ProjectRepository {
   }) async {
     return const <String>{};
   }
+
+  @override
+  Future<List<ProjectItem>> searchJobs(String query) async => const [];
 }
 
 final class _FakeMessageRepository implements MessageRepository {
@@ -678,6 +746,9 @@ final class _FakeNotificationRepository implements NotificationRepository {
 
   @override
   Future<void> markRead(String notificationId) async {}
+
+  @override
+  Future<void> markAllRead() async {}
 }
 
 final class _FakeReelRepository implements ReelRepository {

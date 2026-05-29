@@ -10,13 +10,33 @@ import '../notifications/notification_push_dispatcher.dart';
 import 'repository_failure.dart';
 
 abstract interface class FeedRepository {
-  Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false});
+  /// Fetches one page of the home feed. [offset] is the number of rows to
+  /// skip (raw, server-side) so the screen can load more on scroll. Only the
+  /// first page (`offset == 0`) is cached.
+  Future<List<FeedPostModel>> fetchHomeFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  });
+
+  /// Loads a single post by id. Used for notification / deep-link
+  /// navigation (`app://post/<id>`). Returns null if not found or hidden.
+  Future<FeedPostModel?> fetchPostById(String postId);
+
+  /// Server-side search across active posts by content. Returns up to a page
+  /// of matches; empty when [query] is blank.
+  Future<List<FeedPostModel>> searchPosts(String query);
 
   /// Returns home-feed posts authored by profiles the viewer follows.
-  Future<List<FeedPostModel>> fetchFollowingFeed({bool forceRefresh = false});
+  Future<List<FeedPostModel>> fetchFollowingFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  });
 
   /// Returns home-feed posts authored by craftsmen and workers.
-  Future<List<FeedPostModel>> fetchProfessionalsFeed({bool forceRefresh = false});
+  Future<List<FeedPostModel>> fetchProfessionalsFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  });
 
   Future<List<FeedPostModel>> fetchProfilePosts(
     String profileId, {
@@ -44,6 +64,7 @@ final class SupabaseFeedRepository implements FeedRepository {
 
   static const _feedPageSize = 20;
   static const _profilePageSize = 24;
+  static const _searchPageSize = 24;
 
   final SupabaseClient? client;
   final _cache = TimedMemoryCache<List<FeedPostModel>>(
@@ -63,68 +84,165 @@ final class SupabaseFeedRepository implements FeedRepository {
   final _profileCaches = <String, TimedMemoryCache<List<FeedPostModel>>>{};
 
   @override
-  Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) async {
+  Future<List<FeedPostModel>> fetchHomeFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  }) async {
+    // Subsequent pages bypass the cache (which holds only the first page).
+    if (offset > 0) {
+      return _fetchHomeFeed(offset: offset);
+    }
     return _cache.read(_fetchHomeFeed, forceRefresh: forceRefresh);
   }
 
-  Future<List<FeedPostModel>> _fetchHomeFeed() async {
+  Future<List<FeedPostModel>> _fetchHomeFeed({int offset = 0}) async {
     final remote = client;
     if (remote == null) {
       return const [];
     }
 
-    try {
-      final profileId = await _currentProfileId(remote);
-      final params = <String, dynamic>{'p_limit': _feedPageSize};
-      if (profileId != null) {
-        params['p_profile_id'] = profileId;
+    // The `get_home_feed` RPC requires `p_profile_id` (no SQL default), so it
+    // can only be called once we've resolved the viewer's profile. Calling it
+    // with `p_limit` alone always 404s (PGRST202) and burns a round-trip, so
+    // when there's no profile (signed out / not resolved yet) we skip the RPC
+    // entirely and query the table directly.
+    final profileId = await _currentProfileId(remote);
+    if (profileId != null) {
+      try {
+        final rows = await remote.rpc<List<dynamic>>(
+          'get_home_feed',
+          params: {
+            'p_profile_id': profileId,
+            'p_limit': _feedPageSize,
+            'p_offset': offset,
+          },
+        );
+        return _postsFromRows(rows);
+      } catch (_) {
+        // RPC missing/renamed on this deployment — fall through to the table.
       }
-      final rows = await remote.rpc<List<dynamic>>(
-        'get_home_feed',
-        params: params,
-      );
-      return _enforceVisibility(remote, _postsFromRows(rows));
+    }
+
+    final to = offset + _feedPageSize - 1;
+    try {
+      final rows = await remote
+          .from('posts')
+          .select(
+            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)',
+          )
+          .eq('is_active', true)
+          .eq('is_archived', false)
+          .order('created_at', ascending: false)
+          .range(offset, to);
+      return _postsFromRows(rows);
     } catch (_) {
       try {
         final rows = await remote
             .from('posts')
             .select(
-              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles(full_name,role,avatar_url)',
+              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)',
             )
             .eq('is_active', true)
-            .eq('is_archived', false)
             .order('created_at', ascending: false)
-            .limit(_feedPageSize);
-        return _enforceVisibility(remote, _postsFromRows(rows));
+            .range(offset, to);
+        return _postsFromRows(rows);
       } catch (_) {
-        try {
-          final rows = await remote
-              .from('posts')
-              .select(
-                'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
-              )
-              .eq('is_active', true)
-              .order('created_at', ascending: false)
-              .limit(_feedPageSize);
-          return _enforceVisibility(remote, _postsFromRows(rows));
-        } catch (_) {
-          return const [];
-        }
+        return const [];
       }
     }
   }
 
   @override
+  Future<FeedPostModel?> fetchPostById(String postId) async {
+    final remote = client;
+    if (remote == null || postId.isEmpty) {
+      return null;
+    }
+    const fullSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,'
+        'repost_of_post_id,repost_original_profile_id,repost_original_name,'
+        'profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)';
+    const baseSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,'
+        'profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)';
+    const minimalSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at';
+    for (final select in const [fullSelect, baseSelect, minimalSelect]) {
+      try {
+        final row = await remote
+            .from('posts')
+            .select(select)
+            .eq('id', postId)
+            .maybeSingle();
+        if (row == null) {
+          return null;
+        }
+        return feedPostFromSupabase(
+          Map<String, dynamic>.from(row),
+          colorIndex: 0,
+        );
+      } catch (_) {
+        // Try the next, simpler select (a column may be missing on this
+        // deployment, or RLS rejected the embedded profile join).
+        continue;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<List<FeedPostModel>> searchPosts(String query) async {
+    final remote = client;
+    final term = _sanitizeSearchTerm(query);
+    if (remote == null || term.isEmpty) {
+      return const [];
+    }
+    final pattern = '%$term%';
+    const fullSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,'
+        'repost_of_post_id,repost_original_profile_id,repost_original_name,'
+        'profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)';
+    const minimalSelect =
+        'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,'
+        'profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)';
+    for (final select in const [fullSelect, minimalSelect]) {
+      try {
+        final rows = await remote
+            .from('posts')
+            .select(select)
+            .ilike('content', pattern)
+            .eq('is_active', true)
+            .order('created_at', ascending: false)
+            .limit(_searchPageSize);
+        return _postsFromRows(rows);
+      } catch (_) {
+        // Try the simpler select (a column may be missing on this deployment).
+        continue;
+      }
+    }
+    return const [];
+  }
+
+  /// Strips SQL `LIKE` wildcards so raw user input can't inject unintended
+  /// wildcard matches into the search pattern.
+  String _sanitizeSearchTerm(String query) =>
+      query.replaceAll(RegExp(r'[%_]'), ' ').trim();
+
+  @override
   Future<List<FeedPostModel>> fetchFollowingFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) {
+    if (offset > 0) {
+      return _fetchFollowingFeed(offset: offset);
+    }
     return _followingCache.read(
       _fetchFollowingFeed,
       forceRefresh: forceRefresh,
     );
   }
 
-  Future<List<FeedPostModel>> _fetchFollowingFeed() async {
+  Future<List<FeedPostModel>> _fetchFollowingFeed({int offset = 0}) async {
     final remote = client;
     if (remote == null) {
       return const [];
@@ -150,13 +268,13 @@ final class SupabaseFeedRepository implements FeedRepository {
       final rows = await remote
           .from('posts')
           .select(
-            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles(full_name,role,avatar_url)',
+            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)',
           )
           .inFilter('profile_id', followedIds.toList())
           .eq('is_active', true)
           .order('created_at', ascending: false)
-          .limit(_feedPageSize);
-      return _enforceVisibility(remote, _postsFromRows(rows));
+          .range(offset, offset + _feedPageSize - 1);
+      return _postsFromRows(rows);
     } catch (_) {
       // Visibility column or is_archived column may be missing — retry minimal.
       try {
@@ -178,13 +296,13 @@ final class SupabaseFeedRepository implements FeedRepository {
         final rows = await remote
             .from('posts')
             .select(
-              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles(full_name,role,avatar_url)',
+              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)',
             )
             .inFilter('profile_id', followedIds.toList())
             .eq('is_active', true)
             .order('created_at', ascending: false)
-            .limit(_feedPageSize);
-        return _enforceVisibility(remote, _postsFromRows(rows));
+            .range(offset, offset + _feedPageSize - 1);
+        return _postsFromRows(rows);
       } catch (_) {
         return const [];
       }
@@ -194,14 +312,18 @@ final class SupabaseFeedRepository implements FeedRepository {
   @override
   Future<List<FeedPostModel>> fetchProfessionalsFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) {
+    if (offset > 0) {
+      return _fetchProfessionalsFeed(offset: offset);
+    }
     return _professionalsCache.read(
       _fetchProfessionalsFeed,
       forceRefresh: forceRefresh,
     );
   }
 
-  Future<List<FeedPostModel>> _fetchProfessionalsFeed() async {
+  Future<List<FeedPostModel>> _fetchProfessionalsFeed({int offset = 0}) async {
     final remote = client;
     if (remote == null) {
       return const [];
@@ -210,25 +332,25 @@ final class SupabaseFeedRepository implements FeedRepository {
       final rows = await remote
           .from('posts')
           .select(
-            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles!inner(full_name,role,avatar_url)',
+            'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,repost_of_post_id,repost_original_profile_id,repost_original_name,profiles!posts_profile_id_fkey!inner(full_name,role,avatar_url,governorate)',
           )
           .inFilter('profiles.role', ['craftsman', 'worker'])
           .eq('is_active', true)
           .order('created_at', ascending: false)
-          .limit(_feedPageSize);
-      return _enforceVisibility(remote, _postsFromRows(rows));
+          .range(offset, offset + _feedPageSize - 1);
+      return _postsFromRows(rows);
     } catch (_) {
       try {
         final rows = await remote
             .from('posts')
             .select(
-              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles!inner(full_name,role,avatar_url)',
+              'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,profiles!posts_profile_id_fkey!inner(full_name,role,avatar_url,governorate)',
             )
             .inFilter('profiles.role', ['craftsman', 'worker'])
             .eq('is_active', true)
             .order('created_at', ascending: false)
-            .limit(_feedPageSize);
-        return _enforceVisibility(remote, _postsFromRows(rows));
+            .range(offset, offset + _feedPageSize - 1);
+        return _postsFromRows(rows);
       } catch (_) {
         return const [];
       }
@@ -261,8 +383,7 @@ final class SupabaseFeedRepository implements FeedRepository {
     if (remote == null || profileId.isEmpty) {
       return const [];
     }
-    final posts = await _fetchProfilePostsRaw(remote, profileId);
-    return _enforceVisibility(remote, posts);
+    return _fetchProfilePostsRaw(remote, profileId);
   }
 
   Future<List<FeedPostModel>> _fetchProfilePostsRaw(
@@ -275,10 +396,10 @@ final class SupabaseFeedRepository implements FeedRepository {
     const fullSelect =
         'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,visibility,'
         'repost_of_post_id,repost_original_profile_id,repost_original_name,'
-        'profiles(full_name,role,avatar_url)';
+        'profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)';
     const baseSelect =
         'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at,'
-        'profiles(full_name,role,avatar_url)';
+        'profiles!posts_profile_id_fkey(full_name,role,avatar_url,governorate)';
     const minimalSelect =
         'id,profile_id,content,image_url,post_type,likes_count,comments_count,created_at';
 
@@ -523,63 +644,6 @@ final class SupabaseFeedRepository implements FeedRepository {
     return posts;
   }
 
-  /// Hide posts whose author flagged them as connections-only when the
-  /// viewer isn't the author or an accepted connection. The
-  /// 20260521150000 migration adds a SELECT RLS that does the same job on
-  /// the server, but the client filter keeps older deployments correct.
-  Future<List<FeedPostModel>> _enforceVisibility(
-    SupabaseClient remote,
-    List<FeedPostModel> posts,
-  ) async {
-    if (posts.isEmpty) {
-      return posts;
-    }
-    final hasPrivate =
-        posts.any((post) => post.visibility == PostVisibility.private);
-    if (!hasPrivate) {
-      return posts;
-    }
-    final viewerId = await _currentProfileId(remote);
-    final connectionIds = await _acceptedConnectionIds(remote, viewerId);
-    return [
-      for (final post in posts)
-        if (post.visibility == PostVisibility.public ||
-            (viewerId != null && post.profileId == viewerId) ||
-            (post.profileId != null &&
-                connectionIds.contains(post.profileId)))
-          post,
-    ];
-  }
-
-  Future<Set<String>> _acceptedConnectionIds(
-    SupabaseClient remote,
-    String? viewerId,
-  ) async {
-    if (viewerId == null) {
-      return const <String>{};
-    }
-    try {
-      final asRequester = await remote
-          .from('connection_requests')
-          .select('receiver_profile_id')
-          .eq('requester_profile_id', viewerId)
-          .eq('status', 'accepted');
-      final asReceiver = await remote
-          .from('connection_requests')
-          .select('requester_profile_id')
-          .eq('receiver_profile_id', viewerId)
-          .eq('status', 'accepted');
-      return <String>{
-        for (final raw in asRequester)
-          '${(raw as Map)['receiver_profile_id'] ?? ''}',
-        for (final raw in asReceiver)
-          '${(raw as Map)['requester_profile_id'] ?? ''}',
-      }..removeWhere((id) => id.isEmpty);
-    } catch (_) {
-      return const <String>{};
-    }
-  }
-
   Future<void> _createRepostPost(
     SupabaseClient remote, {
     required String postId,
@@ -588,7 +652,9 @@ final class SupabaseFeedRepository implements FeedRepository {
     try {
       final original = await remote
           .from('posts')
-          .select('content,image_url,post_type,profile_id,profiles(full_name)')
+          .select(
+            'content,image_url,post_type,profile_id,profiles!posts_profile_id_fkey(full_name)',
+          )
           .eq('id', postId)
           .maybeSingle();
       if (original == null) {

@@ -15,6 +15,10 @@ import 'repository_failure.dart';
 abstract interface class ProjectRepository {
   Future<List<ProjectItem>> fetchProjects({bool forceRefresh = false});
 
+  /// Server-side search across projects by title / description. Returns up to
+  /// a page of matches; empty when [query] is blank.
+  Future<List<ProjectItem>> searchJobs(String query);
+
   Future<List<ProjectItem>> fetchProjectsForProfile(
     String profileId, {
     bool forceRefresh = false,
@@ -42,6 +46,7 @@ final class SupabaseProjectRepository implements ProjectRepository {
 
   static const _projectsPageSize = 24;
   static const _profileProjectsPageSize = 24;
+  static const _searchPageSize = 24;
   static const _applicationsPageSize = 30;
 
   final SupabaseClient? client;
@@ -99,6 +104,40 @@ final class SupabaseProjectRepository implements ProjectRepository {
       }
     }
   }
+
+  @override
+  Future<List<ProjectItem>> searchJobs(String query) async {
+    final remote = client;
+    final term = _sanitizeSearchTerm(query);
+    if (remote == null || term.isEmpty) {
+      return const [];
+    }
+    try {
+      final pattern = '%$term%';
+      final rows = await remote
+          .from('projects')
+          .select(
+            'id,title,description,governorate,budget_min,budget_max,status,start_date,end_date,image_url,profile_id,profiles(full_name,avatar_url)',
+          )
+          .or('title.ilike.$pattern,description.ilike.$pattern')
+          .order('created_at', ascending: false)
+          .limit(_searchPageSize);
+      return [
+        for (var i = 0; i < rows.length; i++)
+          projectFromSupabase(
+            Map<String, dynamic>.from(rows[i] as Map),
+            colorIndex: i,
+          ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Strips SQL `LIKE` wildcards (`%`, `_`) and PostgREST `or()` structural
+  /// characters (`,`, `(`, `)`) so raw user input can't break the filter.
+  String _sanitizeSearchTerm(String query) =>
+      query.replaceAll(RegExp(r'[%_,()]'), ' ').trim();
 
   @override
   Future<List<ProjectItem>> fetchProjectsForProfile(

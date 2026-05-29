@@ -24,6 +24,7 @@ class MediaPreview extends StatelessWidget {
     this.cacheWidth,
     this.cacheHeight,
     this.muted,
+    this.releaseController = false,
   });
 
   final String mediaUrl;
@@ -32,6 +33,12 @@ class MediaPreview extends StatelessWidget {
   final String? fallbackLabel;
   final bool autoplay;
   final bool showVideoControls;
+
+  /// When true the underlying video controller is fully disposed (freeing the
+  /// native decoder/buffers) instead of merely paused. Used to release reels
+  /// when their whole tab is hidden — pausing alone keeps the decoder
+  /// allocated. Flipping back to false re-initialises the controller.
+  final bool releaseController;
 
   /// Decode hint in pixels. Pass roughly the on-screen size — decoding 4K
   /// images down to feed-card dimensions is one of the biggest sources of
@@ -57,6 +64,7 @@ class MediaPreview extends StatelessWidget {
         autoplay: autoplay,
         showControls: showVideoControls,
         muted: muted,
+        releaseController: releaseController,
       );
     }
     if (!_hasMedia) {
@@ -113,6 +121,7 @@ class _VideoFramePreview extends StatefulWidget {
     required this.showControls,
     this.fallbackLabel,
     this.muted,
+    this.releaseController = false,
   });
 
   final String mediaUrl;
@@ -124,6 +133,10 @@ class _VideoFramePreview extends StatefulWidget {
   /// Explicit mute override. `null` falls back to legacy "follow controls"
   /// behaviour, where volume is 1 when controls are visible.
   final bool? muted;
+
+  /// When true the controller is fully disposed (releasing the native
+  /// decoder) instead of merely paused. Flipping back to false re-initialises.
+  final bool releaseController;
 
   @override
   State<_VideoFramePreview> createState() => _VideoFramePreviewState();
@@ -138,7 +151,9 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
   @override
   void initState() {
     super.initState();
-    _initialize();
+    if (!widget.releaseController) {
+      _initialize();
+    }
   }
 
   @override
@@ -148,7 +163,24 @@ class _VideoFramePreviewState extends State<_VideoFramePreview> {
       _disposePreparedController();
       _controller = null;
       _failed = false;
-      _initialize();
+      if (!widget.releaseController) {
+        _initialize();
+      }
+      return;
+    }
+    if (oldWidget.releaseController != widget.releaseController) {
+      if (widget.releaseController) {
+        // Tab hidden: tear the decoder down rather than leaving it allocated.
+        _loadGeneration++;
+        _disposePreparedController();
+        _failed = false;
+        if (mounted) {
+          setState(() {});
+        }
+      } else {
+        // Tab visible again: rebuild the controller from scratch.
+        _initialize();
+      }
       return;
     }
     if (oldWidget.showControls != widget.showControls ||

@@ -7,7 +7,7 @@ import '../../shared/widgets/app_avatar.dart';
 import '../../state/app_scope.dart';
 import '../messages/messages_screen.dart';
 import '../notifications/notifications_screen.dart';
-import '../onboarding/onboarding_screen.dart';
+import '../auth/phone_login_screen.dart';
 import '../premium/premium_dashboard_screen.dart';
 import '../premium/premium_access_screen.dart';
 import '../profile/profile_screen.dart';
@@ -71,7 +71,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
       return;
     }
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
       (_) => false,
     );
   }

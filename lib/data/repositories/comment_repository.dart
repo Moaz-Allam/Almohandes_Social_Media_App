@@ -27,6 +27,12 @@ abstract interface class CommentRepository {
     required String commentId,
     required bool shouldLike,
   });
+
+  /// Resolves which post/reel/project a comment belongs to, for notification
+  /// deep links of the form `app://comment/<id>`. Returns null if unknown.
+  Future<({String targetType, String targetId})?> resolveCommentTarget(
+    String commentId,
+  );
 }
 
 final class SupabaseCommentRepository implements CommentRepository {
@@ -104,7 +110,45 @@ final class SupabaseCommentRepository implements CommentRepository {
     // the viewer's rows in `app_comment_likes`. PostgREST doesn't expose
     // the correlated-subquery `is_liked` field, so we do a second query
     // and merge. Falls back silently if the table is missing.
-    return _withViewerLikes(remote, fetched);
+    final withLikes = await _withViewerLikes(remote, fetched);
+    return _threadComments(withLikes);
+  }
+
+  /// Orders comments so each top-level comment is immediately followed by its
+  /// replies (oldest reply first), instead of a flat time-ordered list. The
+  /// input is newest-first, so top-level comments stay newest-first.
+  List<CommentItem> _threadComments(List<CommentItem> flat) {
+    final repliesByParent = <String, List<CommentItem>>{};
+    for (final comment in flat) {
+      if (comment.isReply) {
+        repliesByParent
+            .putIfAbsent(comment.parentId!, () => <CommentItem>[])
+            .add(comment);
+      }
+    }
+    for (final replies in repliesByParent.values) {
+      replies.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    }
+    final result = <CommentItem>[];
+    final seen = <String>{};
+    for (final comment in flat) {
+      if (comment.isReply) {
+        continue;
+      }
+      result.add(comment);
+      seen.add(comment.id);
+      for (final reply in repliesByParent[comment.id] ?? const <CommentItem>[]) {
+        result.add(reply);
+        seen.add(reply.id);
+      }
+    }
+    // Append any orphan replies whose parent wasn't in this page.
+    for (final comment in flat) {
+      if (!seen.contains(comment.id)) {
+        result.add(comment);
+      }
+    }
+    return result;
   }
 
   Future<List<CommentItem>> _withViewerLikes(
@@ -360,6 +404,34 @@ final class SupabaseCommentRepository implements CommentRepository {
     } catch (_) {
       // app_comment_likes is optional on older deployments; the UI keeps
       // the optimistic toggle either way.
+    }
+  }
+
+  @override
+  Future<({String targetType, String targetId})?> resolveCommentTarget(
+    String commentId,
+  ) async {
+    final remote = client;
+    if (remote == null || commentId.isEmpty) {
+      return null;
+    }
+    try {
+      final row = await remote
+          .from('app_comments')
+          .select('target_type,target_id')
+          .eq('id', commentId)
+          .maybeSingle();
+      if (row == null) {
+        return null;
+      }
+      final targetType = '${row['target_type'] ?? ''}'.trim();
+      final targetId = '${row['target_id'] ?? ''}'.trim();
+      if (targetType.isEmpty || targetId.isEmpty) {
+        return null;
+      }
+      return (targetType: targetType, targetId: targetId);
+    } catch (_) {
+      return null;
     }
   }
 

@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../data/notifications/local_notification_service.dart';
+import '../data/notifications/push_token_service.dart';
+import '../data/mappers/supabase_enum_mapper.dart';
 import '../data/repositories/app_repositories.dart';
 import '../data/session/session_store.dart';
 import '../models/account_type.dart';
@@ -33,6 +38,11 @@ final class AppController extends ChangeNotifier {
   final List<SavedContent> _savedItems = [];
   int _messageStateVersion = 0;
   int _notificationStateVersion = 0;
+  // Bumped ONLY by realtime pushes from the server (a row changed remotely),
+  // never by the user's own actions. Message/chat/notification screens watch
+  // these to refetch live, without re-firing on their own self-refreshes.
+  int _realtimeMessageVersion = 0;
+  int _realtimeNotificationVersion = 0;
   int _feedVersion = 0;
   int _reelsVersion = 0;
   int _storiesVersion = 0;
@@ -66,6 +76,14 @@ final class AppController extends ChangeNotifier {
   int get messageStateVersion => _messageStateVersion;
 
   int get notificationStateVersion => _notificationStateVersion;
+
+  /// Bumped when the server pushes a message/conversation change over realtime.
+  /// Screens watch this to refetch live; it never fires for the viewer's own
+  /// sends, avoiding refetch loops.
+  int get realtimeMessageVersion => _realtimeMessageVersion;
+
+  /// Bumped when the server pushes a notification change over realtime.
+  int get realtimeNotificationVersion => _realtimeNotificationVersion;
 
   /// Bumped whenever the home feed should be re-fetched (post published,
   /// post deleted, etc.). Screens cache the previous version in their State
@@ -101,7 +119,11 @@ final class AppController extends ChangeNotifier {
       ).wait;
       _profile = remoteProfile ?? _profile;
       _hasPremiumLibrary = hasPremium || (remoteProfile?.isPremium ?? false);
+      if (remoteProfile != null) {
+        _isProfilePrivate = !remoteProfile.profilePublic;
+      }
       _mergeSavedItems(remoteSavedItems);
+      _startRealtime();
     }
     _isBootstrapped = true;
     notifyListeners();
@@ -111,19 +133,21 @@ final class AppController extends ChangeNotifier {
     _isSignedIn = true;
     await _sessionStore.saveSignedIn();
     await refreshSessionData();
+    _startRealtime();
     notifyListeners();
   }
 
   Future<void> signInWithPassword({
-    required String login,
+    required String phone,
     required String password,
   }) async {
     await repositories.auth.signInWithPassword(
-      login: login,
+      phone: phone,
       password: password,
     );
     _isSignedIn = true;
     await refreshSessionData();
+    _startRealtime();
     notifyListeners();
   }
 
@@ -132,14 +156,12 @@ final class AppController extends ChangeNotifier {
     AccountType accountType = AccountType.engineer,
     String specialization = 'مدني',
     String phone = '',
-    String password = '',
   }) async {
     await repositories.auth.completeSignUp(
       profile: profile,
       accountType: accountType,
       specialization: specialization,
       phone: phone,
-      password: password,
     );
     final remoteProfile = await repositories.profiles.currentProfile(
       forceRefresh: true,
@@ -152,6 +174,7 @@ final class AppController extends ChangeNotifier {
           );
     _isSignedIn = true;
     await _sessionStore.saveSignedIn();
+    _startRealtime();
     notifyListeners();
   }
 
@@ -180,6 +203,68 @@ final class AppController extends ChangeNotifier {
     await repositories.profiles.updateCurrentProfile(about: about.trim());
   }
 
+  /// Saves the editable profile fields (name, governorate, skills, bio) in a
+  /// single round-trip. Optimistically updates the in-memory profile so the
+  /// UI reflects the change immediately; the repository persists the rest.
+  ///
+  /// [fullName] is split into first/last names locally; [governorate] is the
+  /// Arabic display value (converted to the storage slug before writing);
+  /// [skills] replaces the stored set.
+  Future<void> updateMyProfileDetails({
+    String? fullName,
+    String? governorate,
+    List<String>? skills,
+    String? about,
+  }) async {
+    final current = _profile;
+    if (current == null) {
+      return;
+    }
+
+    final trimmedName = fullName?.trim();
+    final hasName = trimmedName != null && trimmedName.isNotEmpty;
+    String? firstName;
+    String? lastName;
+    if (hasName) {
+      final parts = trimmedName
+          .split(RegExp(r'\s+'))
+          .where((p) => p.isNotEmpty)
+          .toList();
+      firstName = parts.isEmpty ? '' : parts.first;
+      lastName = parts.length <= 1 ? '' : parts.skip(1).join(' ');
+    }
+
+    final trimmedGovernorate = governorate?.trim();
+    final hasGovernorate =
+        trimmedGovernorate != null && trimmedGovernorate.isNotEmpty;
+    final newLocation = hasGovernorate ? trimmedGovernorate : current.location;
+
+    final cleanedSkills = skills
+        ?.map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+
+    final trimmedAbout = about?.trim();
+
+    _profile = current.copyWith(
+      firstName: firstName,
+      lastName: lastName,
+      location: hasGovernorate ? newLocation : null,
+      headline: hasGovernorate ? '${current.role} · $newLocation' : null,
+      skills: cleanedSkills,
+      about: trimmedAbout,
+    );
+    notifyListeners();
+
+    await repositories.profiles.updateCurrentProfile(
+      fullName: hasName ? trimmedName : null,
+      governorate:
+          hasGovernorate ? governorateToSupabase(trimmedGovernorate) : null,
+      skills: cleanedSkills?.toList(),
+      about: trimmedAbout,
+    );
+  }
+
   Future<void> updateMyAvatar(String avatarUrl) async {
     final current = _profile;
     if (current == null) {
@@ -201,6 +286,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _stopRealtime();
     await repositories.auth.signOut();
     _isSignedIn = false;
     _hasPremiumLibrary = false;
@@ -212,6 +298,7 @@ final class AppController extends ChangeNotifier {
   }
 
   Future<void> deleteAccount() async {
+    _stopRealtime();
     await repositories.profiles.deleteCurrentProfile();
     await repositories.auth.signOut();
     _isSignedIn = false;
@@ -244,6 +331,9 @@ final class AppController extends ChangeNotifier {
     _isProfilePrivate = isPrivate;
     notifyListeners();
     await _sessionStore.saveProfilePrivate(isPrivate);
+    // Persist to the backend so RLS can hide this profile's posts from
+    // non-connections.
+    await repositories.profiles.setProfilePrivacy(isPrivate);
   }
 
   void selectTab(AppTab tab) {
@@ -282,6 +372,89 @@ final class AppController extends ChangeNotifier {
   void notifyNotificationStateChanged() {
     _notificationStateVersion += 1;
     notifyListeners();
+  }
+
+  /// Called by [RealtimeService] when a message/conversation row changes
+  /// remotely. Bumps the badge counter (so the unread pill updates) AND the
+  /// realtime counter (so open message/chat screens refetch live).
+  void notifyRealtimeMessage() {
+    _messageStateVersion += 1;
+    _realtimeMessageVersion += 1;
+    notifyListeners();
+  }
+
+  /// Called by [RealtimeService] when a notification row changes remotely.
+  /// [latest] is the changed row (title/message/is_read) when available, so we
+  /// can pop a local notification without a second fetch.
+  void notifyRealtimeNotification([Map<String, dynamic>? latest]) {
+    _notificationStateVersion += 1;
+    _realtimeNotificationVersion += 1;
+    notifyListeners();
+    _popLocalNotification(latest);
+  }
+
+  /// Shows the newest unread notification as a foreground OS notification.
+  /// Best-effort and silent on failure / web. When the realtime payload is
+  /// supplied we build the notification straight from it; only when it's
+  /// missing (defensive path) do we fall back to a fetch.
+  Future<void> _popLocalNotification(Map<String, dynamic>? latest) async {
+    try {
+      String title;
+      String body;
+      if (latest != null) {
+        // An UPDATE that flips is_read (e.g. read on another device) is not a
+        // new alert — skip it.
+        if (latest['is_read'] == true) {
+          return;
+        }
+        title = '${latest['title'] ?? ''}';
+        body = '${latest['message'] ?? ''}';
+        if (title.isEmpty && body.isEmpty) {
+          return;
+        }
+      } else {
+        final items = await repositories.notifications.fetchNotifications(
+          forceRefresh: true,
+        );
+        if (items.isEmpty || !items.first.unread) {
+          return;
+        }
+        title = items.first.title;
+        body = items.first.preview;
+      }
+      await LocalNotificationService.instance.show(title: title, body: body);
+    } catch (_) {
+      // Local notification is a nicety; never surface failures.
+    }
+  }
+
+  void _startRealtime() {
+    final realtime = repositories.realtime;
+    if (realtime == null) {
+      // Tests / unconfigured envs: skip realtime + push entirely.
+      return;
+    }
+    realtime.start(
+      onMessagesChanged: notifyRealtimeMessage,
+      onNotificationsChanged: notifyRealtimeNotification,
+    );
+    // Register this device for background push (FCM / Web Push).
+    unawaited(PushTokenService.register());
+  }
+
+  void _stopRealtime() {
+    final realtime = repositories.realtime;
+    if (realtime == null) {
+      return;
+    }
+    realtime.stop();
+    unawaited(PushTokenService.unregister());
+  }
+
+  @override
+  void dispose() {
+    _stopRealtime();
+    super.dispose();
   }
 
   Future<void> saveContent(SavedContent content) async {

@@ -19,6 +19,7 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   late Future<List<MessageItem>> _contactsFuture;
   bool _didStartLoading = false;
+  int _lastRealtimeVersion = 0;
 
   @override
   void initState() {
@@ -29,13 +30,19 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didStartLoading) {
+    // Watch the realtime counter: refetch the conversation list whenever the
+    // server pushes a new/updated message or conversation.
+    final controller = AppScope.watch(context);
+    final version = controller.realtimeMessageVersion;
+    if (_didStartLoading && _lastRealtimeVersion == version) {
       return;
     }
+    final isLiveUpdate = _didStartLoading;
     _didStartLoading = true;
-    _contactsFuture = AppScope.read(
-      context,
-    ).repositories.messages.fetchConversations();
+    _lastRealtimeVersion = version;
+    _contactsFuture = controller.repositories.messages.fetchConversations(
+      forceRefresh: isLiveUpdate,
+    );
   }
 
   Future<void> _refresh() async {

@@ -1,9 +1,18 @@
 import 'dart:ui';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
 import 'app/linked_arabic_app.dart';
+import 'data/notifications/local_notification_service.dart';
 import 'data/supabase/supabase_bootstrap.dart';
+import 'firebase_options.dart';
+
+/// Background isolate entrypoint. The OS renders `notification` payloads
+/// itself; this just needs to exist and be a top-level function.
+@pragma('vm:entry-point')
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,5 +46,17 @@ Future<void> main() async {
   );
 
   await SupabaseBootstrap.initializeIfConfigured();
+  // Set up local/foreground notifications (Arabic + app icon). No-op on web.
+  await LocalNotificationService.instance.init();
+  // Initialise Firebase for background push (FCM mobile + Web Push). Guarded
+  // so a misconfiguration can never block app startup.
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  } catch (_) {
+    // App stays fully functional with just local notifications.
+  }
   runApp(const LinkedArabicApp());
 }

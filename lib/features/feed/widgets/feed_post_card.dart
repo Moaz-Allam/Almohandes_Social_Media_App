@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/feed_post_model.dart';
+import '../../../models/saved_content.dart';
 import '../../../shared/widgets/app_avatar.dart';
+import '../../../shared/widgets/app_snack.dart';
 import '../../../shared/widgets/comments_bottom_sheet.dart';
+import '../../../shared/widgets/full_screen_image_viewer.dart';
 import '../../../shared/widgets/media_preview.dart';
 import '../../../state/app_scope.dart';
 import '../../profile/profile_screen.dart';
+import '../post_detail_screen.dart';
 
 /// Post card styled after the web `.feed-post` / `.pro-card` components:
 /// theme-tinted surface, 20px radius, soft border, and Lucide-equivalent
@@ -63,6 +67,85 @@ class _FeedPostCardState extends State<FeedPostCard> {
     AppScope.read(
       context,
     ).repositories.feed.toggleLike(postId: post.id, shouldLike: _isLiked);
+  }
+
+  String get _savedId =>
+      post.id.isEmpty ? 'post:${post.name}:${post.time}' : post.id;
+
+  void _toggleSave(bool isSaved) {
+    final app = AppScope.read(context);
+    if (isSaved) {
+      app.removeSavedContent(_savedId);
+    } else {
+      app.saveContent(
+        SavedContent(
+          id: _savedId,
+          type: SavedContentType.post,
+          title: post.body,
+          subtitle: post.name,
+          detail: 'منشور محفوظ · ${post.comments}',
+        ),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم الحفظ في المحفوظات')),
+      );
+    }
+  }
+
+  void _openDetail() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
+    );
+  }
+
+  Future<void> _deletePost() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف المنشور'),
+        content: const Text('هل تريد حذف هذا المنشور نهائيا؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final app = AppScope.read(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await app.repositories.feed.deletePost(post.id);
+      app.notifyFeedChanged();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تم حذف المنشور')),
+      );
+    } catch (error) {
+      if (mounted) {
+        AppSnack.error(context, error, fallback: 'تعذر حذف المنشور الآن');
+      }
+    }
+  }
+
+  void _onMenuSelected(String value) {
+    if (value == 'delete') {
+      _deletePost();
+    } else if (value == 'report') {
+      AppScope.read(
+        context,
+      ).repositories.feed.reportPost(postId: post.id, reason: 'user_report');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم إرسال البلاغ')),
+      );
+    }
   }
 
   void _openProfile(BuildContext context) {
@@ -168,7 +251,9 @@ class _FeedPostCardState extends State<FeedPostCard> {
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            '${post.time} • بغداد',
+                            post.location.isEmpty
+                                ? post.time
+                                : '${post.time} • ${post.location}',
                             style: TextStyle(
                               color: context.appMuted,
                               fontSize: 12,
@@ -181,35 +266,75 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   ),
                 ),
                 // RTL end (visual left): overflow menu.
-                Icon(Icons.more_horiz_rounded, color: context.appMuted),
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz_rounded, color: context.appMuted),
+                  tooltip: 'خيارات',
+                  onSelected: _onMenuSelected,
+                  itemBuilder: (context) {
+                    final isOwner = post.profileId != null &&
+                        post.profileId == AppScope.read(context).profile?.id;
+                    return [
+                      if (isOwner)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('حذف المنشور'),
+                        )
+                      else
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('إبلاغ عن المنشور'),
+                        ),
+                    ];
+                  },
+                ),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text(
-              post.body,
-              textDirection: TextDirection.rtl,
-              style: TextStyle(
-                color: context.appText,
-                fontSize: 14.5,
-                height: 1.6,
-                fontWeight: FontWeight.w500,
+          GestureDetector(
+            onTap: _openDetail,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              // Flush the media against the text when present (no gap below the
+              // body), otherwise keep normal spacing for text-only posts.
+              padding: EdgeInsets.fromLTRB(16, 0, 16, post.showMedia ? 0 : 12),
+              child: Text(
+                post.body,
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                  color: context.appText,
+                  fontSize: 14.5,
+                  height: 1.6,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ),
           if (post.showMedia)
-            SizedBox(
-              width: double.infinity,
-              height: 360,
-              child: MediaPreview(
-                mediaUrl: post.mediaUrl,
-                mediaType: post.mediaType,
-                fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+            GestureDetector(
+              onTap: post.mediaUrl.trim().isEmpty
+                  ? null
+                  : () => FullScreenImageViewer.open(
+                      context,
+                      mediaUrl: post.mediaUrl,
+                      mediaType: post.mediaType,
+                    ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 360,
+                child: MediaPreview(
+                  mediaUrl: post.mediaUrl,
+                  mediaType: post.mediaType,
+                  // Fill the container so there are no empty bands above/below
+                  // the image (contain would letterbox off-ratio media).
+                  fit: BoxFit.cover,
+                  fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+                ),
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+            // No gap above the actions when media is shown, so the image sits
+            // flush against the action row too.
+            padding: EdgeInsets.fromLTRB(8, post.showMedia ? 0 : 8, 8, 10),
             child: Row(
               children: [
                 // RTL start (visual right): like, comments, share.
@@ -239,9 +364,17 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 ),
                 const Spacer(),
                 // RTL end (visual left): save.
-                _ActionButton(
-                  icon: Icons.bookmark_outline_rounded,
-                  onTap: () {},
+                Builder(
+                  builder: (context) {
+                    final isSaved = AppScope.watch(context).isSaved(_savedId);
+                    return _ActionButton(
+                      icon: isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_outline_rounded,
+                      iconColor: isSaved ? context.appPrimary : null,
+                      onTap: () => _toggleSave(isSaved),
+                    );
+                  },
                 ),
               ],
             ),
@@ -253,10 +386,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.onTap});
+  const _ActionButton({required this.icon, required this.onTap, this.iconColor});
 
   final IconData icon;
   final VoidCallback onTap;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +401,7 @@ class _ActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         child: Padding(
           padding: const EdgeInsets.all(8),
-          child: Icon(icon, color: context.appText, size: 22),
+          child: Icon(icon, color: iconColor ?? context.appText, size: 22),
         ),
       ),
     );

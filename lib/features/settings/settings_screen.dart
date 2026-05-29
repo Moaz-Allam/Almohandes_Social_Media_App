@@ -3,12 +3,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
-import '../../features/onboarding/onboarding_screen.dart';
+import '../../features/auth/phone_login_screen.dart';
 import '../../models/app_theme_mode.dart';
 import '../../models/settings_item.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
+import '../saved/saved_items_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -120,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
         return;
       }
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
         (_) => false,
       );
     } catch (error) {
@@ -209,7 +210,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: _sections.length + 4,
+                itemCount: _sections.length + 5,
                 separatorBuilder: (context, index) =>
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
@@ -225,7 +226,40 @@ class SettingsScreen extends StatelessWidget {
                       onChanged: controller.setProfilePrivate,
                     );
                   }
-                  if (index == _sections.length + 2) {
+                  if (index == 2) {
+                    return ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      leading: const Icon(
+                        Icons.bookmark_outline_rounded,
+                        color: AppColors.blue,
+                      ),
+                      title: const Text(
+                        'المحفوظات',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'المنشورات والعناصر التي حفظتها',
+                        style: TextStyle(
+                          color: context.appMuted,
+                          fontSize: 14.5,
+                          height: 1.25,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_left),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SavedItemsScreen(),
+                        ),
+                      ),
+                    );
+                  }
+                  if (index == _sections.length + 3) {
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -253,7 +287,7 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () => showPrivacyPolicyDialog(context),
                     );
                   }
-                  if (index == _sections.length + 3) {
+                  if (index == _sections.length + 4) {
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 18,
@@ -282,7 +316,7 @@ class SettingsScreen extends StatelessWidget {
                       onTap: () => _deleteAccount(context),
                     );
                   }
-                  final section = _sections[index - 2];
+                  final section = _sections[index - 3];
                   return ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 18,

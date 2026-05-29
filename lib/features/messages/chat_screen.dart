@@ -15,6 +15,7 @@ import '../../models/feed_post_model.dart';
 import '../../models/message_item.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/app_avatar.dart';
+import '../../shared/widgets/full_screen_image_viewer.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
@@ -38,6 +39,7 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<Uint8List>? _voiceSubscription;
   BytesBuilder? _voiceBytes;
   bool _didStartLoading = false;
+  int _lastRealtimeVersion = 0;
   bool _isSendingText = false;
   bool _isSendingVoice = false;
   bool _isRecordingVoice = false;
@@ -53,12 +55,23 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_didStartLoading) {
+    // Watch the realtime counter: when the server pushes a new message for
+    // this conversation, refetch (force-bypassing the cache) so it appears
+    // live. The viewer's own sends bump a different counter, so they don't
+    // trigger a redundant refetch loop here.
+    final controller = AppScope.watch(context);
+    final version = controller.realtimeMessageVersion;
+    if (_didStartLoading && _lastRealtimeVersion == version) {
       return;
     }
+    final isLiveUpdate = _didStartLoading;
     _didStartLoading = true;
-    _messagesFuture = AppScope.read(context).repositories.messages
-        .fetchMessages(widget.contact.conversationId)
+    _lastRealtimeVersion = version;
+    _messagesFuture = controller.repositories.messages
+        .fetchMessages(
+          widget.contact.conversationId,
+          forceRefresh: isLiveUpdate,
+        )
         .then((items) {
           if (mounted) {
             AppScope.read(context).notifyMessageStateChanged();
@@ -1060,18 +1073,28 @@ class _ChatMediaBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 248,
-      child: AspectRatio(
-        aspectRatio: 1.3,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: MediaPreview(
-            mediaUrl: _fileUrlFrom(text),
-            mediaType: type,
-            fallbackLabel: type == 'video' ? 'فيديو' : 'صورة',
-            showVideoControls: type == 'video',
-            cacheWidth: 640,
+    final url = _fileUrlFrom(text);
+    return GestureDetector(
+      onTap: url.trim().isEmpty
+          ? null
+          : () => FullScreenImageViewer.open(
+              context,
+              mediaUrl: url,
+              mediaType: type,
+            ),
+      child: SizedBox(
+        width: 248,
+        child: AspectRatio(
+          aspectRatio: 1.3,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: MediaPreview(
+              mediaUrl: url,
+              mediaType: type,
+              fallbackLabel: type == 'video' ? 'فيديو' : 'صورة',
+              showVideoControls: type == 'video',
+              cacheWidth: 640,
+            ),
           ),
         ),
       ),

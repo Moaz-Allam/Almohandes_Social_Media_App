@@ -3,12 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/layout_breakpoints.dart';
-import '../../models/app_tab.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/project_item.dart';
+import '../../shared/widgets/app_snack.dart';
 import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
+import '../jobs/job_application_screen.dart';
 import '../projects/widgets/project_card.dart';
 import '../projects/project_application_screen.dart';
 import 'widgets/feed_post_card.dart';
@@ -30,8 +31,18 @@ class HomeFeedScreen extends StatefulWidget {
 }
 
 class _HomeFeedScreenState extends State<HomeFeedScreen> {
-  late Future<List<dynamic>> _contentFuture;
+  static const _pageSize = 20;
+
+  final ScrollController _scrollController = ScrollController();
+  List<dynamic> _items = const [];
   bool _didStartLoading = false;
+  bool _isInitialLoading = false;
+  bool _isLoadingMore = false;
+  bool _hasMore = false;
+  int _offset = 0;
+  // Bumped on every (re)load so a slow in-flight request from a previous
+  // filter / refresh can't overwrite the current list when it resolves.
+  int _loadToken = 0;
   int _lastFeedVersion = 0;
   int _lastFollowVersion = 0;
   int _selectedFilterIndex = 0;
@@ -39,7 +50,15 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   @override
   void initState() {
     super.initState();
-    _contentFuture = Future.value(const []);
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
   }
 
   @override
@@ -56,31 +75,125 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     _didStartLoading = true;
     _lastFeedVersion = controller.feedVersion;
     _lastFollowVersion = controller.followVersion;
-    _loadContent();
+    _loadInitial();
   }
 
-  void _loadContent({bool forceRefresh = true}) {
+  /// Only the post feeds (home / following / professionals) and jobs support
+  /// server-side offset paging. Projects load a single page.
+  bool _supportsPagination(int index) =>
+      index == 0 || index == 1 || index == 2 || index == 4;
+
+  Future<List<dynamic>> _fetchPage({
+    required int offset,
+    required bool forceRefresh,
+  }) {
     final app = AppScope.read(context);
+    return switch (_selectedFilterIndex) {
+      0 => app.repositories.feed
+          .fetchHomeFeed(forceRefresh: forceRefresh, offset: offset),
+      1 => app.repositories.feed
+          .fetchFollowingFeed(forceRefresh: forceRefresh, offset: offset),
+      2 => app.repositories.feed
+          .fetchProfessionalsFeed(forceRefresh: forceRefresh, offset: offset),
+      3 => app.repositories.projects.fetchProjects(forceRefresh: forceRefresh),
+      4 => _fetchJobs(forceRefresh: forceRefresh, offset: offset),
+      _ => app.repositories.feed
+          .fetchHomeFeed(forceRefresh: forceRefresh, offset: offset),
+    };
+  }
+
+  Future<void> _loadInitial({bool forceRefresh = true}) async {
+    final token = ++_loadToken;
     setState(() {
-      _contentFuture = switch (_selectedFilterIndex) {
-        0 => app.repositories.feed.fetchHomeFeed(forceRefresh: forceRefresh),
-        1 => app.repositories.feed.fetchFollowingFeed(forceRefresh: forceRefresh),
-        2 => app.repositories.feed.fetchProfessionalsFeed(forceRefresh: forceRefresh),
-        3 => app.repositories.projects.fetchProjects(forceRefresh: forceRefresh),
-        4 => _fetchJobs(forceRefresh: forceRefresh),
-        _ => app.repositories.feed.fetchHomeFeed(forceRefresh: forceRefresh),
-      };
+      _isInitialLoading = true;
+      _isLoadingMore = false;
+      _hasMore = false;
+      _offset = 0;
+    });
+    List<dynamic> page;
+    try {
+      page = await _fetchPage(offset: 0, forceRefresh: forceRefresh);
+    } catch (_) {
+      page = const [];
+    }
+    if (!mounted || token != _loadToken) {
+      return;
+    }
+    setState(() {
+      _items = List<dynamic>.from(page);
+      _offset = _pageSize;
+      _hasMore = _supportsPagination(_selectedFilterIndex) && page.isNotEmpty;
+      _isInitialLoading = false;
     });
   }
 
-  Future<List<dynamic>> _fetchJobs({bool forceRefresh = false}) async {
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || _isInitialLoading || !_hasMore) {
+      return;
+    }
+    if (!_supportsPagination(_selectedFilterIndex)) {
+      return;
+    }
+    final token = _loadToken;
+    setState(() => _isLoadingMore = true);
+    List<dynamic> page;
+    try {
+      page = await _fetchPage(offset: _offset, forceRefresh: false);
+    } catch (_) {
+      page = const [];
+    }
+    if (!mounted || token != _loadToken) {
+      return;
+    }
+    setState(() {
+      final existingKeys = _items.map(_itemKey).toSet();
+      final fresh = [
+        for (final item in page)
+          if (!existingKeys.contains(_itemKey(item))) item,
+      ];
+      _items = [..._items, ...fresh];
+      _offset += _pageSize;
+      _hasMore = page.isNotEmpty;
+      _isLoadingMore = false;
+    });
+  }
+
+  /// Stable identity for de-duping appended pages across types.
+  String _itemKey(dynamic item) {
+    if (item is FeedPostModel) {
+      return 'post:${item.id}';
+    }
+    if (item is ProjectItem) {
+      return 'project:${item.id}';
+    }
+    if (item is Map) {
+      return 'job:${item['id']}';
+    }
+    return '${item.hashCode}';
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 600) {
+      _loadMore();
+    }
+  }
+
+  Future<List<dynamic>> _fetchJobs({
+    bool forceRefresh = false,
+    int offset = 0,
+  }) async {
     final client = Supabase.instance.client;
     try {
       final rows = await client
           .from('jobs')
           .select('*, profiles(full_name, avatar_url, role)')
           .eq('is_active', true)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(offset, offset + _pageSize - 1);
       return rows;
     } catch (_) {
       return [];
@@ -91,8 +204,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     final controller = AppScope.read(context);
     _lastFeedVersion = controller.feedVersion;
     _lastFollowVersion = controller.followVersion;
-    _loadContent(forceRefresh: true);
-    await _contentFuture;
+    await _loadInitial(forceRefresh: true);
   }
 
   void _onFilterChanged(int index) {
@@ -100,7 +212,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     setState(() {
       _selectedFilterIndex = index;
     });
-    _loadContent(forceRefresh: false);
+    _loadInitial(forceRefresh: false);
   }
 
   Future<void> _openProjectApplication(ProjectItem project) async {
@@ -109,7 +221,24 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
         builder: (_) => ProjectApplicationScreen(project: project),
       ),
     );
-    _loadContent(forceRefresh: true);
+    if (!mounted) {
+      return;
+    }
+    _loadInitial(forceRefresh: true);
+  }
+
+  Future<void> _openJobApplication(Map<String, dynamic> job) async {
+    final applied = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => JobApplicationScreen(job: job),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (applied == true) {
+      AppSnack.success(context, 'تم إرسال طلب التوظيف بنجاح');
+    }
   }
 
   @override
@@ -126,70 +255,87 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             child: WebComposerPrompt(),
           ),
         Expanded(
-          child: FutureBuilder<List<dynamic>>(
-            future: _contentFuture,
-            builder: (context, snapshot) {
-              final isInitialLoading =
-                  snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData;
-              if (isInitialLoading) {
-                return const _HomeFeedSkeleton();
-              }
-              final items = snapshot.data ?? const [];
-              return RefreshIndicator(
-                onRefresh: _refresh,
-                child: ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: 2 + (items.isEmpty ? 1 : items.length),
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return const StoriesStrip();
-                    }
-                    if (index == 1) {
-                      return _CategoryFilterBar(
-                        selectedIndex: _selectedFilterIndex,
-                        onChanged: _onFilterChanged,
-                      );
-                    }
-                    if (items.isEmpty) {
-                      return _FeedEmptyState(filterIndex: _selectedFilterIndex);
-                    }
-                    final item = items[index - 2];
-
-                    if (item is FeedPostModel) {
-                      return FeedPostCard(
-                        key: ValueKey('feed-post-${item.id}'),
-                        post: item,
-                      );
-                    } else if (item is ProjectItem) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ProjectCard(
-                          project: item,
-                          onApply: () => _openProjectApplication(item),
-                          canApply: item.profileId != myProfileId,
-                        ),
-                      );
-                    } else if (item is Map<String, dynamic>) {
-                      // Basic Job Card
-                      return _JobListItem(job: item);
-                    }
-                    return const SizedBox.shrink();
-                  },
+          child: _isInitialLoading
+              ? const _HomeFeedSkeleton()
+              : RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: _buildList(myProfileId),
                 ),
-              );
-            },
-          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildList(String? myProfileId) {
+    final hasItems = _items.isNotEmpty;
+    final showLoader = _isLoadingMore && hasItems;
+    // 2 leading slots (stories strip + filter bar), then items (or one empty
+    // state row), then an optional trailing load-more spinner.
+    final itemCount = 2 + (hasItems ? _items.length : 1) + (showLoader ? 1 : 0);
+
+    return ListView.builder(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return const StoriesStrip();
+        }
+        if (index == 1) {
+          return _CategoryFilterBar(
+            selectedIndex: _selectedFilterIndex,
+            onChanged: _onFilterChanged,
+          );
+        }
+        if (!hasItems) {
+          return _FeedEmptyState(filterIndex: _selectedFilterIndex);
+        }
+        if (showLoader && index == itemCount - 1) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 18),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final item = _items[index - 2];
+
+        if (item is FeedPostModel) {
+          return FeedPostCard(
+            key: ValueKey('feed-post-${item.id}'),
+            post: item,
+          );
+        } else if (item is ProjectItem) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: ProjectCard(
+              project: item,
+              onApply: () => _openProjectApplication(item),
+              canApply: item.profileId != myProfileId,
+            ),
+          );
+        } else if (item is Map<String, dynamic>) {
+          // Basic Job Card
+          return _JobListItem(
+            job: item,
+            canApply: '${item['profile_id'] ?? ''}' != myProfileId,
+            onApply: () => _openJobApplication(item),
+          );
+        }
+        return const SizedBox.shrink();
+      },
     );
   }
 }
 
 class _JobListItem extends StatelessWidget {
-  const _JobListItem({required this.job});
+  const _JobListItem({
+    required this.job,
+    required this.canApply,
+    required this.onApply,
+  });
   final Map<String, dynamic> job;
+  final bool canApply;
+  final VoidCallback onApply;
 
   @override
   Widget build(BuildContext context) {
@@ -227,12 +373,15 @@ class _JobListItem extends StatelessWidget {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: () {
-                // TODO: Open Job Application
-              },
-              child: const Text('تقديم الآن'),
-            ),
+            child: canApply
+                ? FilledButton(
+                    onPressed: onApply,
+                    child: const Text('تقديم الآن'),
+                  )
+                : OutlinedButton(
+                    onPressed: null,
+                    child: const Text('هذه وظيفتك'),
+                  ),
           ),
         ],
       ),
@@ -339,8 +488,6 @@ class _FeedEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showCreateButton = filterIndex != 1; // Show for all except 'Following'
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 70, 24, 24),
       child: Column(
@@ -370,21 +517,12 @@ class _FeedEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            filterIndex == 1 
+            filterIndex == 1
                 ? 'لم يقم من تتابعهم بنشر أي شيء بعد.'
-                : 'ابدأ بمشاركة منشور أو ريل ليظهر هنا.',
+                : 'لا توجد منشورات لعرضها هنا حاليا.',
             textAlign: TextAlign.center,
             style: TextStyle(color: context.appMuted, height: 1.45),
           ),
-          if (showCreateButton) ...[
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: () =>
-                  AppScope.read(context).selectTab(AppTab.feed),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('إنشاء منشور'),
-            ),
-          ],
         ],
       ),
     );

@@ -16,7 +16,6 @@ import '../premium/premium_access_screen.dart';
 import '../premium/premium_dashboard_screen.dart';
 import '../profile/profile_connections_screen.dart';
 import '../profile/profile_screen.dart';
-import '../projects/projects_screen.dart';
 import '../reels/reels_screen.dart';
 import '../saved/saved_items_screen.dart';
 import '../search/search_screen.dart';
@@ -318,8 +317,11 @@ class _MessagesNavItemState extends State<_MessagesNavItem> {
     super.didChangeDependencies();
     final controller = AppScope.watch(context);
     if (_future == null || _lastVersion != controller.messageStateVersion) {
+      final isLiveUpdate = _future != null;
       _lastVersion = controller.messageStateVersion;
-      _future = controller.repositories.messages.fetchConversations();
+      _future = controller.repositories.messages.fetchConversations(
+        forceRefresh: isLiveUpdate,
+      );
     }
   }
 
@@ -518,8 +520,11 @@ class _RecentNotificationsCardState extends State<_RecentNotificationsCard> {
     super.didChangeDependencies();
     final controller = AppScope.watch(context);
     if (_future == null || _lastVersion != controller.notificationStateVersion) {
+      final isLiveUpdate = _future != null;
       _lastVersion = controller.notificationStateVersion;
-      _future = controller.repositories.notifications.fetchNotifications();
+      _future = controller.repositories.notifications.fetchNotifications(
+        forceRefresh: isLiveUpdate,
+      );
     }
   }
 

@@ -254,39 +254,42 @@ final class _FakeAuthRepository implements AuthRepository {
   bool get isRemoteConfigured => false;
 
   @override
-  Future<void> completeSignUp({
-    required ProfileForm profile,
-    required AccountType accountType,
-    required String specialization,
+  Future<bool> phoneExists(String phone) async => false;
+
+  @override
+  Future<void> signInWithPassword({
     required String phone,
     required String password,
   }) async {}
 
   @override
-  Future<void> sendPasswordReset({required String email}) async {}
+  Future<void> sendSignupOtp({required String phone}) async {}
 
   @override
-  Future<void> updatePassword({required String password}) async {}
+  Future<void> resendSignupOtp({required String phone}) async {}
 
   @override
-  Future<String?> sendOtp({required String phone}) async => null;
+  Future<void> verifySignupOtp({
+    required String phone,
+    required String code,
+  }) async {}
 
   @override
-  Future<void> signInWithPassword({
-    required String login,
-    required String password,
+  Future<void> setPasswordForCurrentUser({required String password}) async {}
+
+  @override
+  Future<void> setFullNameForCurrentUser({required String fullName}) async {}
+
+  @override
+  Future<void> completeSignUp({
+    required ProfileForm profile,
+    required AccountType accountType,
+    required String specialization,
+    required String phone,
   }) async {}
 
   @override
   Future<void> signOut() async {}
-
-  @override
-  Future<bool> verifyOtp({required String phone, required String code}) async {
-    return true;
-  }
-
-  @override
-  Future<void> checkExistence({String? email, String? phone}) async {}
 }
 
 final class _FakeCourseRepository implements CourseRepository {
@@ -342,6 +345,13 @@ final class _FakeCommentRepository implements CommentRepository {
     required String commentId,
     required bool shouldLike,
   }) async {}
+
+  @override
+  Future<({String targetType, String targetId})?> resolveCommentTarget(
+    String commentId,
+  ) async {
+    return null;
+  }
 }
 
 final class _ControlledFeedRepository implements FeedRepository {
@@ -362,22 +372,33 @@ final class _ControlledFeedRepository implements FeedRepository {
   Future<void> repost(String postId) async {}
 
   @override
-  Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) {
+  Future<List<FeedPostModel>> fetchHomeFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  }) {
+    if (offset > 0) {
+      return Future.value(const []);
+    }
     return _completer.future;
   }
 
   @override
+  Future<FeedPostModel?> fetchPostById(String postId) async => null;
+
+  @override
   Future<List<FeedPostModel>> fetchFollowingFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) async {
-    return _testPosts;
+    return offset > 0 ? const [] : _testPosts;
   }
 
   @override
   Future<List<FeedPostModel>> fetchProfessionalsFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) async {
-    return _testPosts;
+    return offset > 0 ? const [] : _testPosts;
   }
 
   @override
@@ -400,6 +421,9 @@ final class _ControlledFeedRepository implements FeedRepository {
     required bool shouldLike,
   }) async {}
 
+  @override
+  Future<List<FeedPostModel>> searchPosts(String query) async => const [];
+
   void complete(List<FeedPostModel> posts) {
     _completer.complete(posts);
   }
@@ -421,22 +445,30 @@ final class _ImmediateFeedRepository implements FeedRepository {
   Future<void> repost(String postId) async {}
 
   @override
-  Future<List<FeedPostModel>> fetchHomeFeed({bool forceRefresh = false}) async {
-    return _testPosts;
+  Future<List<FeedPostModel>> fetchHomeFeed({
+    bool forceRefresh = false,
+    int offset = 0,
+  }) async {
+    return offset > 0 ? const [] : _testPosts;
   }
+
+  @override
+  Future<FeedPostModel?> fetchPostById(String postId) async => null;
 
   @override
   Future<List<FeedPostModel>> fetchFollowingFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) async {
-    return _testPosts;
+    return offset > 0 ? const [] : _testPosts;
   }
 
   @override
   Future<List<FeedPostModel>> fetchProfessionalsFeed({
     bool forceRefresh = false,
+    int offset = 0,
   }) async {
-    return _testPosts;
+    return offset > 0 ? const [] : _testPosts;
   }
 
   @override
@@ -458,6 +490,9 @@ final class _ImmediateFeedRepository implements FeedRepository {
     required String postId,
     required bool shouldLike,
   }) async {}
+
+  @override
+  Future<List<FeedPostModel>> searchPosts(String query) async => const [];
 }
 
 final class _ControlledProjectRepository implements ProjectRepository {
@@ -501,6 +536,9 @@ final class _ControlledProjectRepository implements ProjectRepository {
   }) async {
     return const <String>{};
   }
+
+  @override
+  Future<List<ProjectItem>> searchJobs(String query) async => const [];
 
   void complete(List<ProjectItem> projects) {
     _completer.complete(projects);
@@ -546,6 +584,9 @@ final class _ImmediateProjectRepository implements ProjectRepository {
   }) async {
     return const <String>{};
   }
+
+  @override
+  Future<List<ProjectItem>> searchJobs(String query) async => const [];
 }
 
 final class _ControlledReelRepository implements ReelRepository {
@@ -633,6 +674,12 @@ final class _FakeProfileRepository implements ProfileRepository {
   }
 
   @override
+  Future<void> setProfilePrivacy(bool isPrivate) async {}
+
+  @override
+  Future<bool> isProfilePrivate(String profileId) async => false;
+
+  @override
   Future<void> deleteCurrentProfile() async {}
 
   @override
@@ -640,6 +687,9 @@ final class _FakeProfileRepository implements ProfileRepository {
     String? about,
     String? avatarUrl,
     String? coverUrl,
+    String? fullName,
+    String? governorate,
+    List<String>? skills,
   }) async {}
 
   @override
@@ -689,12 +739,18 @@ final class _FakeProfileRepository implements ProfileRepository {
   Future<void> followProfile(String followingProfileId) async {}
 
   @override
+  Future<void> unfollowProfile(String followingProfileId) async {}
+
+  @override
   Future<void> requestConnection(String receiverProfileId) async {}
 
   @override
   Future<ProfileStats> fetchProfileStats(String profileId) async {
     return ProfileStats.empty;
   }
+
+  @override
+  Future<List<NetworkPerson>> searchPeople(String query) async => const [];
 }
 
 final class _FakeMessageRepository implements MessageRepository {
@@ -755,6 +811,9 @@ final class _FakeNotificationRepository implements NotificationRepository {
 
   @override
   Future<void> markRead(String notificationId) async {}
+
+  @override
+  Future<void> markAllRead() async {}
 }
 
 final class _FakeSavedContentRepository implements SavedContentRepository {

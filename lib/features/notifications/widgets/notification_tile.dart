@@ -10,18 +10,26 @@ class NotificationTile extends StatelessWidget {
     required this.item,
     required this.onMarkRead,
     required this.onDelete,
+    this.onTap,
   });
 
   final NotificationItemModel item;
   final VoidCallback onMarkRead;
   final VoidCallback onDelete;
 
+  /// Invoked when the body of the tile is tapped. Routes to the
+  /// notification's target (post / reel / profile / chat) when set.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
       color: item.unread ? context.appPaleBlue : context.appSurface,
-      padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-      child: Row(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+          child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (item.unread)
@@ -95,7 +103,9 @@ class NotificationTile extends StatelessWidget {
               ],
             ),
           ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,16 +1,29 @@
-import '../models/account_type.dart';
-import '../models/profile_form.dart';
 import 'package:flutter/material.dart';
 
+import '../core/data/countries.dart';
+import '../models/account_type.dart';
+import '../models/profile_form.dart';
+
+// `iraqiGovernorates` now lives next to the governorate slug mappers (single
+// source of truth). Re-exported here so existing signup consumers keep their
+// import unchanged.
+export '../data/mappers/supabase_enum_mapper.dart' show iraqiGovernorates;
+
+/// Holds state for the multi-screen signup wizard.
+///
+/// Flow: phone → OTP → password → name → account type → specialization →
+/// governorate → bio/skills → submit. Each screen reads/writes the
+/// controller's fields and pushes the next screen on its own. The
+/// controller itself is just a ChangeNotifier — there is no PageView
+/// driving navigation anymore.
 final class SignupController extends ChangeNotifier {
   SignupController() {
     for (final controller in [
-      displayName,
-      email,
-      phone,
+      firstName,
+      lastName,
+      phoneInput,
       password,
       confirmPassword,
-      otp,
       about,
       customSkill,
     ]) {
@@ -18,30 +31,33 @@ final class SignupController extends ChangeNotifier {
     }
   }
 
-  static const totalSteps = 6;
-
-  final pageController = PageController();
-
-  int _step = 0;
+  Country _country = defaultCountry;
   AccountType _userType = AccountType.engineer;
   String _specialization = 'مدني';
   String _governorate = 'بغداد';
   final Set<String> _skills = {'مدني'};
 
-  final displayName = TextEditingController();
-  final email = TextEditingController();
-  final phone = TextEditingController();
+  final firstName = TextEditingController();
+  final lastName = TextEditingController();
+  // Local part of the phone, without the country dial code.
+  final phoneInput = TextEditingController();
   final password = TextEditingController();
   final confirmPassword = TextEditingController();
-  final otp = TextEditingController();
   final about = TextEditingController();
   final customSkill = TextEditingController();
 
-  int get step => _step;
+  Country get country => _country;
 
-  double get progress => (_step + 1) / totalSteps;
-
-  bool get isLastStep => _step == totalSteps - 1;
+  /// Full E.164 phone, e.g. "+9647712345678". Always recomputed from the
+  /// current country dial code + the local digits the user has typed.
+  String get fullPhone {
+    final digits = phoneInput.text.trim();
+    if (digits.isEmpty) {
+      return '';
+    }
+    final normalized = digits.startsWith('0') ? digits.substring(1) : digits;
+    return '${_country.dialCode}$normalized';
+  }
 
   AccountType get userType => _userType;
 
@@ -50,6 +66,21 @@ final class SignupController extends ChangeNotifier {
   String get governorate => _governorate;
 
   Set<String> get skills => Set.unmodifiable(_skills);
+
+  String get fullName {
+    final f = firstName.text.trim();
+    final l = lastName.text.trim();
+    if (f.isEmpty && l.isEmpty) {
+      return '';
+    }
+    if (l.isEmpty) {
+      return f;
+    }
+    if (f.isEmpty) {
+      return l;
+    }
+    return '$f $l';
+  }
 
   String get effectiveAbout {
     final value = about.text.trim();
@@ -82,25 +113,30 @@ final class SignupController extends ChangeNotifier {
     };
   }
 
-  bool get hasValidPhoneNumber => isSupportedPhoneNumber(phone.text);
-
-  bool get hasValidIraqiPhone => hasValidPhoneNumber;
-
-  bool get hasValidEmail {
-    final value = email.text.trim();
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
+  bool get hasValidPhoneNumber {
+    final value = phoneInput.text.trim();
+    return value.length >= 7 && RegExp(r'^\d+$').hasMatch(value);
   }
-
-  bool get hasValidOtp => RegExp(r'^\d{6}$').hasMatch(otp.text.trim());
 
   bool get hasMatchingPasswords {
-    return password.text.isNotEmpty && password.text == confirmPassword.text;
+    return password.text.length >= 6 && password.text == confirmPassword.text;
   }
 
+  /// Used by the legacy phone-validation widget test. Accepts the same
+  /// local + E.164 patterns the wizard always supported (Iraq +964, Egypt
+  /// +20). Anything else falls through to the country-picker entry path.
   static bool isSupportedPhoneNumber(String value) {
     final normalized = value.trim().replaceAll(' ', '').replaceAll('-', '');
     return RegExp(r'^(?:\+964|00964|0)7[3-9]\d{8}$').hasMatch(normalized) ||
         RegExp(r'^(?:\+20|0020|0)1[0125]\d{8}$').hasMatch(normalized);
+  }
+
+  void setCountry(Country value) {
+    if (_country.code == value.code) {
+      return;
+    }
+    _country = value;
+    notifyListeners();
   }
 
   void setUserType(AccountType value) {
@@ -157,35 +193,15 @@ final class SignupController extends ChangeNotifier {
     }
   }
 
-  void nextStep() {
-    if (isLastStep) {
-      return;
-    }
-    _step += 1;
-    _animateToCurrentStep();
-  }
-
-  void previousStep() {
-    if (_step == 0) {
-      return;
-    }
-    _step -= 1;
-    _animateToCurrentStep();
-  }
-
   ProfileForm toProfile() {
-    final parts = displayName.text.trim().split(RegExp(r'\s+'));
-    final first = parts.isEmpty ? '' : parts.first;
-    final last = parts.length <= 1 ? '' : parts.skip(1).join(' ');
-
     return ProfileForm(
-      email: email.text.trim(),
-      firstName: first,
-      lastName: last,
+      email: '',
+      firstName: firstName.text.trim(),
+      lastName: lastName.text.trim(),
       headline: '${_userType.label} · $_specialization',
       location: _governorate,
       industry: _userType.label,
-      company: _userType == AccountType.company ? displayName.text : '',
+      company: _userType == AccountType.company ? fullName : '',
       role: _specialization,
       about: effectiveAbout,
       skills: effectiveSkills,
@@ -196,24 +212,13 @@ final class SignupController extends ChangeNotifier {
     );
   }
 
-  void _animateToCurrentStep() {
-    notifyListeners();
-    pageController.animateToPage(
-      _step,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOut,
-    );
-  }
-
   @override
   void dispose() {
-    pageController.dispose();
-    displayName.dispose();
-    email.dispose();
-    phone.dispose();
+    firstName.dispose();
+    lastName.dispose();
+    phoneInput.dispose();
     password.dispose();
     confirmPassword.dispose();
-    otp.dispose();
     about.dispose();
     customSkill.dispose();
     super.dispose();
@@ -280,23 +285,3 @@ const equipmentTypes = [
   'أخرى',
 ];
 
-const iraqiGovernorates = [
-  'بغداد',
-  'البصرة',
-  'نينوى',
-  'أربيل',
-  'السليمانية',
-  'دهوك',
-  'كركوك',
-  'ديالى',
-  'الأنبار',
-  'بابل',
-  'كربلاء',
-  'النجف',
-  'واسط',
-  'صلاح الدين',
-  'ذي قار',
-  'ميسان',
-  'المثنى',
-  'القادسية',
-];

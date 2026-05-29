@@ -4,15 +4,12 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/layout_breakpoints.dart';
 import '../../models/app_tab.dart';
 import '../../state/app_scope.dart';
-import '../composer/composer_screen.dart';
 import '../feed/home_feed_screen.dart';
 import '../messages/messages_screen.dart';
-import '../network/network_screen.dart';
 import '../premium/premium_dashboard_screen.dart';
-import '../projects/projects_screen.dart';
 import '../reels/reels_screen.dart';
 import '../profile/profile_screen.dart';
-import '../settings/settings_screen.dart';
+import '../search/search_screen.dart';
 import 'web_shell.dart';
 import 'widgets/linked_bottom_navigation.dart';
 
@@ -55,12 +52,6 @@ class _MainShellState extends State<_MobileShell> {
     ).push(MaterialPageRoute(builder: (_) => const MessagesScreen()));
   }
 
-  void _openSettings() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
-  }
-
   int _indexOf(AppTab tab) {
     return switch (tab) {
       AppTab.feed => 0,
@@ -78,7 +69,7 @@ class _MainShellState extends State<_MobileShell> {
     final controller = AppScope.read(context);
     return switch (tab) {
       AppTab.feed => HomeFeedScreen(onMenu: _openDrawer, onMessages: _openMessages),
-      AppTab.search => NetworkScreen(onMenu: _openDrawer, onMessages: _openMessages),
+      AppTab.search => SearchScreen(onMenu: _openDrawer, onMessages: _openMessages),
       AppTab.dashboard => PremiumDashboardScreen(onMenu: _openDrawer, onMessages: _openMessages),
       AppTab.reels => ReelsScreen(onMenu: _openDrawer, onMessages: _openMessages),
       AppTab.profile => ProfileScreen(

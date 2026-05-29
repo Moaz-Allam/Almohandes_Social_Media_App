@@ -4,11 +4,15 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/errors/user_error_message.dart';
 import '../../state/app_scope.dart';
+import '../home/widgets/home_top_bar.dart';
 import 'payment_webview_screen.dart';
 import 'premium_dashboard_screen.dart';
 
 class PremiumAccessScreen extends StatefulWidget {
-  const PremiumAccessScreen({super.key});
+  const PremiumAccessScreen({super.key, this.onMenu, this.onMessages});
+
+  final VoidCallback? onMenu;
+  final VoidCallback? onMessages;
 
   @override
   State<PremiumAccessScreen> createState() => _PremiumAccessScreenState();
@@ -76,24 +80,26 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
-      appBar: AppBar(
-        backgroundColor: context.appSurface,
-        foregroundColor: context.appText,
-        title: const Text(
-          'Premium',
-          style: TextStyle(fontWeight: FontWeight.w900),
-        ),
-      ),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
-        itemCount: _items.length + 1,
-        separatorBuilder: (context, index) =>
-            Divider(height: 16, thickness: 16, color: context.appBackground),
-        itemBuilder: (context, index) {
-          if (index == _items.length) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Column(
+      body: Column(
+        children: [
+          HomeTopBar(
+            onMenu: widget.onMenu ?? () => Navigator.of(context).maybePop(),
+            onMessages: widget.onMessages ?? () {},
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+              itemCount: _items.length + 1,
+              separatorBuilder: (context, index) => Divider(
+                height: 16,
+                thickness: 16,
+                color: context.appBackground,
+              ),
+              itemBuilder: (context, index) {
+                if (index == _items.length) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
+                    child: Column(
                 children: [
                   FilledButton.icon(
                     onPressed: _isStartingPayment ? null : _startPayment,
@@ -159,7 +165,10 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
               ],
             ),
           );
-        },
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

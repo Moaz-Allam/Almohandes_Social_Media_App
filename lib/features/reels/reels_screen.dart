@@ -196,6 +196,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                         // Only autoplay when this reel is the active page
                         // AND the reels tab itself is visible.
                         isActive: index == _index && tabIsVisible,
+                        tabVisible: tabIsVisible,
                         effectiveAvatarUrl: effectiveAvatarUrl,
                         onLike: () => _triggerLike(item),
                         onSend: () => _openSendFlow(item),
@@ -255,6 +256,7 @@ class _ReelPage extends StatefulWidget {
     required this.likesCount,
     required this.isLiked,
     required this.isActive,
+    required this.tabVisible,
     required this.effectiveAvatarUrl,
     required this.onLike,
     required this.onSend,
@@ -264,6 +266,7 @@ class _ReelPage extends StatefulWidget {
   final int likesCount;
   final bool isLiked;
   final bool isActive;
+  final bool tabVisible;
   final String? effectiveAvatarUrl;
   final VoidCallback onLike;
   final VoidCallback onSend;
@@ -301,6 +304,9 @@ class _ReelPageState extends State<_ReelPage> {
                 autoplay: widget.isActive,
                 showVideoControls: true,
                 muted: _muted,
+                // When the whole reels tab is hidden, dispose the native
+                // decoder rather than leaving every page's controller alive.
+                releaseController: !widget.tabVisible,
               ),
             ),
           Positioned.fill(

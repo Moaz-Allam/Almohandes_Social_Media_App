@@ -2,6 +2,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/post_visibility.dart';
 import '../../models/reel_item.dart';
+import 'supabase_enum_mapper.dart';
 
 FeedPostModel feedPostFromSupabase(
   Map<String, dynamic> row, {
@@ -29,6 +30,10 @@ FeedPostModel feedPostFromSupabase(
   final visibility = PostVisibility.fromStorageValue(
     '${row['visibility'] ?? row['audience'] ?? ''}',
   );
+  final governorate = profile?['governorate'] ?? row['governorate'];
+  final location = governorate == null
+      ? ''
+      : governorateFromSupabase('$governorate');
 
   return FeedPostModel(
     id: '${row['post_id'] ?? row['id'] ?? ''}',
@@ -36,6 +41,7 @@ FeedPostModel feedPostFromSupabase(
     name: '$name',
     headline: _headlineForRole('$role'),
     time: _exactDateTime(row['created_at']),
+    location: location,
     body: '${row['content'] ?? ''}',
     reactions: '$likes',
     comments: '$comments تعليق',

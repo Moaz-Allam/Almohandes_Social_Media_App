@@ -9,6 +9,7 @@ final class FeedPostModel {
     required this.name,
     required this.headline,
     required this.time,
+    this.location = '',
     required this.body,
     required this.reactions,
     required this.comments,
@@ -29,6 +30,7 @@ final class FeedPostModel {
   final String name;
   final String headline;
   final String time;
+  final String location;
   final String body;
   final String reactions;
   final String comments;

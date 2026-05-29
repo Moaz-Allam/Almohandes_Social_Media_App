@@ -142,12 +142,9 @@ class _StoriesStripState extends State<StoriesStrip> {
             child: FutureBuilder<List<StoryItem>>(
               future: _storiesFuture,
               builder: (context, snapshot) {
-                final isLoading =
-                    snapshot.connectionState == ConnectionState.waiting &&
-                    !snapshot.hasData;
                 final stories = snapshot.data ?? const <StoryItem>[];
                 final groups = _storyGroups(stories);
-                
+
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   scrollDirection: Axis.horizontal,

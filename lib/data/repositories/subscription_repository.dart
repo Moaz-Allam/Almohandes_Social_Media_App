@@ -81,7 +81,22 @@ final class SupabaseSubscriptionRepository implements SubscriptionRepository {
         throw const RepositoryFailure('سجل الدخول أولا');
       }
 
-      final profile = await remote
+      // Read the owner's own contact details. Prefer the SECURITY DEFINER
+      // `get_my_profile` RPC since email/phone are no longer granted to
+      // `authenticated` for direct table reads (see profile_contact_privacy
+      // migration); fall back to a direct select on older backends.
+      Map<String, dynamic>? profile;
+      try {
+        final result = await remote.rpc('get_my_profile');
+        if (result is List && result.isNotEmpty && result.first is Map) {
+          profile = Map<String, dynamic>.from(result.first as Map);
+        } else if (result is Map) {
+          profile = Map<String, dynamic>.from(result);
+        }
+      } catch (_) {
+        // RPC unavailable — fall through to the legacy direct read.
+      }
+      profile ??= await remote
           .from('profiles')
           .select('id, full_name, email, phone')
           .eq('user_id', userId)
