@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/story_item.dart';
+import '../../models/story_viewer.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
@@ -32,6 +34,10 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   late int _index;
   bool _isHeld = false;
   String? _burstEmoji;
+  String? _myProfileId;
+  // Stories whose view we've already recorded this session, so paging back and
+  // forth doesn't fire the RPC repeatedly.
+  final Set<String> _recordedViews = {};
 
   @override
   void initState() {
@@ -56,11 +62,54 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _myProfileId ??= AppScope.read(context).profile?.id;
+    // Record the first story as viewed once we have a profile context.
+    _markViewed(_index);
+  }
+
+  @override
   void dispose() {
     _progress.dispose();
     _burst.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Records that the viewer opened the story at [index] (skipping the
+  /// viewer's own stories so a creator never appears in their own audience).
+  void _markViewed(int index) {
+    if (index < 0 || index >= widget.stories.length) {
+      return;
+    }
+    final story = widget.stories[index];
+    if (story.id.isEmpty) {
+      return;
+    }
+    if (story.profileId.isNotEmpty && story.profileId == _myProfileId) {
+      return;
+    }
+    if (!_recordedViews.add(story.id)) {
+      return;
+    }
+    AppScope.read(context).repositories.stories.markStoryViewed(story.id);
+  }
+
+  bool _isMine(StoryItem story) =>
+      story.profileId.isNotEmpty && story.profileId == _myProfileId;
+
+  Future<void> _openViewers(StoryItem story) async {
+    _pauseProgress();
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _StoryViewersSheet(story: story),
+    );
+    if (mounted) {
+      _resumeProgress();
+    }
   }
 
   void _restartProgress() {
@@ -187,6 +236,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   });
                   _burst.stop();
                   _restartProgress();
+                  _markViewed(value);
                 },
                 itemBuilder: (context, index) {
                   final story = widget.stories[index];
@@ -274,10 +324,17 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 start: 0,
                 end: 0,
                 bottom: 16,
-                child: _StoryReactionBar(
-                  emojis: _reactionEmojis,
-                  onTap: (emoji) => _sendReaction(emoji, currentStory),
-                ),
+                // Your own story shows "who viewed it"; everyone else's shows
+                // the emoji reaction bar.
+                child: _isMine(currentStory)
+                    ? _StoryViewersButton(
+                        count: currentStory.viewsCount,
+                        onTap: () => _openViewers(currentStory),
+                      )
+                    : _StoryReactionBar(
+                        emojis: _reactionEmojis,
+                        onTap: (emoji) => _sendReaction(emoji, currentStory),
+                      ),
               ),
               if (_burstEmoji != null)
                 Positioned.fill(
@@ -583,5 +640,238 @@ class _StoryArtPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _StoryArtPainter oldDelegate) {
     return oldDelegate.color != color || oldDelegate.index != index;
+  }
+}
+
+/// The pill shown at the bottom of your own story: an eye + the viewer count.
+/// Tapping it opens the list of people who saw the story.
+class _StoryViewersButton extends StatelessWidget {
+  const _StoryViewersButton({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: .5),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withValues(alpha: .18)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.visibility_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  count > 0 ? 'شاهدها $count' : 'لا مشاهدات بعد',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet listing everyone who viewed the story (creator-only — RLS
+/// returns no rows to anyone else).
+class _StoryViewersSheet extends StatefulWidget {
+  const _StoryViewersSheet({required this.story});
+
+  final StoryItem story;
+
+  @override
+  State<_StoryViewersSheet> createState() => _StoryViewersSheetState();
+}
+
+class _StoryViewersSheetState extends State<_StoryViewersSheet> {
+  late Future<List<StoryViewer>> _viewersFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewersFuture = AppScope.read(context)
+        .repositories
+        .stories
+        .fetchStoryViewers(widget.story.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: context.appBorder,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.visibility_outlined,
+                      size: 20,
+                      color: context.appText,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'من شاهد قصتك',
+                      style: TextStyle(
+                        color: context.appText,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: context.appBorder),
+              Expanded(
+                child: FutureBuilder<List<StoryViewer>>(
+                  future: _viewersFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      );
+                    }
+                    final viewers = snapshot.data ?? const <StoryViewer>[];
+                    if (viewers.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(
+                            'لم يشاهد أحد قصتك بعد',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: context.appMuted,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: viewers.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 2),
+                      itemBuilder: (context, index) =>
+                          _StoryViewerTile(viewer: viewers[index]),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StoryViewerTile extends StatelessWidget {
+  const _StoryViewerTile({required this.viewer});
+
+  final StoryViewer viewer;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = [
+      _roleLabel(viewer.role),
+      if (viewer.viewedAt != null) _relativeTime(viewer.viewedAt!),
+    ].where((s) => s.isNotEmpty).join(' · ');
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      leading: AppAvatar(
+        name: viewer.name,
+        radius: 22,
+        color: AppColors.blue,
+        imageUrl: viewer.avatarUrl,
+      ),
+      title: Text(
+        viewer.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: context.appText,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      subtitle: subtitle.isEmpty
+          ? null
+          : Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: context.appMuted, fontSize: 12.5),
+            ),
+    );
+  }
+
+  static String _roleLabel(String role) {
+    return switch (role) {
+      'engineer' => 'مهندس',
+      'contractor' => 'شركة مقاولات',
+      'craftsman' => 'حرفي',
+      'worker' => 'عامل بناء',
+      'machinery' => 'مزود آليات',
+      _ => '',
+    };
+  }
+
+  static String _relativeTime(DateTime time) {
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) {
+      return 'الآن';
+    }
+    if (diff.inMinutes < 60) {
+      return 'قبل ${diff.inMinutes} د';
+    }
+    if (diff.inHours < 24) {
+      return 'قبل ${diff.inHours} س';
+    }
+    return 'قبل ${diff.inDays} ي';
   }
 }

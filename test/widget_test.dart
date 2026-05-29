@@ -37,6 +37,7 @@ import 'package:tradeflow/models/project_item.dart';
 import 'package:tradeflow/models/reel_item.dart';
 import 'package:tradeflow/models/saved_content.dart';
 import 'package:tradeflow/models/story_item.dart';
+import 'package:tradeflow/models/story_viewer.dart';
 import 'package:tradeflow/state/app_controller.dart';
 import 'package:tradeflow/state/signup_controller.dart';
 
@@ -821,6 +822,13 @@ final class _FakeStoryRepository implements StoryRepository {
     required String storyId,
     required String emoji,
   }) async {}
+
+  @override
+  Future<void> markStoryViewed(String storyId) async {}
+
+  @override
+  Future<List<StoryViewer>> fetchStoryViewers(String storyId) async =>
+      const [];
 }
 
 final class _FakeSubscriptionRepository implements SubscriptionRepository {

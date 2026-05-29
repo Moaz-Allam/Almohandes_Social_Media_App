@@ -157,7 +157,7 @@ class _StoriesStripState extends State<StoriesStrip> {
                     final group = groups[index - 1];
                     return _StoryCard(
                       group: group,
-                      seen: _seenStoryGroups.contains(group.id),
+                      seen: group.seen || _seenStoryGroups.contains(group.id),
                       onTap: () => _openStory(context, group, 0),
                     );
                   },
@@ -333,6 +333,10 @@ final class _StoryGroup {
   final String id;
   final List<StoryItem> stories;
   StoryItem get preview => stories.first;
+
+  /// A group reads as "seen" only once every story in it has been viewed
+  /// (matches Instagram: the ring stays bright until you finish the set).
+  bool get seen => stories.isNotEmpty && stories.every((s) => s.seen);
 }
 
 final class _StoryDraft {

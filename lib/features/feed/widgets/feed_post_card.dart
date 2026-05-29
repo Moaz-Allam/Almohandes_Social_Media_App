@@ -259,14 +259,18 @@ class _FeedPostCardState extends State<FeedPostCard> {
                             color: context.appMuted,
                           ),
                           const SizedBox(width: 3),
-                          Text(
-                            post.location.isEmpty
-                                ? post.time
-                                : '${post.time} • ${post.location}',
-                            style: TextStyle(
-                              color: context.appMuted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              post.location.isEmpty
+                                  ? post.time
+                                  : '${post.time} • ${post.location}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: context.appMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],

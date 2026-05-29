@@ -40,6 +40,15 @@ final class SupabaseCommentRepository implements CommentRepository {
 
   static const _commentsPageSize = 30;
 
+  // Adding `app_comment_likes` introduced a SECOND relationship between
+  // `app_comments` and `profiles` (the m2m likes path), so an unqualified
+  // `profiles(...)` embed became ambiguous — PostgREST answers PGRST201 (HTTP
+  // 300) and EVERY rich comment read/write fails, silently falling back to the
+  // legacy unthreaded tables (which is why replies reverted to top-level).
+  // Pinning the author embed to its FK constraint name disambiguates it.
+  static const _authorEmbed =
+      'profiles!app_comments_profile_id_fkey(full_name,avatar_url)';
+
   final SupabaseClient? client;
   final _caches = <String, TimedMemoryCache<List<CommentItem>>>{};
 
@@ -75,9 +84,9 @@ final class SupabaseCommentRepository implements CommentRepository {
     //   (c) parent_id missing
     //   (d) legacy post_comments / reel_comments fallback
     final attempts = <String>[
-      'id,content,created_at,parent_id,likes_count,replies_count,profiles(full_name,avatar_url)',
-      'id,content,created_at,parent_id,profiles(full_name,avatar_url)',
-      'id,content,created_at,profiles(full_name,avatar_url)',
+      'id,content,created_at,parent_id,likes_count,replies_count,$_authorEmbed',
+      'id,content,created_at,parent_id,$_authorEmbed',
+      'id,content,created_at,$_authorEmbed',
     ];
     List<CommentItem>? fetched;
     for (final select in attempts) {
@@ -252,21 +261,21 @@ final class SupabaseCommentRepository implements CommentRepository {
           _InsertAttempt(
             includeParent: true,
             select:
-                'id,content,created_at,parent_id,likes_count,replies_count,profiles(full_name,avatar_url)',
+                'id,content,created_at,parent_id,likes_count,replies_count,$_authorEmbed',
           ),
         if (hasParent)
           _InsertAttempt(
             includeParent: true,
-            select: 'id,content,created_at,parent_id,profiles(full_name,avatar_url)',
+            select: 'id,content,created_at,parent_id,$_authorEmbed',
           ),
         _InsertAttempt(
           includeParent: false,
           select:
-              'id,content,created_at,parent_id,likes_count,replies_count,profiles(full_name,avatar_url)',
+              'id,content,created_at,parent_id,likes_count,replies_count,$_authorEmbed',
         ),
         _InsertAttempt(
           includeParent: false,
-          select: 'id,content,created_at,profiles(full_name,avatar_url)',
+          select: 'id,content,created_at,$_authorEmbed',
         ),
       ];
 

@@ -362,10 +362,14 @@ final class SupabaseProjectRepository implements ProjectRepository {
       ];
     } catch (_) {
       try {
+        // Fallback without the profiles embed: project_applications has two
+        // FKs to profiles (profile_id + reviewed_by), so a plain
+        // `profiles(...)` embed is permanently ambiguous (PGRST201). Degrade
+        // gracefully to scalar columns rather than failing outright.
         final rows = await remote
             .from('project_applications')
             .select(
-              'id,subject,message,attachments_count,status,created_at,profiles(id,full_name,role,bio,avatar_url)',
+              'id,subject,message,attachments_count,status,created_at',
             )
             .eq('project_id', projectId)
             .order('created_at', ascending: false)

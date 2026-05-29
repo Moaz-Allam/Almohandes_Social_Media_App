@@ -486,6 +486,8 @@ class _TopLevelCommentTile extends StatelessWidget {
               children: [
                 Text(
                   comment.authorName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 14.5,

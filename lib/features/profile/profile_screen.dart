@@ -411,6 +411,8 @@ class _ProfileHeroState extends State<_ProfileHero> {
               children: [
                 Text(
                   widget.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.appText,
                     fontSize: 22,
@@ -428,12 +430,16 @@ class _ProfileHeroState extends State<_ProfileHero> {
                       color: context.appMuted,
                     ),
                     const SizedBox(width: 4),
-                    Text(
-                      widget.location,
-                      style: TextStyle(
-                        color: context.appMuted,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        widget.location,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: context.appMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
