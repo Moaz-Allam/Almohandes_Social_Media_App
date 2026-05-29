@@ -1,14 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../data/storage/media_upload_service.dart';
 import '../../../models/story_item.dart';
-import '../../../shared/widgets/app_snack.dart';
 import '../../../shared/widgets/cached_image.dart';
 import '../../../state/app_scope.dart';
+import '../../stories/story_create_screen.dart';
 import '../../stories/story_viewer_screen.dart';
 
 class StoriesStrip extends StatefulWidget {
@@ -60,35 +56,10 @@ class _StoriesStripState extends State<StoriesStrip> {
     );
   }
 
-  Future<void> _createStory(BuildContext context) async {
-    final draft = await showDialog<_StoryDraft>(
-      context: context,
-      builder: (_) => const _StoryComposerDialog(),
+  void _createStory(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const StoryCreateScreen()),
     );
-    if (!context.mounted || draft == null) {
-      return;
-    }
-    final repositories = AppScope.read(context).repositories;
-    try {
-      await repositories.stories.createStory(
-        content: draft.content,
-        mediaUrl: draft.mediaUrl,
-        mediaType: draft.mediaType,
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      AppSnack.error(context, error, fallback: 'تعذر نشر القصة الآن');
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('تم نشر القصة')));
-    AppScope.read(context).notifyStoriesChanged();
   }
 
   @override
@@ -339,100 +310,3 @@ final class _StoryGroup {
   bool get seen => stories.isNotEmpty && stories.every((s) => s.seen);
 }
 
-final class _StoryDraft {
-  const _StoryDraft({
-    required this.content,
-    required this.mediaUrl,
-    required this.mediaType,
-  });
-  final String content;
-  final String mediaUrl;
-  final String mediaType;
-}
-
-class _StoryComposerDialog extends StatefulWidget {
-  const _StoryComposerDialog();
-  @override
-  State<_StoryComposerDialog> createState() => _StoryComposerDialogState();
-}
-
-class _StoryComposerDialogState extends State<_StoryComposerDialog> {
-  final _controller = TextEditingController();
-  String _mediaUrl = '';
-  String _mediaType = 'image';
-  bool _isUploading = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickMedia(bool video) async {
-    if (_isUploading) return;
-    final XFile? picked;
-    final Uint8List bytes;
-    try {
-      final picker = ImagePicker();
-      picked = video
-          ? await picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(seconds: 30))
-          : await picker.pickImage(source: ImageSource.gallery, maxWidth: 1080, imageQuality: 60);
-      if (picked == null) return;
-      bytes = await picked.readAsBytes();
-    } catch (error) {
-      if (!mounted) return;
-      AppSnack.error(context, error, fallback: 'تعذر اختيار القصة الآن');
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _isUploading = true);
-    final mimeType = picked.mimeType ?? (video ? 'video/mp4' : 'image/jpeg');
-    final media = AppScope.read(context).repositories.media;
-    try {
-      final url = await media.uploadBytes(
-        bucket: video ? MediaBucket.reels : MediaBucket.stories,
-        bytes: bytes,
-        fileName: picked.name,
-        mimeType: mimeType,
-      );
-      if (!mounted) return;
-      setState(() {
-        _mediaUrl = url;
-        _mediaType = video ? 'video' : 'image';
-      });
-    } catch (error) {
-      if (!mounted) return;
-      AppSnack.error(context, error, fallback: 'تعذر رفع القصة الآن');
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('قصة جديدة'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _controller,
-            decoration: const InputDecoration(hintText: 'اكتب النص للقصة'),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: OutlinedButton(onPressed: () => _pickMedia(false), child: const Text('صورة'))),
-              const SizedBox(width: 8),
-              Expanded(child: OutlinedButton(onPressed: () => _pickMedia(true), child: const Text('فيديو'))),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Navigator.pop(context, _StoryDraft(content: _controller.text, mediaUrl: _mediaUrl, mediaType: _mediaType)), child: const Text('نشر')),
-      ],
-    );
-  }
-}
