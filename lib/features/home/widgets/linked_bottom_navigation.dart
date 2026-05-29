@@ -11,10 +11,15 @@ class LinkedBottomNavigation extends StatelessWidget {
     super.key,
     required this.selectedTab,
     required this.onChanged,
+    this.showDashboard = true,
   });
 
   final AppTab selectedTab;
   final ValueChanged<AppTab> onChanged;
+
+  /// Whether the engineer-only dashboard tab is shown. Non-engineer
+  /// accounts have it hidden entirely.
+  final bool showDashboard;
 
   @override
   Widget build(BuildContext context) {
@@ -52,13 +57,14 @@ class LinkedBottomNavigation extends StatelessWidget {
                 selected: selectedTab == AppTab.search,
                 onTap: () => onChanged(AppTab.search),
               ),
-              _NavItem(
-                icon: Icons.grid_view_outlined,
-                activeIcon: Icons.grid_view_rounded,
-                label: 'لوحة التحكم',
-                selected: selectedTab == AppTab.dashboard,
-                onTap: () => onChanged(AppTab.dashboard),
-              ),
+              if (showDashboard)
+                _NavItem(
+                  icon: Icons.grid_view_outlined,
+                  activeIcon: Icons.grid_view_rounded,
+                  label: 'لوحة التحكم',
+                  selected: selectedTab == AppTab.dashboard,
+                  onTap: () => onChanged(AppTab.dashboard),
+                ),
               _NavItem(
                 icon: Icons.play_circle_outline_rounded,
                 activeIcon: Icons.play_circle_rounded,

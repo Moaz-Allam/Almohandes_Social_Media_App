@@ -157,33 +157,48 @@ class _CircleIconButton extends StatelessWidget {
 class _LivePill extends StatelessWidget {
   const _LivePill();
 
+  void _showComingSoon(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(content: Text('البث المباشر قريباً')),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showComingSoon(context),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: const Color(0xFFEF4444).withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.podcasts_rounded, size: 14, color: Color(0xFFEF4444)),
-          SizedBox(width: 5),
-          Text(
-            'LIVE',
-            style: TextStyle(
-              color: Color(0xFFEF4444),
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.35),
             ),
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.podcasts_rounded, size: 14, color: Color(0xFFEF4444)),
+              SizedBox(width: 5),
+              Text(
+                'LIVE',
+                style: TextStyle(
+                  color: Color(0xFFEF4444),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -15,6 +15,7 @@ import '../../shared/widgets/like_burst.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
 import '../messages/share_contact_screen.dart';
+import 'widgets/report_post_sheet.dart';
 
 String _exactDateTime(DateTime value) {
   final local = value.toLocal();
@@ -100,13 +101,51 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         ).showSnackBar(const SnackBar(content: Text('تم الحفظ في المحفوظات')));
         return;
       case 'report':
-        AppScope.read(
-          context,
-        ).repositories.feed.reportPost(postId: post.id, reason: 'user_report');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('تم إرسال البلاغ')));
+        showReportPostSheet(context, postId: post.id);
         return;
+      case 'delete':
+        _deletePost();
+        return;
+    }
+  }
+
+  Future<void> _deletePost() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حذف المنشور'),
+        content: const Text('هل تريد حذف هذا المنشور نهائياً؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final app = AppScope.read(context);
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await app.repositories.feed.deletePost(post.id);
+      app.notifyFeedChanged();
+      navigator.pop();
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(content: Text('تم حذف المنشور')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      AppSnack.error(context, error, fallback: 'تعذر حذف المنشور الآن');
     }
   }
 
@@ -284,10 +323,27 @@ class _PostDetailCard extends StatelessWidget {
                   icon: const Icon(Icons.more_vert, color: AppColors.muted),
                   tooltip: 'خيارات المنشور',
                   onSelected: onMenuSelected,
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'save', child: Text('حفظ')),
-                    PopupMenuItem(value: 'report', child: Text('إبلاغ')),
-                  ],
+                  itemBuilder: (context) {
+                    final isOwner = post.profileId != null &&
+                        profile?.id != null &&
+                        profile!.id == post.profileId;
+                    return [
+                      const PopupMenuItem(value: 'save', child: Text('حفظ')),
+                      if (isOwner)
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text(
+                            'حذف المنشور',
+                            style: TextStyle(color: Colors.redAccent),
+                          ),
+                        )
+                      else
+                        const PopupMenuItem(
+                          value: 'report',
+                          child: Text('إبلاغ عن المنشور'),
+                        ),
+                    ];
+                  },
                 ),
               ],
             ),

@@ -64,6 +64,23 @@ final class AppController extends ChangeNotifier {
 
   bool get hasPremiumLibrary => _hasPremiumLibrary;
 
+  /// True when the signed-in user's account type is "engineer". The premium
+  /// dashboard ("مركز المهندس") is gated on this: only engineers may open it,
+  /// every other account type (شركة/مقاول، حرفي، عامل، آليات، إدارة) is denied.
+  ///
+  /// [ProfileForm.role] stores the Arabic account label (e.g. "مهندس") because
+  /// `currentProfile` maps the Supabase role through `AccountType.label`. We
+  /// also accept the raw "engineer" slug defensively. Returns false until the
+  /// profile is loaded so access never defaults open.
+  bool get isEngineer {
+    final profile = _profile;
+    if (profile == null) {
+      return false;
+    }
+    final role = profile.role.trim();
+    return role == AccountType.engineer.label || role.toLowerCase() == 'engineer';
+  }
+
   /// True when the current user has flipped their profile to private. A
   /// private profile is fully visible to the owner and to accepted
   /// connections, but only shows basic info to anyone else.

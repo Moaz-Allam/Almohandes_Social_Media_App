@@ -12,7 +12,6 @@ import '../feed/home_feed_screen.dart';
 import '../messages/messages_screen.dart';
 import '../network/network_screen.dart';
 import '../../models/notification_item_model.dart';
-import '../premium/premium_access_screen.dart';
 import '../premium/premium_dashboard_screen.dart';
 import '../profile/profile_connections_screen.dart';
 import '../profile/profile_screen.dart';
@@ -97,6 +96,7 @@ class _WebShellState extends State<WebShell> {
               onOpenSettings: _openSettings,
               onSignOut: _signOut,
               onOpenSearch: _openSearch,
+              showDashboard: controller.isEngineer,
             ),
             Expanded(
               child: Center(
@@ -153,6 +153,7 @@ class _WebTopBar extends StatelessWidget {
     required this.onOpenSettings,
     required this.onSignOut,
     required this.onOpenSearch,
+    this.showDashboard = true,
   });
 
   final AppTab selectedTab;
@@ -162,6 +163,7 @@ class _WebTopBar extends StatelessWidget {
   final VoidCallback onOpenSettings;
   final Future<void> Function() onSignOut;
   final VoidCallback onOpenSearch;
+  final bool showDashboard;
 
   @override
   Widget build(BuildContext context) {
@@ -196,12 +198,13 @@ class _WebTopBar extends StatelessWidget {
                     selected: selectedTab == AppTab.search,
                     onPressed: () => onChangeTab(AppTab.search),
                   ),
-                  _WebNavItem(
-                    icon: Icons.dashboard_outlined,
-                    label: 'لوحة التحكم',
-                    selected: selectedTab == AppTab.dashboard,
-                    onPressed: () => onChangeTab(AppTab.dashboard),
-                  ),
+                  if (showDashboard)
+                    _WebNavItem(
+                      icon: Icons.dashboard_outlined,
+                      label: 'لوحة التحكم',
+                      selected: selectedTab == AppTab.dashboard,
+                      onPressed: () => onChangeTab(AppTab.dashboard),
+                    ),
                   _WebNavItem(
                     icon: Icons.movie_filter_outlined,
                     label: 'reels',
@@ -489,20 +492,25 @@ class _WebRightRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.watch(context);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [_PremiumRailCard(isPremium: controller.hasPremiumLibrary, onOpen: () { Navigator.of(context).push(MaterialPageRoute(builder: (_) => controller.hasPremiumLibrary ? const PremiumDashboardScreen() : const PremiumAccessScreen())); }), const SizedBox(height: 8), const _RecentNotificationsCard()]);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      if (controller.isEngineer) ...[
+        _PremiumRailCard(onOpen: () { Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PremiumDashboardScreen())); }),
+        const SizedBox(height: 8),
+      ],
+      const _RecentNotificationsCard(),
+    ]);
   }
 }
 
 class _PremiumRailCard extends StatelessWidget {
-  const _PremiumRailCard({required this.isPremium, required this.onOpen});
-  final bool isPremium;
+  const _PremiumRailCard({required this.onOpen});
   final VoidCallback onOpen;
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final gradient = isDark ? const LinearGradient(colors: [Color(0xFF1B1B1B), Color(0xFF0C2240)]) : const LinearGradient(colors: [Color(0xFFFFF7DC), Color(0xFFFFE9A8)]);
     final borderColor = isDark ? const Color(0xFFB68A2C) : const Color(0xFFD7A93C);
-    return Container(decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor), gradient: gradient), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Container(width: 34, height: 34, decoration: BoxDecoration(color: isDark ? const Color(0xFFB68A2C).withValues(alpha: .25) : const Color(0xFFFFDB85), border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.workspace_premium, color: isDark ? const Color(0xFFE6BE5C) : const Color(0xFF8A5A00))), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('المهندس Premium', style: TextStyle(color: isDark ? const Color(0xFFFFE7A6) : const Color(0xFF5C3A00), fontWeight: FontWeight.w900, fontSize: 15)), const SizedBox(height: 2), Text('لوحة تحكم خاصة، مكتبة دورات، AI مساعد المهندس', style: TextStyle(color: isDark ? Colors.white70 : const Color(0xFF7A5A1E), fontSize: 12, height: 1.35))]))]), const SizedBox(height: 14), SizedBox(width: double.infinity, height: 38, child: FilledButton(onPressed: onOpen, style: FilledButton.styleFrom(backgroundColor: isDark ? const Color(0xFFE6BE5C) : const Color(0xFF8A5A00), foregroundColor: isDark ? const Color(0xFF1B1B1B) : Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))), child: Text(isPremium ? 'افتح لوحة Premium' : 'اشترك في Premium', style: const TextStyle(fontWeight: FontWeight.w900))))])));
+    return Container(decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: borderColor), gradient: gradient), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Container(width: 34, height: 34, decoration: BoxDecoration(color: isDark ? const Color(0xFFB68A2C).withValues(alpha: .25) : const Color(0xFFFFDB85), border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.workspace_premium, color: isDark ? const Color(0xFFE6BE5C) : const Color(0xFF8A5A00))), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('المهندس Premium', style: TextStyle(color: isDark ? const Color(0xFFFFE7A6) : const Color(0xFF5C3A00), fontWeight: FontWeight.w900, fontSize: 15)), const SizedBox(height: 2), Text('لوحة تحكم خاصة، مكتبة دورات، AI مساعد المهندس', style: TextStyle(color: isDark ? Colors.white70 : const Color(0xFF7A5A1E), fontSize: 12, height: 1.35))]))]), const SizedBox(height: 14), SizedBox(width: double.infinity, height: 38, child: FilledButton(onPressed: onOpen, style: FilledButton.styleFrom(backgroundColor: isDark ? const Color(0xFFE6BE5C) : const Color(0xFF8A5A00), foregroundColor: isDark ? const Color(0xFF1B1B1B) : Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))), child: const Text('افتح لوحة Premium', style: TextStyle(fontWeight: FontWeight.w900))))])));
   }
 }
 

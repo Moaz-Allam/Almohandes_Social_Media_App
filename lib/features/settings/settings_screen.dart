@@ -5,11 +5,11 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/auth/phone_login_screen.dart';
 import '../../models/app_theme_mode.dart';
-import '../../models/settings_item.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
 import '../saved/saved_items_screen.dart';
+import 'my_posts_manager_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -17,34 +17,6 @@ class SettingsScreen extends StatelessWidget {
   static final Uri _whatsAppSupportUri = Uri.parse(
     'https://wa.me/9647800000000',
   );
-
-  static const _sections = [
-    SettingsItem(
-      icon: Icons.account_circle_outlined,
-      title: 'تفضيلات الحساب',
-      subtitle: 'خيارات إدارة حسابك وتجربتك على المهندس',
-    ),
-    SettingsItem(
-      icon: Icons.lock_outline,
-      title: 'تسجيل الدخول والأمان',
-      subtitle: 'التحكم في تسجيل الدخول والحفاظ على أمان الحساب',
-    ),
-    SettingsItem(
-      icon: Icons.visibility_outlined,
-      title: 'الظهور',
-      subtitle: 'تحكم في من يرى نشاطك ومساهماتك على المهندس',
-    ),
-    SettingsItem(
-      icon: Icons.mail_outline,
-      title: 'التواصل',
-      subtitle: 'إعدادات البريد والدعوات والإشعارات',
-    ),
-    SettingsItem(
-      icon: Icons.shield_outlined,
-      title: 'خصوصية البيانات',
-      subtitle: 'تحكم في كيفية استخدام المهندس لبياناتك ومساهماتك',
-    ),
-  ];
 
   void _showHelp(BuildContext context) {
     showDialog<void>(
@@ -132,43 +104,6 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  void _openSection(BuildContext context, SettingsItem section) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Icon(section.icon, color: AppColors.blue, size: 34),
-              const SizedBox(height: 12),
-              Text(
-                section.title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                section.subtitle,
-                style: TextStyle(color: context.appMuted, height: 1.45),
-              ),
-              const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('تم'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.watch(context);
@@ -210,136 +145,142 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: _sections.length + 5,
+                itemCount: 6,
                 separatorBuilder: (context, index) =>
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
-                  if (index == 0) {
-                    return _ThemeSelectionTile(
-                      themeMode: controller.themeMode,
-                      onChanged: controller.setThemeMode,
-                    );
-                  }
-                  if (index == 1) {
-                    return _PrivateProfileTile(
-                      isPrivate: controller.isProfilePrivate,
-                      onChanged: controller.setProfilePrivate,
-                    );
-                  }
-                  if (index == 2) {
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      leading: const Icon(
-                        Icons.bookmark_outline_rounded,
-                        color: AppColors.blue,
-                      ),
-                      title: const Text(
-                        'المحفوظات',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                  switch (index) {
+                    case 0:
+                      return _ThemeSelectionTile(
+                        themeMode: controller.themeMode,
+                        onChanged: controller.setThemeMode,
+                      );
+                    case 1:
+                      return _PrivateProfileTile(
+                        isPrivate: controller.isProfilePrivate,
+                        onChanged: controller.setProfilePrivate,
+                      );
+                    case 2:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
                         ),
-                      ),
-                      subtitle: Text(
-                        'المنشورات والعناصر التي حفظتها',
-                        style: TextStyle(
-                          color: context.appMuted,
-                          fontSize: 14.5,
-                          height: 1.25,
+                        leading: const Icon(
+                          Icons.bookmark_outline_rounded,
+                          color: AppColors.blue,
                         ),
-                      ),
-                      trailing: const Icon(Icons.chevron_left),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SavedItemsScreen(),
+                        title: const Text(
+                          'المحفوظات',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                    );
-                  }
-                  if (index == _sections.length + 3) {
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      leading: const Icon(
-                        Icons.privacy_tip_outlined,
-                        color: AppColors.blue,
-                      ),
-                      title: const Text(
-                        'سياسة الخصوصية',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                        subtitle: Text(
+                          'المنشورات والعناصر التي حفظتها',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
                         ),
-                      ),
-                      subtitle: Text(
-                        'راجع كيفية استخدام بياناتك داخل التطبيق',
-                        style: TextStyle(
-                          color: context.appMuted,
-                          fontSize: 14.5,
-                          height: 1.25,
+                        trailing: const Icon(Icons.chevron_left),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SavedItemsScreen(),
+                          ),
                         ),
-                      ),
-                      onTap: () => showPrivacyPolicyDialog(context),
-                    );
-                  }
-                  if (index == _sections.length + 4) {
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                      leading: const Icon(
-                        Icons.delete_forever_outlined,
-                        color: Colors.redAccent,
-                      ),
-                      title: const Text(
-                        'حذف الحساب',
-                        style: TextStyle(
+                      );
+                    case 3:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        leading: const Icon(
+                          Icons.delete_sweep_outlined,
+                          color: AppColors.blue,
+                        ),
+                        title: const Text(
+                          'حذف منشوراتي',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'استعرض كل ما نشرته واحذف منشوراً أو عدة منشورات دفعة واحدة',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_left),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const MyPostsManagerScreen(),
+                          ),
+                        ),
+                      );
+                    case 4:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        leading: const Icon(
+                          Icons.privacy_tip_outlined,
+                          color: AppColors.blue,
+                        ),
+                        title: const Text(
+                          'سياسة الخصوصية',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'راجع كيفية استخدام بياناتك داخل التطبيق',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
+                        ),
+                        onTap: () => showPrivacyPolicyDialog(context),
+                      );
+                    case 5:
+                    default:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        leading: const Icon(
+                          Icons.delete_forever_outlined,
                           color: Colors.redAccent,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
                         ),
-                      ),
-                      subtitle: Text(
-                        'حذف الملف الشخصي وتسجيل الخروج من التطبيق',
-                        style: TextStyle(
-                          color: context.appMuted,
-                          fontSize: 14.5,
-                          height: 1.25,
+                        title: const Text(
+                          'حذف الحساب',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                      onTap: () => _deleteAccount(context),
-                    );
+                        subtitle: Text(
+                          'حذف الملف الشخصي وتسجيل الخروج من التطبيق',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
+                        ),
+                        onTap: () => _deleteAccount(context),
+                      );
                   }
-                  final section = _sections[index - 3];
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
-                    ),
-                    leading: Icon(section.icon, color: context.appMuted),
-                    title: Text(
-                      section.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    subtitle: Text(
-                      section.subtitle,
-                      style: TextStyle(
-                        color: context.appMuted,
-                        fontSize: 14.5,
-                        height: 1.25,
-                      ),
-                    ),
-                    onTap: () => _openSection(context, section),
-                  );
                 },
               ),
             ),

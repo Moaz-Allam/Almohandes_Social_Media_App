@@ -6,6 +6,7 @@ import '../../data/repositories/profile_repository.dart';
 import '../../models/feed_post_model.dart';
 import '../../models/message_item.dart';
 import '../../models/network_person.dart';
+import '../../models/reel_item.dart';
 import '../../shared/widgets/app_avatar.dart';
 import '../../shared/widgets/media_preview.dart';
 import '../../state/app_scope.dart';
@@ -13,6 +14,7 @@ import '../composer/composer_screen.dart';
 import '../composer/project_form_screen.dart';
 import '../feed/post_detail_screen.dart';
 import '../messages/chat_screen.dart';
+import '../reels/reel_viewer_screen.dart';
 import '../settings/settings_screen.dart';
 import 'edit_profile_screen.dart';
 import 'people_list_screen.dart';
@@ -810,7 +812,10 @@ class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
         if (_selectedSubTab == 0) {
           return _ProfilePostsGrid(profileId: widget.profileId);
         } else if (_selectedSubTab == 2) {
-          return _ProfileReelsGrid(profileId: widget.profileId);
+          return _ProfileReelsGrid(
+            profileId: widget.profileId,
+            isMe: widget.isMe,
+          );
         }
         // Gallery sub-tab or default
         return _ProfilePostsGrid(profileId: widget.profileId);
@@ -965,16 +970,17 @@ class _ProfilePostsGrid extends StatelessWidget {
 }
 
 class _ProfileReelsGrid extends StatelessWidget {
-  const _ProfileReelsGrid({required this.profileId});
+  const _ProfileReelsGrid({required this.profileId, this.isMe = false});
   final String? profileId;
+  final bool isMe;
 
   @override
   Widget build(BuildContext context) {
     if (profileId == null) return const SizedBox();
-    return FutureBuilder(
+    return FutureBuilder<List<ReelItem>>(
       future: AppScope.read(context).repositories.reels.fetchReelsForProfile(profileId!),
       builder: (context, snapshot) {
-        final reels = snapshot.data ?? [];
+        final reels = snapshot.data ?? const <ReelItem>[];
         if (reels.isEmpty) {
           return Center(
             child: Text(
@@ -996,19 +1002,45 @@ class _ProfileReelsGrid extends StatelessWidget {
           itemCount: reels.length,
           itemBuilder: (context, index) {
             final reel = reels[index];
-            return Container(
-              decoration: BoxDecoration(
-                color: context.appSurfaceAlt,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: context.appBorder.withValues(alpha: 0.5),
+            return GestureDetector(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ReelViewerScreen(
+                    reels: reels,
+                    initialIndex: index,
+                    canManage: isMe,
+                  ),
                 ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: MediaPreview(
-                mediaUrl: reel.videoUrl ?? '',
-                mediaType: 'video',
-                fallbackLabel: '',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: context.appSurfaceAlt,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: context.appBorder.withValues(alpha: 0.5),
+                  ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    MediaPreview(
+                      mediaUrl: reel.thumbnailUrl ?? reel.videoUrl ?? '',
+                      mediaType: 'video',
+                      fit: BoxFit.cover,
+                      fallbackLabel: '',
+                    ),
+                    const PositionedDirectional(
+                      bottom: 6,
+                      start: 6,
+                      child: Icon(
+                        Icons.play_circle_fill,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },

@@ -10,7 +10,6 @@ import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'engineer_ai_chat_screen.dart';
 import 'models/premium_course.dart';
-import 'premium_access_screen.dart';
 import 'premium_course_library_screen.dart';
 import 'premium_info_screen.dart';
 import 'premium_notes_screen.dart';
@@ -44,7 +43,7 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
     super.didChangeDependencies();
     final app = AppScope.read(context);
     _coursesFuture = app.repositories.courses.fetchPremiumCourses();
-    _syncScreenProtection(app.hasPremiumLibrary);
+    _syncScreenProtection(app.isEngineer);
   }
 
   @override
@@ -181,9 +180,9 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.watch(context);
-    _syncScreenProtection(app.hasPremiumLibrary);
-    if (!app.hasPremiumLibrary) {
-      return const PremiumAccessScreen();
+    _syncScreenProtection(app.isEngineer);
+    if (!app.isEngineer) {
+      return const _EngineerOnlyScreen();
     }
     return Scaffold(
       backgroundColor: Colors.black,
@@ -344,6 +343,66 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
         onTap: _showComingSoon,
       ),
     ];
+  }
+}
+
+/// Shown when a non-engineer account opens the premium dashboard tab.
+///
+/// "مركز المهندس" is restricted to the engineer account type only, so we
+/// render an access-denied message instead of the subscription paywall.
+class _EngineerOnlyScreen extends StatelessWidget {
+  const _EngineerOnlyScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: AppColors.blue.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.engineering_outlined,
+                    size: 48,
+                    color: AppColors.blue,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'مركز المهندس',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'هذا القسم متاح لحسابات المهندسين فقط.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 15,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

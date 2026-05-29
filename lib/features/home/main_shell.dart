@@ -103,6 +103,7 @@ class _MainShellState extends State<_MobileShell> {
       bottomNavigationBar: LinkedBottomNavigation(
         selectedTab: controller.selectedTab,
         onChanged: _onTabChanged,
+        showDashboard: controller.isEngineer,
       ),
     );
   }

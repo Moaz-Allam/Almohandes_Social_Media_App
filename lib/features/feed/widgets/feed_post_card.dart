@@ -13,6 +13,7 @@ import '../../../shared/widgets/media_preview.dart';
 import '../../../state/app_scope.dart';
 import '../../profile/profile_screen.dart';
 import '../post_detail_screen.dart';
+import 'report_post_sheet.dart';
 
 /// Post card styled after the web `.feed-post` / `.pro-card` components:
 /// theme-tinted surface, 20px radius, soft border, and Lucide-equivalent
@@ -139,12 +140,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
     if (value == 'delete') {
       _deletePost();
     } else if (value == 'report') {
-      AppScope.read(
-        context,
-      ).repositories.feed.reportPost(postId: post.id, reason: 'user_report');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم إرسال البلاغ')),
-      );
+      showReportPostSheet(context, postId: post.id);
     }
   }
 
