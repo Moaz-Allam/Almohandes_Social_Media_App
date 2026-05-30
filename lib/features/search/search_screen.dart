@@ -511,13 +511,14 @@ class _SearchPrompt extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onBrowseNetwork,
                 icon: const Icon(Icons.groups_outlined),
-                label: const Text('تصفح الشبكة'),
+                label: const Text(
+                  'تصفح الشبكة',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.blue,
                   side: const BorderSide(color: AppColors.blue),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
-                  ),
                 ),
               ),
             ],

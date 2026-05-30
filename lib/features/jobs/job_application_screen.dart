@@ -177,11 +177,12 @@ class _JobApplicationScreenState extends State<JobApplicationScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.blue,
                 minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
               ),
-              child: Text(_isSubmitting ? 'جار الإرسال...' : 'إرسال الطلب'),
+              child: Text(
+                _isSubmitting ? 'جار الإرسال...' : 'إرسال الطلب',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

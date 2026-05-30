@@ -10,6 +10,7 @@ import 'package:tradeflow/data/repositories/comment_repository.dart';
 import 'package:tradeflow/data/repositories/course_repository.dart';
 import 'package:tradeflow/data/repositories/engineer_ai_repository.dart';
 import 'package:tradeflow/data/repositories/feed_repository.dart';
+import 'package:tradeflow/data/repositories/job_repository.dart';
 import 'package:tradeflow/data/repositories/message_repository.dart';
 import 'package:tradeflow/data/repositories/notification_repository.dart';
 import 'package:tradeflow/data/repositories/profile_repository.dart';
@@ -26,7 +27,11 @@ import 'package:tradeflow/features/premium/models/premium_course.dart';
 import 'package:tradeflow/features/projects/projects_screen.dart';
 import 'package:tradeflow/features/reels/reels_screen.dart';
 import 'package:tradeflow/models/account_type.dart';
+import 'package:tradeflow/models/applicant_request.dart';
 import 'package:tradeflow/models/comment_item.dart';
+import 'package:tradeflow/models/managed_listing.dart';
+import 'package:tradeflow/models/matched_work.dart';
+import 'package:tradeflow/models/my_application.dart';
 import 'package:tradeflow/models/engineer_ai_message.dart';
 import 'package:tradeflow/models/feed_post_model.dart';
 import 'package:tradeflow/models/message_item.dart';
@@ -133,6 +138,7 @@ AppController _controller({
       courses: _FakeCourseRepository(),
       engineerAi: _FakeEngineerAiRepository(),
       feed: feed ?? _ImmediateFeedRepository(),
+      jobs: _FakeJobRepository(),
       messages: _FakeMessageRepository(),
       notifications: _FakeNotificationRepository(),
       profiles: _FakeProfileRepository(),
@@ -553,6 +559,15 @@ final class _ControlledProjectRepository implements ProjectRepository {
   @override
   Future<List<ProjectItem>> searchJobs(String query) async => const [];
 
+  @override
+  Future<List<ManagedListing>> fetchMyProjects() async => const [];
+
+  @override
+  Future<List<MyApplication>> fetchMyProjectApplications() async => const [];
+
+  @override
+  Future<void> matchProjectApplicant(String applicationId) async {}
+
   void complete(List<ProjectItem> projects) {
     _completer.complete(projects);
   }
@@ -600,6 +615,15 @@ final class _ImmediateProjectRepository implements ProjectRepository {
 
   @override
   Future<List<ProjectItem>> searchJobs(String query) async => const [];
+
+  @override
+  Future<List<ManagedListing>> fetchMyProjects() async => const [];
+
+  @override
+  Future<List<MyApplication>> fetchMyProjectApplications() async => const [];
+
+  @override
+  Future<void> matchProjectApplicant(String applicationId) async {}
 }
 
 final class _ControlledReelRepository implements ReelRepository {
@@ -764,6 +788,30 @@ final class _FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<List<NetworkPerson>> searchPeople(String query) async => const [];
+}
+
+final class _FakeJobRepository implements JobRepository {
+  @override
+  Future<List<ManagedListing>> fetchMyJobs({bool forceRefresh = false}) async =>
+      const [];
+
+  @override
+  Future<List<ApplicantRequest>> fetchJobApplications(String jobId) async =>
+      const [];
+
+  @override
+  Future<void> matchJobApplicant(String applicationId) async {}
+
+  @override
+  Future<List<MyApplication>> fetchMyJobApplications() async => const [];
+
+  @override
+  Future<Set<String>> fetchAppliedJobIds({bool forceRefresh = false}) async =>
+      const <String>{};
+
+  @override
+  Future<List<MatchedWork>> fetchMatchedWorks(String profileId) async =>
+      const [];
 }
 
 final class _FakeMessageRepository implements MessageRepository {

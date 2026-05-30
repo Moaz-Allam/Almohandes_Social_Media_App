@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../models/feed_post_model.dart';
+import '../../models/matched_work.dart';
 import '../../models/message_item.dart';
 import '../../models/network_person.dart';
 import '../../models/reel_item.dart';
@@ -13,6 +14,7 @@ import '../../state/app_scope.dart';
 import '../composer/composer_screen.dart';
 import '../composer/project_form_screen.dart';
 import '../feed/post_detail_screen.dart';
+import '../listings/my_listings_screen.dart';
 import '../messages/chat_screen.dart';
 import '../reels/reel_viewer_screen.dart';
 import '../settings/settings_screen.dart';
@@ -822,38 +824,7 @@ class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
       case 1: // نبذة
         return _ProfileAbout(about: widget.about, skills: widget.skills);
       case 2: // الأعمال
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              children: [
-                Icon(Icons.work_outline_rounded, size: 48, color: context.appMuted),
-                const SizedBox(height: 16),
-                Text(
-                  'لا توجد أعمال لعرضها حالياً',
-                  style: TextStyle(color: context.appMuted),
-                ),
-                if (widget.isMe) ...[
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ProjectFormScreen()),
-                    ),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('إضافة مشروع جديد'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: context.appPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
+        return _ProfileWorks(profileId: widget.profileId, isMe: widget.isMe);
       case 3: // البرامج والتطبيقات
         return Center(
           child: Padding(
@@ -890,6 +861,262 @@ class _ProfileWorkspaceState extends State<_ProfileWorkspace> {
       default:
         return const SizedBox();
     }
+  }
+}
+
+class _ProfileWorks extends StatefulWidget {
+  const _ProfileWorks({required this.profileId, required this.isMe});
+
+  final String? profileId;
+  final bool isMe;
+
+  @override
+  State<_ProfileWorks> createState() => _ProfileWorksState();
+}
+
+class _ProfileWorksState extends State<_ProfileWorks> {
+  late Future<List<MatchedWork>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = Future.value(const <MatchedWork>[]);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future = _load();
+  }
+
+  Future<List<MatchedWork>> _load() async {
+    final id = widget.profileId;
+    if (id == null || id.isEmpty) {
+      return const <MatchedWork>[];
+    }
+    return AppScope.read(context).repositories.jobs.fetchMatchedWorks(id);
+  }
+
+  Future<void> _openManagement() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MyListingsScreen()),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _future = _load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.isMe) ...[
+            _ManagementEntry(onTap: _openManagement),
+            const SizedBox(height: 16),
+          ],
+          FutureBuilder<List<MatchedWork>>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final works = snapshot.data ?? const <MatchedWork>[];
+              if (works.isEmpty) {
+                return _WorksEmptyState(isMe: widget.isMe);
+              }
+              return Column(
+                children: [
+                  for (final work in works) ...[
+                    _MatchedWorkCard(work: work),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManagementEntry extends StatelessWidget {
+  const _ManagementEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: context.appSurfaceAlt,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: context.appBorder.withValues(alpha: 0.6)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: context.appPrimary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.work_history_outlined, color: context.appPrimary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'مشاريعي ووظائفي',
+                      style: TextStyle(
+                        color: context.appText,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'إدارة ما أنشأته ومطابقة المتقدمين',
+                      style: TextStyle(color: context.appMuted, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: context.appMuted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MatchedWorkCard extends StatelessWidget {
+  const _MatchedWorkCard({required this.work});
+
+  final MatchedWork work;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = work.title.isEmpty
+        ? (work.isProject ? 'مشروع' : 'وظيفة')
+        : work.title;
+    return Material(
+      color: context.appSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: context.appBorder),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: context.appSurfaceAlt,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                work.isProject
+                    ? Icons.folder_special_outlined
+                    : Icons.work_outline_rounded,
+                color: context.appPrimary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${work.isProject ? 'مشروع' : 'وظيفة'} · ${work.ownerName}'
+                    '${work.subtitle.isEmpty ? '' : ' · ${work.subtitle}'}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.appMuted, height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.verified_rounded, color: AppColors.blue, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorksEmptyState extends StatelessWidget {
+  const _WorksEmptyState({required this.isMe});
+
+  final bool isMe;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          Icon(Icons.work_outline_rounded, size: 48, color: context.appMuted),
+          const SizedBox(height: 16),
+          Text(
+            isMe
+                ? 'لم تتم مطابقتك في أي عمل بعد'
+                : 'لا توجد أعمال لعرضها حالياً',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: context.appMuted),
+          ),
+          if (isMe) ...[
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProjectFormScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('إضافة مشروع جديد'),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.appPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

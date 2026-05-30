@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../session/current_profile_resolver.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../models/managed_listing.dart';
+import '../../models/my_application.dart';
 import '../../models/project_application_request.dart';
 import '../../models/project_draft.dart';
 import '../../models/project_item.dart';
@@ -39,6 +41,17 @@ abstract interface class ProjectRepository {
   });
 
   Future<Set<String>> fetchAppliedProjectIds({bool forceRefresh = false});
+
+  /// Projects created by the current user, with applicant counts (owner view).
+  Future<List<ManagedListing>> fetchMyProjects();
+
+  /// Projects the current user applied to (for "تقديماتي").
+  Future<List<MyApplication>> fetchMyProjectApplications();
+
+  /// Accepts (matches) an applicant on a project. May complete the project
+  /// once the engineers_needed cap is reached. Owner-only (enforced server
+  /// side); the applicant is notified by the server.
+  Future<void> matchProjectApplicant(String applicationId);
 }
 
 final class SupabaseProjectRepository implements ProjectRepository {
@@ -580,5 +593,77 @@ final class SupabaseProjectRepository implements ProjectRepository {
       for (final item in existing)
         if (item.id != project.id) item,
     ]);
+  }
+
+  @override
+  Future<List<ManagedListing>> fetchMyProjects() async {
+    final remote = client;
+    if (remote == null) {
+      return const [];
+    }
+    try {
+      final rows = await remote.rpc<List<dynamic>>('get_my_projects');
+      return [
+        for (final row in rows)
+          ManagedListing.project(Map<String, dynamic>.from(row as Map)),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<List<MyApplication>> fetchMyProjectApplications() async {
+    final remote = client;
+    if (remote == null) {
+      return const [];
+    }
+    try {
+      final rows = await remote.rpc<List<dynamic>>(
+        'get_my_project_applications',
+      );
+      return [
+        for (final row in rows)
+          MyApplication.project(Map<String, dynamic>.from(row as Map)),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<void> matchProjectApplicant(String applicationId) async {
+    final remote = client;
+    if (remote == null || applicationId.isEmpty) {
+      return;
+    }
+    try {
+      await remote.rpc(
+        'match_project_applicant',
+        params: {'p_application_id': applicationId},
+      );
+      // Bust the applicant + feed caches so the new status is reflected.
+      for (final cache in _applicationCaches.values) {
+        cache.clear();
+      }
+      _cache.clear();
+    } on PostgrestException catch (error) {
+      throw RepositoryFailure(_matchErrorMessage(error.message), error);
+    } catch (error) {
+      throw RepositoryFailure('تعذر إتمام المطابقة الآن', error);
+    }
+  }
+
+  String _matchErrorMessage(String raw) {
+    if (raw.contains('MATCH_LIMIT_REACHED')) {
+      return 'تم الوصول إلى الحد الأقصى للمطابقات لهذا المشروع';
+    }
+    if (raw.contains('NOT_PROJECT_OWNER')) {
+      return 'لا يمكنك إجراء المطابقة على مشروع لا تملكه';
+    }
+    if (raw.contains('AUTH_REQUIRED')) {
+      return 'سجل الدخول أولا';
+    }
+    return 'تعذر إتمام المطابقة الآن';
   }
 }

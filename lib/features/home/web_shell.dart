@@ -96,7 +96,10 @@ class _WebShellState extends State<WebShell> {
               onOpenSettings: _openSettings,
               onSignOut: _signOut,
               onOpenSearch: _openSearch,
-              showDashboard: controller.canAccessPremiumDashboard,
+              // Every engineer and admin sees the dashboard tab. Unsubscribed
+              // engineers hit the paywall inside the screen so they can pay;
+              // non-engineers never see the tab.
+              showDashboard: controller.isEngineer || controller.isAdmin,
             ),
             Expanded(
               child: Center(

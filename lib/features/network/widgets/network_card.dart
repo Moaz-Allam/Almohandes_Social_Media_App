@@ -142,9 +142,6 @@ class NetworkCard extends StatelessWidget {
                     side: BorderSide(
                       color: loading ? AppColors.darkBlue : AppColors.blue,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
                   ),
                   child: loading
                       ? const SizedBox.square(
@@ -153,6 +150,8 @@ class NetworkCard extends StatelessWidget {
                         )
                       : Text(
                           person.actionLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                 ),

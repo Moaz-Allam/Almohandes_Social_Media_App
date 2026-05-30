@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../models/feed_post_model.dart';
 import '../../state/app_scope.dart';
 import '../feed/post_detail_screen.dart';
+import '../listings/my_listings_screen.dart';
 import '../messages/messages_screen.dart';
 import '../profile/profile_screen.dart';
 import '../reels/reels_screen.dart';
@@ -17,7 +18,9 @@ import '../reels/reels_screen.dart';
 ///   * `app://reel/<reelId>`        → reels feed
 ///   * `app://profile/<profileId>`  → that user's profile
 ///   * `app://chat/<id>`            → messages list
-///   * `app://project/<id>`         → (no dedicated screen) → ignored
+///   * `app://project/<id>`         → owner's listings management
+///   * `app://job/<id>`             → owner's listings management
+///   * `app://work/<id>`            → current user's profile (الأعمال tab)
 ///
 /// Returns true if the URL was recognised and navigation was attempted, even
 /// if the target row no longer exists (so callers can still mark the
@@ -105,8 +108,24 @@ Future<bool> openNotificationAction(
       );
       return true;
 
+    case 'project':
+    case 'job':
+      // Application-received / match notifications. The owner manages the
+      // applicants from their listings screen.
+      navigator.push(
+        MaterialPageRoute(builder: (_) => const MyListingsScreen()),
+      );
+      return true;
+
+    case 'work':
+      // "You were matched" — surface the user's own profile (الأعمال tab).
+      navigator.push(
+        MaterialPageRoute(builder: (_) => const ProfileScreen.me()),
+      );
+      return true;
+
     default:
-      // Unknown / unsupported (e.g. project, story) — nothing to open.
+      // Unknown / unsupported (e.g. story) — nothing to open.
       return false;
   }
 }

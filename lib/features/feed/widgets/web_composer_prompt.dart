@@ -660,9 +660,6 @@ class _WebComposerDialogState extends State<_WebComposerDialog> {
                             horizontal: 24,
                             vertical: 12,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
                         ),
                         child: _isPublishing
                             ? const SizedBox.square(

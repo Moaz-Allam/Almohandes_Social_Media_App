@@ -10,6 +10,7 @@ import '../notifications/notifications_screen.dart';
 import '../auth/phone_login_screen.dart';
 import '../premium/premium_dashboard_screen.dart';
 import '../premium/premium_access_screen.dart';
+import '../applications/my_applications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../saved/saved_items_screen.dart';
 
@@ -63,6 +64,14 @@ class LinkedInMenuDrawer extends StatelessWidget {
     final navigator = Navigator.of(context);
     await navigator.maybePop();
     navigator.push(MaterialPageRoute(builder: (_) => const SavedItemsScreen()));
+  }
+
+  Future<void> _openMyApplications(BuildContext context) async {
+    final navigator = Navigator.of(context);
+    await navigator.maybePop();
+    navigator.push(
+      MaterialPageRoute(builder: (_) => const MyApplicationsScreen()),
+    );
   }
 
   Future<void> _signOut(BuildContext context) async {
@@ -165,6 +174,19 @@ class LinkedInMenuDrawer extends StatelessWidget {
               ),
               trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
               onTap: () => _openSavedItems(context),
+            ),
+            Divider(height: 1, color: context.appBorder),
+            ListTile(
+              leading: const Icon(
+                Icons.assignment_turned_in_outlined,
+                color: AppColors.muted,
+              ),
+              title: const Text(
+                'تقديماتي',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: const Icon(Icons.chevron_right, color: AppColors.blue),
+              onTap: () => _openMyApplications(context),
             ),
             Divider(height: 1, color: context.appBorder),
             const Padding(

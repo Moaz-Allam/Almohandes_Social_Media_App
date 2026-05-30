@@ -18,6 +18,8 @@ final class ProjectItem {
     this.profileId,
     this.creatorAvatarUrl,
     this.hasApplied = false,
+    this.description = '',
+    this.details = const <String, dynamic>{},
   });
 
   final String id;
@@ -37,6 +39,14 @@ final class ProjectItem {
   final String? creatorAvatarUrl;
   final bool hasApplied;
 
+  /// Full project description (the `projects.description` column).
+  final String description;
+
+  /// Raw `project_details` row (the rich brief the creator filled in:
+  /// problem, goals, roles, responsibilities, milestones, budget, etc.).
+  /// Empty when the project has no details row. Used by the detail page.
+  final Map<String, dynamic> details;
+
   ProjectItem copyWith({bool? hasApplied}) {
     return ProjectItem(
       id: id,
@@ -55,6 +65,8 @@ final class ProjectItem {
       profileId: profileId,
       creatorAvatarUrl: creatorAvatarUrl,
       hasApplied: hasApplied ?? this.hasApplied,
+      description: description,
+      details: details,
     );
   }
 }

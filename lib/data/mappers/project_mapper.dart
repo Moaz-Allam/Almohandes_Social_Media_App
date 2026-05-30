@@ -33,6 +33,8 @@ ProjectItem projectFromSupabase(
     creatorAvatarUrl: profile?['avatar_url'] == null
         ? null
         : '${profile?['avatar_url']}',
+    description: '${row['description'] ?? ''}',
+    details: details ?? const <String, dynamic>{},
   );
 }
 

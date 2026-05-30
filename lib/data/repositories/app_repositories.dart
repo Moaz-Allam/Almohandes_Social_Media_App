@@ -7,6 +7,7 @@ import 'comment_repository.dart';
 import 'course_repository.dart';
 import 'engineer_ai_repository.dart';
 import 'feed_repository.dart';
+import 'job_repository.dart';
 import 'message_repository.dart';
 import 'notification_repository.dart';
 import 'profile_repository.dart';
@@ -23,6 +24,7 @@ final class AppRepositories {
     required this.courses,
     required this.engineerAi,
     required this.feed,
+    required this.jobs,
     required this.messages,
     required this.notifications,
     required this.profiles,
@@ -43,6 +45,7 @@ final class AppRepositories {
       courses: SupabaseCourseRepository(client: client),
       engineerAi: SupabaseEngineerAiRepository(client: client),
       feed: SupabaseFeedRepository(client: client),
+      jobs: SupabaseJobRepository(client: client),
       messages: SupabaseMessageRepository(client: client),
       notifications: SupabaseNotificationRepository(client: client),
       profiles: SupabaseProfileRepository(client: client),
@@ -61,6 +64,7 @@ final class AppRepositories {
   final CourseRepository courses;
   final EngineerAiRepository engineerAi;
   final FeedRepository feed;
+  final JobRepository jobs;
   final MessageRepository messages;
   final NotificationRepository notifications;
   final ProfileRepository profiles;

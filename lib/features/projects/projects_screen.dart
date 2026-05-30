@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/skeleton.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'project_application_screen.dart';
+import 'project_detail_screen.dart';
 import 'widgets/project_card.dart';
 import '../../models/project_item.dart';
 import '../../state/app_scope.dart';
@@ -91,6 +92,20 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProjectApplicationScreen(project: project),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _projectsFuture = _loadProjects(forceRefresh: true);
+    });
+  }
+
+  Future<void> _openDetail(ProjectItem project, bool canApply) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailScreen(project: project, canApply: canApply),
       ),
     );
     if (!mounted) {
@@ -226,13 +241,20 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       itemBuilder: (context, index) {
                         final project = projects[index];
                         final didApply = data.appliedIds.contains(project.id);
+                        final canApply =
+                            !didApply &&
+                            (project.profileId == null ||
+                                project.profileId != myProfileId);
+                        final detailProject =
+                            project.copyWith(hasApplied: didApply);
                         return ProjectCard(
-                          project: project.copyWith(hasApplied: didApply),
+                          project: detailProject,
                           onApply: () => _openApplication(project),
-                          canApply:
-                              !didApply &&
-                              (project.profileId == null ||
-                                  project.profileId != myProfileId),
+                          onTap: () => _openDetail(
+                            detailProject,
+                            project.profileId != myProfileId,
+                          ),
+                          canApply: canApply,
                           actionLabel: didApply
                               ? 'تم التقديم'
                               : (project.profileId == myProfileId

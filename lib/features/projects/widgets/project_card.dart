@@ -10,22 +10,39 @@ class ProjectCard extends StatelessWidget {
     super.key,
     required this.project,
     required this.onApply,
+    this.onTap,
     this.canApply = true,
     this.actionLabel,
   });
 
   final ProjectItem project;
   final VoidCallback onApply;
+
+  /// Opens the full project detail page. When null the card isn't tappable.
+  final VoidCallback? onTap;
   final bool canApply;
   final String? actionLabel;
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: _buildBody(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: context.appSurface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: context.appBorder),
       ),
@@ -132,11 +149,12 @@ class ProjectCard extends StatelessWidget {
                   backgroundColor: AppColors.blue,
                   disabledBackgroundColor: context.appSoft,
                   disabledForegroundColor: context.appMuted,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
-                  ),
                 ),
-                child: Text(actionLabel ?? (canApply ? 'تقديم' : 'مشروعك')),
+                child: Text(
+                  actionLabel ?? (canApply ? 'تقديم' : 'مشروعك'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),

@@ -117,6 +117,8 @@ class _PremiumAccessScreenState extends State<PremiumAccessScreen> {
                       _isStartingPayment
                           ? 'جاري تجهيز الدفع...'
                           : 'الدفع وتفعيل Premium',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: _isStartingPayment

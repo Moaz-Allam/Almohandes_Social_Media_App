@@ -197,14 +197,13 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
                 _attachments == 0
                     ? 'رفع ملفات للتقديم'
                     : 'تمت إضافة $_attachments ملفات',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.blue,
                 minimumSize: const Size.fromHeight(46),
                 side: const BorderSide(color: AppColors.blue),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(23),
-                ),
               ),
             ),
             if (_attachmentNames.isNotEmpty) ...[
@@ -238,11 +237,12 @@ class _ProjectApplicationScreenState extends State<ProjectApplicationScreen> {
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.blue,
                 minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                ),
               ),
-              child: Text(_isSubmitting ? 'جار الإرسال...' : 'إرسال التقديم'),
+              child: Text(
+                _isSubmitting ? 'جار الإرسال...' : 'إرسال التقديم',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),

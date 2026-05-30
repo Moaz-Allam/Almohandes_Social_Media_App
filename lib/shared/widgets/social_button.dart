@@ -33,7 +33,7 @@ class SocialButton extends StatelessWidget {
           foregroundColor: context.appText,
           side: BorderSide(color: context.appMuted),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           ),
         ),
         child: Row(

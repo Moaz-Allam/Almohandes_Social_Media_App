@@ -165,11 +165,12 @@ class _ShareContactScreenState extends State<ShareContactScreen> {
                           onPressed: () => _sendToContact(context, contact),
                           style: FilledButton.styleFrom(
                             backgroundColor: AppColors.blue,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
                           ),
-                          child: const Text('إرسال'),
+                          child: const Text(
+                            'إرسال',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         onTap: () => _sendToContact(context, contact),
                       );

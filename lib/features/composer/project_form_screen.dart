@@ -494,11 +494,12 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                         foregroundColor: AppColors.blue,
                         minimumSize: const Size.fromHeight(46),
                         side: const BorderSide(color: AppColors.blue),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
                       ),
-                      child: Text(_step == 0 ? 'إلغاء' : 'السابق'),
+                      child: Text(
+                        _step == 0 ? 'إلغاء' : 'السابق',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -508,9 +509,6 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.blue,
                         minimumSize: const Size.fromHeight(46),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
                       ),
                       child: Text(
                         _isSubmitting
@@ -518,6 +516,8 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
                             : _isLastStep
                             ? 'نشر المشروع'
                             : 'التالي',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),

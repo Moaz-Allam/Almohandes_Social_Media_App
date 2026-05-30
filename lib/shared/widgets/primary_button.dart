@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -32,7 +33,7 @@ class PrimaryButton extends StatelessWidget {
               ? AppColors.white
               : AppColors.muted,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
           ),
         ),
         child: AnimatedSwitcher(
@@ -66,6 +67,8 @@ class PrimaryButton extends StatelessWidget {
               : Text(
                   label,
                   key: const ValueKey('label'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,

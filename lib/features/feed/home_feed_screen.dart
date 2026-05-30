@@ -10,8 +10,10 @@ import '../../shared/widgets/skeleton.dart';
 import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import '../jobs/job_application_screen.dart';
+import '../jobs/job_detail_screen.dart';
 import '../projects/widgets/project_card.dart';
 import '../projects/project_application_screen.dart';
+import '../projects/project_detail_screen.dart';
 import 'widgets/feed_post_card.dart';
 import 'widgets/stories_strip.dart';
 import 'widgets/web_composer_prompt.dart';
@@ -46,6 +48,8 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   int _lastFeedVersion = 0;
   int _lastFollowVersion = 0;
   int _selectedFilterIndex = 0;
+  // Ids of jobs the current user already applied to, used to show "تم التقديم".
+  Set<String> _appliedJobIds = const <String>{};
 
   @override
   void initState() {
@@ -186,6 +190,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     bool forceRefresh = false,
     int offset = 0,
   }) async {
+    if (offset == 0) {
+      _appliedJobIds = await AppScope.read(
+        context,
+      ).repositories.jobs.fetchAppliedJobIds(forceRefresh: forceRefresh);
+    }
     final client = Supabase.instance.client;
     try {
       final rows = await client
@@ -238,6 +247,43 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     }
     if (applied == true) {
       AppSnack.success(context, 'تم إرسال طلب التوظيف بنجاح');
+      _loadInitial(forceRefresh: true);
+    }
+  }
+
+  Future<void> _openProjectDetail(ProjectItem project, bool canApply) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProjectDetailScreen(project: project, canApply: canApply),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    // Applying / matching from the detail page may change the feed state.
+    _loadInitial(forceRefresh: true);
+  }
+
+  Future<void> _openJobDetail(
+    Map<String, dynamic> job, {
+    required bool isOwn,
+    required bool didApply,
+  }) async {
+    final applied = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => JobDetailScreen(
+          job: job,
+          isOwn: isOwn,
+          didApply: didApply,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (applied == true) {
+      AppSnack.success(context, 'تم إرسال طلب التوظيف بنجاح');
+      _loadInitial(forceRefresh: true);
     }
   }
 
@@ -305,20 +351,26 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             post: item,
           );
         } else if (item is ProjectItem) {
+          final canApply = item.profileId != myProfileId;
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: ProjectCard(
               project: item,
               onApply: () => _openProjectApplication(item),
-              canApply: item.profileId != myProfileId,
+              onTap: () => _openProjectDetail(item, canApply),
+              canApply: canApply,
             ),
           );
         } else if (item is Map<String, dynamic>) {
           // Basic Job Card
+          final didApply = _appliedJobIds.contains('${item['id'] ?? ''}');
+          final isOwn = '${item['profile_id'] ?? ''}' == myProfileId;
           return _JobListItem(
             job: item,
-            canApply: '${item['profile_id'] ?? ''}' != myProfileId,
+            isOwn: isOwn,
+            didApply: didApply,
             onApply: () => _openJobApplication(item),
+            onTap: () => _openJobDetail(item, isOwn: isOwn, didApply: didApply),
           );
         }
         return const SizedBox.shrink();
@@ -330,63 +382,123 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 class _JobListItem extends StatelessWidget {
   const _JobListItem({
     required this.job,
-    required this.canApply,
+    required this.isOwn,
+    required this.didApply,
     required this.onApply,
+    required this.onTap,
   });
   final Map<String, dynamic> job;
-  final bool canApply;
+  final bool isOwn;
+  final bool didApply;
   final VoidCallback onApply;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final profiles = job['profiles'] as Map<String, dynamic>?;
     final companyName = job['company_name'] ?? profiles?['full_name'] ?? 'شركة';
-    
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Material(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.appBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${job['title']}',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '$companyName · ${job['location'] ?? ''}',
-            style: TextStyle(color: context.appMuted),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _JobTag(label: '${job['job_type']}'),
-              const SizedBox(width: 8),
-              _JobTag(label: '${job['category']}'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: canApply
-                ? FilledButton(
-                    onPressed: onApply,
-                    child: const Text('تقديم الآن'),
-                  )
-                : OutlinedButton(
-                    onPressed: null,
-                    child: const Text('هذه وظيفتك'),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.appBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${job['title']}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
                   ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$companyName · ${job['location'] ?? ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: context.appMuted),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (_jobTypeLabel('${job['job_type'] ?? ''}').isNotEmpty)
+                      _JobTag(label: _jobTypeLabel('${job['job_type'] ?? ''}')),
+                    if ('${job['category'] ?? ''}'.trim().isNotEmpty)
+                      _JobTag(label: '${job['category']}'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: _buildAction(),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _buildAction() {
+    if (isOwn) {
+      return const OutlinedButton(
+        onPressed: null,
+        child: Text(
+          'هذه وظيفتك',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+    if (didApply) {
+      return const OutlinedButton(
+        onPressed: null,
+        child: Text(
+          'تم التقديم',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+    return FilledButton(
+      onPressed: onApply,
+      child: const Text(
+        'تقديم الآن',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+/// Maps the stored job-type code to its Arabic label (same mapping the job
+/// form and detail page use). Returns the raw value if unknown.
+String _jobTypeLabel(String raw) {
+  return switch (raw.trim()) {
+    '' => '',
+    'full-time' => 'دوام كامل',
+    'part-time' => 'دوام جزئي',
+    'contract' => 'عقد',
+    'freelance' => 'عمل حر',
+    'internship' => 'تدريب',
+    _ => raw.trim(),
+  };
 }
 
 class _JobTag extends StatelessWidget {

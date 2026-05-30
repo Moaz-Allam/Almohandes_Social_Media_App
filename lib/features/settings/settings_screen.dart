@@ -8,6 +8,7 @@ import '../../models/app_theme_mode.dart';
 import '../../shared/widgets/app_snack.dart';
 import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
+import '../applications/my_applications_screen.dart';
 import '../saved/saved_items_screen.dart';
 import 'my_posts_manager_screen.dart';
 
@@ -145,7 +146,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: 6,
+                itemCount: 7,
                 separatorBuilder: (context, index) =>
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
@@ -185,7 +186,7 @@ class SettingsScreen extends StatelessWidget {
                             height: 1.25,
                           ),
                         ),
-                        trailing: const Icon(Icons.chevron_left),
+                        trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const SavedItemsScreen(),
@@ -193,6 +194,38 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       );
                     case 3:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        leading: const Icon(
+                          Icons.assignment_turned_in_outlined,
+                          color: AppColors.blue,
+                        ),
+                        title: const Text(
+                          'تقديماتي',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'تابع حالة المشاريع والوظائف التي قدّمت عليها',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const MyApplicationsScreen(),
+                          ),
+                        ),
+                      );
+                    case 4:
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
@@ -217,14 +250,14 @@ class SettingsScreen extends StatelessWidget {
                             height: 1.25,
                           ),
                         ),
-                        trailing: const Icon(Icons.chevron_left),
+                        trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const MyPostsManagerScreen(),
                           ),
                         ),
                       );
-                    case 4:
+                    case 5:
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
@@ -251,7 +284,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         onTap: () => showPrivacyPolicyDialog(context),
                       );
-                    case 5:
+                    case 6:
                     default:
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(

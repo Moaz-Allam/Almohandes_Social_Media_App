@@ -103,7 +103,10 @@ class _MainShellState extends State<_MobileShell> {
       bottomNavigationBar: LinkedBottomNavigation(
         selectedTab: controller.selectedTab,
         onChanged: _onTabChanged,
-        showDashboard: controller.canAccessPremiumDashboard,
+        // Every engineer and admin sees the dashboard tab. Engineers who
+        // haven't subscribed are routed to the paywall inside the screen so
+        // they have a path to pay; non-engineers don't see the tab at all.
+        showDashboard: controller.isEngineer || controller.isAdmin,
       ),
     );
   }

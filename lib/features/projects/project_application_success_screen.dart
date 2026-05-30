@@ -52,11 +52,12 @@ class ProjectApplicationSuccessScreen extends StatelessWidget {
                   onPressed: () => Navigator.of(context).maybePop(),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
                   ),
-                  child: const Text('العودة إلى المشاريع'),
+                  child: const Text(
+                    'العودة إلى المشاريع',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
