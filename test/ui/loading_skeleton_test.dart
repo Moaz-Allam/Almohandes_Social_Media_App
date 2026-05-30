@@ -261,6 +261,12 @@ final class _FakeAuthRepository implements AuthRepository {
   bool get isRemoteConfigured => false;
 
   @override
+  String? get currentEmail => null;
+
+  @override
+  String? get currentPhone => null;
+
+  @override
   Future<bool> phoneExists(String phone) async => false;
 
   @override
@@ -306,6 +312,18 @@ final class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> resetPassword({required String newPassword}) async {}
+
+  @override
+  Future<void> addEmailToCurrentUser({required String email}) async {}
+
+  @override
+  Future<void> startPhoneChange({required String phone}) async {}
+
+  @override
+  Future<void> confirmPhoneChange({
+    required String phone,
+    required String code,
+  }) async {}
 
   @override
   Future<void> signOut() async {}

@@ -10,6 +10,8 @@ import '../../shared/privacy/privacy_policy_dialog.dart';
 import '../../state/app_scope.dart';
 import '../applications/my_applications_screen.dart';
 import '../saved/saved_items_screen.dart';
+import 'add_contact_screen.dart';
+import 'change_password_screen.dart';
 import 'my_posts_manager_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -105,6 +107,20 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _openChangePassword(BuildContext context) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+    );
+    if (changed != true || !context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        const SnackBar(content: Text('تم تغيير كلمة المرور بنجاح')),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = AppScope.watch(context);
@@ -146,7 +162,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Expanded(
               child: ListView.separated(
-                itemCount: 7,
+                itemCount: 9,
                 separatorBuilder: (context, index) =>
                     Divider(height: 1, color: context.appBorder),
                 itemBuilder: (context, index) {
@@ -264,6 +280,66 @@ class SettingsScreen extends StatelessWidget {
                           vertical: 12,
                         ),
                         leading: const Icon(
+                          Icons.password_outlined,
+                          color: AppColors.blue,
+                        ),
+                        title: const Text(
+                          'تغيير كلمة المرور',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'عيّن كلمة مرور جديدة وستبقى مسجّلاً للدخول بها',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _openChangePassword(context),
+                      );
+                    case 6:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        leading: const Icon(
+                          Icons.alternate_email_rounded,
+                          color: AppColors.blue,
+                        ),
+                        title: const Text(
+                          'إضافة رقم أو بريد إلكتروني',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'أضِف وسيلة دخول إضافية — رقم يُؤكَّد برمز، أو بريد يُؤكَّد برابط',
+                          style: TextStyle(
+                            color: context.appMuted,
+                            fontSize: 14.5,
+                            height: 1.25,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AddContactScreen(),
+                          ),
+                        ),
+                      );
+                    case 7:
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        leading: const Icon(
                           Icons.privacy_tip_outlined,
                           color: AppColors.blue,
                         ),
@@ -284,7 +360,7 @@ class SettingsScreen extends StatelessWidget {
                         ),
                         onTap: () => showPrivacyPolicyDialog(context),
                       );
-                    case 6:
+                    case 8:
                     default:
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(

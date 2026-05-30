@@ -27,6 +27,13 @@ const OtpChannel kOtpChannel = OtpChannel.whatsapp;
 abstract interface class AuthRepository {
   bool get isRemoteConfigured;
 
+  /// The email currently attached to the signed-in auth user, or null when the
+  /// account has none yet (phone-first signups start without an email).
+  String? get currentEmail;
+
+  /// The phone currently attached to the signed-in auth user, or null.
+  String? get currentPhone;
+
   /// True if [phone] is already registered. Backed by the `phone_exists`
   /// RPC. Login uses it to fail fast when the number is unknown; signup
   /// uses it to fail fast when the number is taken.
@@ -84,6 +91,22 @@ abstract interface class AuthRepository {
   /// OTP). Requires an active session.
   Future<void> resetPassword({required String newPassword});
 
+  /// Adds (or updates) the email on the signed-in account. Supabase emails a
+  /// confirmation link to [email]; it only becomes a usable sign-in credential
+  /// once the user opens that link. Requires an active session.
+  Future<void> addEmailToCurrentUser({required String email});
+
+  /// Sends a verification OTP to [phone] to attach it to the signed-in account.
+  /// Confirm with [confirmPhoneChange]. Requires an active session.
+  Future<void> startPhoneChange({required String phone});
+
+  /// Confirms the phone change started by [startPhoneChange] using the OTP
+  /// [code]. On success the number can be used to sign in.
+  Future<void> confirmPhoneChange({
+    required String phone,
+    required String code,
+  });
+
   Future<void> signOut();
 }
 
@@ -95,6 +118,18 @@ final class SupabaseAuthRepository implements AuthRepository {
 
   @override
   bool get isRemoteConfigured => client != null;
+
+  @override
+  String? get currentEmail {
+    final email = client?.auth.currentUser?.email?.trim();
+    return (email == null || email.isEmpty) ? null : email;
+  }
+
+  @override
+  String? get currentPhone {
+    final phone = client?.auth.currentUser?.phone?.trim();
+    return (phone == null || phone.isEmpty) ? null : phone;
+  }
 
   @override
   Future<bool> phoneExists(String phone) async {
@@ -556,6 +591,143 @@ final class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> addEmailToCurrentUser({required String email}) async {
+    final remote = client;
+    if (remote == null) {
+      throw const RepositoryFailure(
+        'الخدمة غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
+    }
+    final value = email.trim();
+    if (value.isEmpty) {
+      throw const RepositoryFailure('أدخل البريد الإلكتروني');
+    }
+    if (!_looksLikeEmail(value)) {
+      throw const RepositoryFailure(
+        'البريد الإلكتروني غير صحيح. تحقق منه وحاول مرة أخرى',
+      );
+    }
+    if (remote.auth.currentSession == null) {
+      throw const RepositoryFailure(
+        'انتهت جلسة الحساب. أعد تسجيل الدخول',
+      );
+    }
+    try {
+      await remote.auth.updateUser(UserAttributes(email: value));
+    } catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر إرسال رابط التحقق. تحقق من البريد ومن الاتصال وحاول مرة أخرى',
+        ),
+        error,
+      );
+    }
+  }
+
+  @override
+  Future<void> startPhoneChange({required String phone}) async {
+    final remote = client;
+    if (remote == null) {
+      throw const RepositoryFailure(
+        'الخدمة غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
+    }
+    final normalized = _normalizePhone(phone);
+    if (!_looksLikePhone(normalized)) {
+      throw const RepositoryFailure(
+        'رقم الهاتف غير صحيح. تحقق من الرقم وأعد المحاولة',
+      );
+    }
+    if (remote.auth.currentSession == null) {
+      throw const RepositoryFailure(
+        'انتهت جلسة الحساب. أعد تسجيل الدخول',
+      );
+    }
+    try {
+      await remote.auth.updateUser(UserAttributes(phone: normalized));
+    } catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر إرسال رمز التحقق. تحقق من الرقم ومن الاتصال وحاول مرة أخرى',
+        ),
+        error,
+      );
+    }
+  }
+
+  @override
+  Future<void> confirmPhoneChange({
+    required String phone,
+    required String code,
+  }) async {
+    final remote = client;
+    if (remote == null) {
+      throw const RepositoryFailure(
+        'الخدمة غير متاحة الآن. تحقق من الاتصال وحاول مرة أخرى',
+      );
+    }
+    final trimmedCode = code.trim();
+    if (trimmedCode.isEmpty) {
+      throw const RepositoryFailure('أدخل رمز التحقق المرسل إلى هاتفك');
+    }
+    if (!RegExp(r'^\d{4,8}$').hasMatch(trimmedCode)) {
+      throw const RepositoryFailure('رمز التحقق يجب أن يتكون من أرقام فقط');
+    }
+    final normalized = _normalizePhone(phone);
+    try {
+      final auth = await remote.auth.verifyOTP(
+        phone: normalized,
+        token: trimmedCode,
+        type: OtpType.phoneChange,
+      );
+      if (auth.user == null) {
+        throw const RepositoryFailure(
+          'تعذر التحقق من الرمز. اطلب رمزا جديدا ثم حاول مرة أخرى',
+        );
+      }
+      // Keep the profile row's phone in sync for display. Best-effort: login
+      // itself relies on auth.users.phone (already updated above), so a failure
+      // here must not surface to the user.
+      final userId = auth.user?.id;
+      if (userId != null) {
+        try {
+          await remote
+              .from('profiles')
+              .update({'phone': normalized})
+              .eq('user_id', userId);
+        } catch (_) {
+          // Ignore — display-only sync.
+        }
+      }
+    } on AuthException catch (error) {
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'رمز التحقق غير صحيح أو منتهي الصلاحية. اطلب رمزا جديدا',
+        ),
+        error,
+      );
+    } catch (error) {
+      if (error is RepositoryFailure) {
+        rethrow;
+      }
+      throw RepositoryFailure(
+        userErrorMessage(
+          error,
+          fallback:
+              'تعذر التحقق من الرمز. تحقق من الاتصال أو اطلب رمزا جديدا',
+        ),
+        error,
+      );
+    }
+  }
+
+  @override
   Future<void> signOut() async {
     final remote = client;
     if (remote != null) {
@@ -728,5 +900,9 @@ final class SupabaseAuthRepository implements AuthRepository {
 
   bool _looksLikePhone(String normalized) {
     return RegExp(r'^\+\d{8,15}$').hasMatch(normalized);
+  }
+
+  bool _looksLikeEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
   }
 }
