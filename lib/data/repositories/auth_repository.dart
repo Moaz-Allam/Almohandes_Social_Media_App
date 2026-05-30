@@ -9,20 +9,10 @@ import 'repository_failure.dart';
 
 /// Delivery channel used for phone OTPs (login / signup / password reset).
 ///
-/// Defaults to WhatsApp. It can be switched back to SMS **at build time
-/// without any code change** by passing:
-///
-///   flutter run/build ... --dart-define=AUTH_OTP_CHANNEL=sms
-///
-/// Note: this only controls *delivery*. The verify step still uses
-/// [OtpType.sms] because Supabase verifies all phone OTPs with that token
-/// type regardless of whether they were delivered over SMS or WhatsApp.
-const String _otpChannelName = String.fromEnvironment(
-  'AUTH_OTP_CHANNEL',
-  defaultValue: 'whatsapp',
-);
-const OtpChannel kOtpChannel =
-    _otpChannelName == 'sms' ? OtpChannel.sms : OtpChannel.whatsapp;
+/// WhatsApp is the only supported channel. Note: this controls *delivery*
+/// only — the verify step still uses [OtpType.sms] because Supabase verifies
+/// all phone OTPs with that token type regardless of the delivery channel.
+const OtpChannel kOtpChannel = OtpChannel.whatsapp;
 
 /// Phone-first auth backed by Supabase + Twilio Verify (mirrors the alqafila
 /// project setup). The user flow is:
