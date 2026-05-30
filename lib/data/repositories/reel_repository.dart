@@ -124,7 +124,7 @@ final class SupabaseReelRepository implements ReelRepository {
     try {
       final profileId = await _currentProfileId(remote);
       if (profileId == null) {
-        throw const RepositoryFailure('سجل الدخول أولا لنشر الريل');
+        throw const RepositoryFailure('سجل الدخول أولا لنشر reel');
       }
       await remote.from('reels').insert({
         'profile_id': profileId,
@@ -138,7 +138,7 @@ final class SupabaseReelRepository implements ReelRepository {
     } on RepositoryFailure {
       rethrow;
     } catch (error) {
-      throw RepositoryFailure('تعذر نشر الريل الآن', error);
+      throw RepositoryFailure('تعذر نشر reel الآن', error);
     }
   }
 
@@ -151,7 +151,7 @@ final class SupabaseReelRepository implements ReelRepository {
     try {
       final profileId = await _currentProfileId(remote);
       if (profileId == null) {
-        throw const RepositoryFailure('سجل الدخول أولا لحذف الريل');
+        throw const RepositoryFailure('سجل الدخول أولا لحذف reel');
       }
       final affected = await remote
           .from('reels')
@@ -161,7 +161,7 @@ final class SupabaseReelRepository implements ReelRepository {
           .select('id');
       if (affected.isEmpty) {
         throw const RepositoryFailure(
-          'لم يتم العثور على الريل أو ليس لديك صلاحية حذفه',
+          'لم يتم العثور على reel أو ليس لديك صلاحية حذفه',
         );
       }
       _cache.clear();
@@ -169,7 +169,7 @@ final class SupabaseReelRepository implements ReelRepository {
     } on RepositoryFailure {
       rethrow;
     } catch (error) {
-      throw RepositoryFailure('تعذر حذف الريل الآن', error);
+      throw RepositoryFailure('تعذر حذف reel الآن', error);
     }
   }
 
@@ -186,7 +186,7 @@ final class SupabaseReelRepository implements ReelRepository {
     try {
       final profileId = await _currentProfileId(remote);
       if (profileId == null) {
-        throw const RepositoryFailure('سجل الدخول أولا لإعادة نشر الريل');
+        throw const RepositoryFailure('سجل الدخول أولا لإعادة نشر reel');
       }
       if (shouldLike) {
         await remote.from('reel_likes').upsert({
@@ -231,14 +231,14 @@ final class SupabaseReelRepository implements ReelRepository {
         reelId: reelId,
         actorProfileId: profileId,
         title: 'إعادة نشر',
-        message: 'تمت إعادة نشر الريل',
+        message: 'تمت إعادة نشر reel',
         type: 'repost',
       );
       _cache.clear();
     } on RepositoryFailure {
       rethrow;
     } catch (error) {
-      throw RepositoryFailure('تعذر إعادة نشر الريل الآن', error);
+      throw RepositoryFailure('تعذر إعادة نشر reel الآن', error);
     }
   }
 

@@ -81,6 +81,31 @@ final class AppController extends ChangeNotifier {
     return role == AccountType.engineer.label || role.toLowerCase() == 'engineer';
   }
 
+  /// True when the signed-in user is a platform admin ("إدارة"). Admins get
+  /// full access to the premium dashboard without any subscription. Matched
+  /// the same way as [isEngineer]: the Arabic account label or the raw
+  /// "admin" slug. Returns false until the profile loads so access never
+  /// defaults open.
+  bool get isAdmin {
+    final profile = _profile;
+    if (profile == null) {
+      return false;
+    }
+    final role = profile.role.trim();
+    return role == AccountType.admin.label || role.toLowerCase() == 'admin';
+  }
+
+  /// Whether the premium dashboard ("مركز المهندس") should be reachable:
+  /// - **Admins** always have access (no subscription required).
+  /// - **Engineers** need an active paid subscription ([hasPremiumLibrary]).
+  /// - **Every other account type** is blocked entirely.
+  ///
+  /// Used to gate the dashboard tab in both shells and the menu entry, and as
+  /// the in-screen guard, so unpaid engineers and non-engineers never see the
+  /// premium content.
+  bool get canAccessPremiumDashboard =>
+      isAdmin || (isEngineer && hasPremiumLibrary);
+
   /// True when the current user has flipped their profile to private. A
   /// private profile is fully visible to the owner and to accepted
   /// connections, but only shows basic info to anyone else.

@@ -36,7 +36,7 @@ class MyPostsManagerScreen extends StatelessWidget {
           bottom: const TabBar(
             tabs: [
               Tab(text: 'المنشورات'),
-              Tab(text: 'الريلز'),
+              Tab(text: 'reels'),
             ],
           ),
         ),
@@ -78,7 +78,7 @@ class MyPostsManagerScreen extends StatelessWidget {
                       await app.repositories.reels.deleteReel(id);
                       app.notifyReelsChanged();
                     },
-                    emptyLabel: 'لا توجد ريلز',
+                    emptyLabel: 'لا توجد reels',
                     crossAxisCount: 3,
                     childAspectRatio: 0.7,
                     tileBuilder: (reel) => _ReelTile(reel: reel),

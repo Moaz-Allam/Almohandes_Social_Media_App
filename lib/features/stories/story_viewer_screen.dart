@@ -193,38 +193,32 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
     return Scaffold(
       key: const ValueKey('story-viewer'),
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Center(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragEnd: _handleDrag,
-            // Long-press anywhere pauses the story; lifting resumes it.
-            onLongPressStart: (_) => _pauseProgress(),
-            onLongPressEnd: (_) => _resumeProgress(),
-            onLongPressCancel: _resumeProgress,
-            onTapUp: (details) {
-              final width = context.size?.width ??
-                  MediaQuery.sizeOf(context).width;
-              if (details.localPosition.dx < width / 2) {
-                _goNext();
-              } else {
-                _goPrevious();
-              }
-            },
-            // Lock story content to a phone-shaped viewport so it doesn't
-            // stretch across a desktop browser. Outside this column the
-            // background stays solid black, like Instagram on the web.
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 420,
-                maxHeight: MediaQuery.sizeOf(context).height,
-              ),
-              child: AspectRatio(
-                aspectRatio: 9 / 16,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-            children: [
+      body: Center(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragEnd: _handleDrag,
+          // Long-press anywhere pauses the story; lifting resumes it.
+          onLongPressStart: (_) => _pauseProgress(),
+          onLongPressEnd: (_) => _resumeProgress(),
+          onLongPressCancel: _resumeProgress,
+          onTapUp: (details) {
+            final width = context.size?.width ??
+                MediaQuery.sizeOf(context).width;
+            if (details.localPosition.dx < width / 2) {
+              _goNext();
+            } else {
+              _goPrevious();
+            }
+          },
+          // Lock the story to a phone-shaped width so it doesn't stretch
+          // across a desktop browser, but let it fill the full screen
+          // height (no letterbox) like Instagram. Outside this column the
+          // background stays solid black.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SizedBox.expand(
+              child: Stack(
+                children: [
               PageView.builder(
                 controller: _controller,
                 physics: const NeverScrollableScrollPhysics(),
@@ -244,10 +238,16 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                 },
               ),
               Positioned(
-                top: 10,
-                left: 12,
-                right: 12,
-                child: Column(
+                top: 0,
+                left: 0,
+                right: 0,
+                // Keep the progress bar + header clear of the status bar /
+                // notch now that the story fills the full height.
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                    child: Column(
                   children: [
                     AnimatedBuilder(
                       animation: _progress,
@@ -319,22 +319,31 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                     ),
                   ],
                 ),
+                  ),
+                ),
               ),
               PositionedDirectional(
                 start: 0,
                 end: 0,
-                bottom: 16,
+                bottom: 0,
                 // Your own story shows "who viewed it"; everyone else's shows
                 // the emoji reaction bar.
-                child: _isMine(currentStory)
-                    ? _StoryViewersButton(
-                        count: currentStory.viewsCount,
-                        onTap: () => _openViewers(currentStory),
-                      )
-                    : _StoryReactionBar(
-                        emojis: _reactionEmojis,
-                        onTap: (emoji) => _sendReaction(emoji, currentStory),
-                      ),
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _isMine(currentStory)
+                        ? _StoryViewersButton(
+                            count: currentStory.viewsCount,
+                            onTap: () => _openViewers(currentStory),
+                          )
+                        : _StoryReactionBar(
+                            emojis: _reactionEmojis,
+                            onTap: (emoji) =>
+                                _sendReaction(emoji, currentStory),
+                          ),
+                  ),
+                ),
               ),
               if (_burstEmoji != null)
                 Positioned.fill(
@@ -346,8 +355,6 @@ class _StoryViewerScreenState extends State<StoryViewerScreen>
                   ),
                 ),
             ],
-                  ),
-                ),
               ),
             ),
           ),
@@ -549,6 +556,9 @@ class _StoryImage extends StatelessWidget {
           MediaPreview(
             mediaUrl: story.mediaUrl,
             mediaType: story.mediaType,
+            // Fill the full-height viewport (like Instagram) instead of
+            // letterboxing the media inside it.
+            fit: BoxFit.cover,
             fallbackLabel: story.isVideo ? 'فيديو' : 'صورة',
             autoplay: story.isVideo,
             showVideoControls: story.isVideo,

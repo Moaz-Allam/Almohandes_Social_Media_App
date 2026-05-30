@@ -52,7 +52,7 @@ class LinkedInMenuDrawer extends StatelessWidget {
     }
     navigator.push(
       MaterialPageRoute(
-        builder: (_) => app.hasPremiumLibrary
+        builder: (_) => app.canAccessPremiumDashboard
             ? const PremiumDashboardScreen()
             : const PremiumAccessScreen(),
       ),
@@ -131,24 +131,29 @@ class LinkedInMenuDrawer extends StatelessWidget {
               ),
             ),
             Divider(height: 1, color: context.appBorder),
-            ListTile(
-              leading: Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: AppColors.blue,
-                  borderRadius: BorderRadius.circular(2),
+            // The premium dashboard entry is only relevant to admins (full
+            // access) and engineers (who may need to subscribe). Every other
+            // account type never sees it.
+            if (controller.isEngineer || controller.isAdmin) ...[
+              ListTile(
+                leading: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: AppColors.blue,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
+                title: Text(
+                  controller.canAccessPremiumDashboard
+                      ? 'لوحة Premium'
+                      : 'الوصول إلى Premium',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                onTap: () => _openPremiumDashboard(context),
               ),
-              title: Text(
-                controller.hasPremiumLibrary
-                    ? 'لوحة Premium'
-                    : 'الوصول إلى Premium',
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              onTap: () => _openPremiumDashboard(context),
-            ),
-            Divider(height: 1, color: context.appBorder),
+              Divider(height: 1, color: context.appBorder),
+            ],
             ListTile(
               leading: const Icon(
                 Icons.bookmark_outline,

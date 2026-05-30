@@ -78,7 +78,7 @@ final class MediaUploadService {
       MediaBucket.covers => 'رفع صورة الغلاف',
       MediaBucket.posts => 'رفع صورة المنشور',
       MediaBucket.stories => 'رفع القصة',
-      MediaBucket.reels => 'رفع الريل',
+      MediaBucket.reels => 'رفع reel',
       MediaBucket.voice => 'رفع الرسالة الصوتية',
       MediaBucket.chatFiles => 'رفع الملف',
     };

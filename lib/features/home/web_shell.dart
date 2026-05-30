@@ -96,7 +96,7 @@ class _WebShellState extends State<WebShell> {
               onOpenSettings: _openSettings,
               onSignOut: _signOut,
               onOpenSearch: _openSearch,
-              showDashboard: controller.isEngineer,
+              showDashboard: controller.canAccessPremiumDashboard,
             ),
             Expanded(
               child: Center(
@@ -201,7 +201,7 @@ class _WebTopBar extends StatelessWidget {
                   if (showDashboard)
                     _WebNavItem(
                       icon: Icons.dashboard_outlined,
-                      label: 'لوحة التحكم',
+                      label: 'لوحة المهندس',
                       selected: selectedTab == AppTab.dashboard,
                       onPressed: () => onChangeTab(AppTab.dashboard),
                     ),

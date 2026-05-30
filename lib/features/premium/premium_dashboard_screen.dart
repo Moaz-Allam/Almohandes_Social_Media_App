@@ -10,6 +10,7 @@ import '../../state/app_scope.dart';
 import '../home/widgets/home_top_bar.dart';
 import 'engineer_ai_chat_screen.dart';
 import 'models/premium_course.dart';
+import 'premium_access_screen.dart';
 import 'premium_course_library_screen.dart';
 import 'premium_info_screen.dart';
 import 'premium_notes_screen.dart';
@@ -43,7 +44,7 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
     super.didChangeDependencies();
     final app = AppScope.read(context);
     _coursesFuture = app.repositories.courses.fetchPremiumCourses();
-    _syncScreenProtection(app.isEngineer);
+    _syncScreenProtection(app.canAccessPremiumDashboard);
   }
 
   @override
@@ -180,8 +181,18 @@ class _PremiumDashboardScreenState extends State<PremiumDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.watch(context);
-    _syncScreenProtection(app.isEngineer);
-    if (!app.isEngineer) {
+    _syncScreenProtection(app.canAccessPremiumDashboard);
+    if (!app.canAccessPremiumDashboard) {
+      // Admins always pass the check above, so we only land here for
+      // non-admins. Engineers who simply haven't subscribed yet get the
+      // paywall (so they can pay from here); every other account type is
+      // blocked outright.
+      if (app.isEngineer) {
+        return PremiumAccessScreen(
+          onMenu: widget.onMenu,
+          onMessages: widget.onMessages,
+        );
+      }
       return const _EngineerOnlyScreen();
     }
     return Scaffold(

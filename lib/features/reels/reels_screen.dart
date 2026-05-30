@@ -146,7 +146,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
         HomeTopBar(
           onMenu: widget.onMenu,
           onMessages: widget.onMessages,
-          hint: 'ابحث في ريلز',
+          hint: 'ابحث في reels',
         ),
         Expanded(
           child: FutureBuilder<List<ReelItem>>(
@@ -232,13 +232,13 @@ class _ReelsEmptyState extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'لا توجد ريلز بعد',
+              'لا توجد reels بعد',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
             SizedBox(height: 6),
             Text(
-              'ستظهر الريلز هنا بعد نشرها.',
+              'ستظهر reels هنا بعد نشرها.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.muted, height: 1.45),
             ),
@@ -300,7 +300,7 @@ class _ReelPageState extends State<_ReelPage> {
               child: MediaPreview(
                 mediaUrl: item.videoUrl ?? item.thumbnailUrl ?? '',
                 mediaType: 'reel',
-                fallbackLabel: 'ريل',
+                fallbackLabel: 'reel',
                 autoplay: widget.isActive,
                 showVideoControls: true,
                 muted: _muted,
@@ -349,13 +349,13 @@ class _ReelPageState extends State<_ReelPage> {
                         AppSnack.error(
                           context,
                           error,
-                          fallback: 'تعذر إعادة نشر الريل الآن',
+                          fallback: 'تعذر إعادة نشر reel الآن',
                         );
                       }
                       return;
                     }
                     if (context.mounted) {
-                      AppSnack.success(context, 'تمت إعادة نشر الريل');
+                      AppSnack.success(context, 'تمت إعادة نشر reel');
                     }
                   },
                 ),

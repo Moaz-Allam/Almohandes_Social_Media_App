@@ -61,14 +61,14 @@ class LinkedBottomNavigation extends StatelessWidget {
                 _NavItem(
                   icon: Icons.grid_view_outlined,
                   activeIcon: Icons.grid_view_rounded,
-                  label: 'لوحة التحكم',
+                  label: 'لوحة المهندس',
                   selected: selectedTab == AppTab.dashboard,
                   onTap: () => onChanged(AppTab.dashboard),
                 ),
               _NavItem(
                 icon: Icons.play_circle_outline_rounded,
                 activeIcon: Icons.play_circle_rounded,
-                label: 'الريلز',
+                label: 'reels',
                 selected: selectedTab == AppTab.reels,
                 onTap: () => onChanged(AppTab.reels),
               ),

@@ -907,7 +907,7 @@ class _MessageBubble extends StatelessWidget {
                         Flexible(
                           child: Text(
                             text.startsWith('app://reel/')
-                                ? 'فتح الريل'
+                                ? 'فتح reel'
                                 : 'فتح المنشور',
                             style: TextStyle(
                               color: accent,

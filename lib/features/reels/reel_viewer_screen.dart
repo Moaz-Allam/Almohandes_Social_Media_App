@@ -56,9 +56,9 @@ class _ReelViewerScreenState extends State<ReelViewerScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('حذف الريل'),
+        title: const Text('حذف reel'),
         content: const Text(
-          'سيتم حذف هذا الريل نهائياً. هل تريد المتابعة؟',
+          'سيتم حذف هذا reel نهائياً. هل تريد المتابعة؟',
           textDirection: TextDirection.rtl,
         ),
         actions: [
@@ -86,7 +86,7 @@ class _ReelViewerScreenState extends State<ReelViewerScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _busy = false);
-      AppSnack.error(context, error, fallback: 'تعذر حذف الريل الآن');
+      AppSnack.error(context, error, fallback: 'تعذر حذف reel الآن');
       return;
     }
     if (!mounted) return;
@@ -99,7 +99,7 @@ class _ReelViewerScreenState extends State<ReelViewerScreen> {
     });
     messenger
       ..clearSnackBars()
-      ..showSnackBar(const SnackBar(content: Text('تم حذف الريل')));
+      ..showSnackBar(const SnackBar(content: Text('تم حذف reel')));
     if (_reels.isEmpty) {
       navigator.pop();
     } else {
@@ -116,7 +116,7 @@ class _ReelViewerScreenState extends State<ReelViewerScreen> {
           if (_reels.isEmpty)
             const Center(
               child: Text(
-                'لا توجد ريلز',
+                'لا توجد reels',
                 style: TextStyle(color: Colors.white70),
               ),
             )
@@ -164,7 +164,7 @@ class _ReelViewerScreenState extends State<ReelViewerScreen> {
                               Icons.delete_outline,
                               color: Colors.white,
                             ),
-                      tooltip: 'حذف الريل',
+                      tooltip: 'حذف reel',
                     ),
                 ],
               ),
@@ -203,7 +203,7 @@ class _ReelViewerPage extends StatelessWidget {
               child: MediaPreview(
                 mediaUrl: mediaUrl,
                 mediaType: 'reel',
-                fallbackLabel: 'ريل',
+                fallbackLabel: 'reel',
                 autoplay: isActive,
                 showVideoControls: true,
                 muted: muted,

@@ -370,7 +370,7 @@ class _PostDetailCard extends StatelessWidget {
               child: MediaPreview(
                 mediaUrl: post.mediaUrl,
                 mediaType: post.mediaType,
-                fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+                fallbackLabel: post.isReel ? 'reel' : 'صورة',
               ),
             ),
           Padding(

@@ -96,7 +96,7 @@ class WebComposerPrompt extends StatelessWidget {
               ),
               _WebPromptAction(
                 icon: Icons.smart_display_outlined,
-                label: 'ريل',
+                label: 'reel',
                 color: const Color(0xFFC4762E),
                 onTap: () =>
                     _openDialog(context, focus: _WebComposerStart.reel),
@@ -378,7 +378,7 @@ class _WebComposerDialogState extends State<_WebComposerDialog> {
       Navigator.of(context).pop();
       AppSnack.success(
         context,
-        wasReel ? 'تم نشر الريل بنجاح' : 'تم نشر المنشور بنجاح',
+        wasReel ? 'تم نشر reel بنجاح' : 'تم نشر المنشور بنجاح',
       );
     } catch (error) {
       if (!mounted) {
@@ -557,7 +557,7 @@ class _WebComposerDialogState extends State<_WebComposerDialog> {
                                 mediaUrl: _mediaUrl,
                                 mediaType: _mediaType,
                                 fallbackLabel:
-                                    _mediaType == 'reel' ? 'ريل' : 'صورة',
+                                    _mediaType == 'reel' ? 'reel' : 'صورة',
                               ),
                             ),
                           ),
@@ -627,7 +627,7 @@ class _WebComposerDialogState extends State<_WebComposerDialog> {
                     onPressed: _isUploadingMedia || _isPublishing
                         ? null
                         : () => _pickMedia(_WebComposerAction.reel),
-                    tooltip: 'إضافة ريل',
+                    tooltip: 'إضافة reel',
                     icon: const Icon(
                       Icons.smart_display_outlined,
                       color: Color(0xFFC4762E),

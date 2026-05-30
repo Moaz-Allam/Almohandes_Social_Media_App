@@ -337,7 +337,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   // the image (contain would letterbox off-ratio media).
                   fit: BoxFit.cover,
                   cacheWidth: mediaCacheWidth,
-                  fallbackLabel: post.isReel ? 'ريل' : 'صورة',
+                  fallbackLabel: post.isReel ? 'reel' : 'صورة',
                 ),
               ),
             ),

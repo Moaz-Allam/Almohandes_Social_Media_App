@@ -124,7 +124,7 @@ class _SavedItemsScreenState extends State<SavedItemsScreen> {
   String _typeLabel(SavedContentType type) {
     return switch (type) {
       SavedContentType.post => 'منشورات',
-      SavedContentType.reel => 'ريلز',
+      SavedContentType.reel => 'reels',
       SavedContentType.project => 'مشاريع',
       SavedContentType.company => 'شركات',
       SavedContentType.story => 'قصص',
@@ -215,7 +215,7 @@ class _SavedItemTile extends StatelessWidget {
   String _typeName(SavedContentType type) {
     return switch (type) {
       SavedContentType.post => 'منشور',
-      SavedContentType.reel => 'ريل',
+      SavedContentType.reel => 'reel',
       SavedContentType.project => 'مشروع',
       SavedContentType.company => 'شركة',
       SavedContentType.story => 'قصة',

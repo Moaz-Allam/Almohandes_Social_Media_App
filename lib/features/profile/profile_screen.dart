@@ -984,7 +984,7 @@ class _ProfileReelsGrid extends StatelessWidget {
         if (reels.isEmpty) {
           return Center(
             child: Text(
-              'لا توجد ريلز',
+              'لا توجد reels',
               style: TextStyle(color: context.appMuted),
             ),
           );

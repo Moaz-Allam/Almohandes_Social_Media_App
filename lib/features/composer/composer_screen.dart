@@ -39,7 +39,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     _ComposerOption(Icons.image_outlined, 'إضافة صورة', _ComposerAction.photo),
     _ComposerOption(
       Icons.smart_display_outlined,
-      'إضافة ريل',
+      'إضافة reel',
       _ComposerAction.reel,
     ),
     _ComposerOption(
@@ -120,7 +120,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
       }
       AppSnack.success(
         context,
-        wasReel ? 'تم نشر الريل بنجاح' : 'تم نشر المنشور بنجاح',
+        wasReel ? 'تم نشر reel بنجاح' : 'تم نشر المنشور بنجاح',
       );
       if (wasReel) {
         app.selectTab(AppTab.reels);
@@ -454,7 +454,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
                       child: MediaPreview(
                         mediaUrl: _mediaUrl,
                         mediaType: _mediaType,
-                        fallbackLabel: _mediaType == 'reel' ? 'ريل' : 'صورة',
+                        fallbackLabel: _mediaType == 'reel' ? 'reel' : 'صورة',
                       ),
                     ),
                     PositionedDirectional(
