@@ -108,8 +108,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 
   Future<void> _loadInitial({bool forceRefresh = true}) async {
     final token = ++_loadToken;
+    // Only show the full-screen skeleton on the very first load (empty list).
+    // Refreshes triggered by a like/comment/repost elsewhere keep the current
+    // list on screen and silently swap in the fresh counts — no skeleton flash.
     setState(() {
-      _isInitialLoading = true;
+      _isInitialLoading = _items.isEmpty;
       _isLoadingMore = false;
       _hasMore = false;
       _offset = 0;

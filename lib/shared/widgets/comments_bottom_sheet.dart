@@ -11,6 +11,7 @@ Future<void> showLinkedCommentsSheet(
   BuildContext context, {
   required String targetType,
   required String targetId,
+  ValueChanged<int>? onTopLevelCountDelta,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -20,8 +21,11 @@ Future<void> showLinkedCommentsSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (_) =>
-        LinkedCommentsSheet(targetType: targetType, targetId: targetId),
+    builder: (_) => LinkedCommentsSheet(
+      targetType: targetType,
+      targetId: targetId,
+      onTopLevelCountDelta: onTopLevelCountDelta,
+    ),
   );
 }
 
@@ -30,10 +34,16 @@ class LinkedCommentsSheet extends StatefulWidget {
     super.key,
     required this.targetType,
     required this.targetId,
+    this.onTopLevelCountDelta,
   });
 
   final String targetType;
   final String targetId;
+  // Fired with +1 when the viewer adds a top-level comment and -1 when they
+  // delete one (replies don't affect the post's comment badge). Lets the
+  // opener (feed card / detail header) update its counter instantly, before
+  // the authoritative feed reload lands.
+  final ValueChanged<int>? onTopLevelCountDelta;
 
   @override
   State<LinkedCommentsSheet> createState() => _LinkedCommentsSheetState();
@@ -45,6 +55,10 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
   final Map<String, int> _likeDeltas = {};
   final Set<String> _likedLocally = {};
   final Map<String, int> _replyDeltas = {};
+  // Comments the viewer deleted this session (hidden until the next refresh
+  // confirms them server-side) and locally-edited bodies keyed by comment id.
+  final Set<String> _deletedIds = {};
+  final Map<String, String> _editedContent = {};
   CommentItem? _replyTarget;
   late Future<List<CommentItem>> _commentsFuture;
   bool _didStartLoading = false;
@@ -161,6 +175,14 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
       setState(() {
         _commentsFuture = refreshed;
       });
+      // Refresh the feed so the post's comment counter updates "from outside"
+      // (the card/detail read comments_count, which the DB trigger just bumped).
+      AppScope.read(context).notifyFeedChanged();
+      // Only top-level comments bump the post's comment badge (replies live
+      // under their parent), matching the DB trigger on `posts.comments_count`.
+      if (replyTo == null) {
+        widget.onTopLevelCountDelta?.call(1);
+      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('تم إضافة التعليق')));
@@ -230,6 +252,135 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
     FocusScope.of(context).requestFocus(FocusNode());
   }
 
+  Future<void> _editComment(CommentItem comment) async {
+    final current = _editedContent[comment.id] ?? comment.content;
+    final edited = await _promptEditComment(current);
+    if (edited == null || !mounted) {
+      return;
+    }
+    final trimmed = edited.trim();
+    if (trimmed.isEmpty || trimmed == comment.content) {
+      return;
+    }
+    // Capture before the await so we don't touch context across an async gap.
+    final repo = AppScope.read(context).repositories.comments;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _editedContent[comment.id] = trimmed);
+    try {
+      await repo.updateComment(commentId: comment.id, content: trimmed);
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تم تعديل التعليق')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _editedContent.remove(comment.id));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر تعديل التعليق'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<String?> _promptEditComment(String initial) {
+    final controller = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('تعديل التعليق'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 4,
+            minLines: 1,
+            textDirection: TextDirection.rtl,
+            decoration: const InputDecoration(hintText: 'عدّل تعليقك...'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('حفظ'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteComment(CommentItem comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('حذف التعليق'),
+          content: const Text('هل تريد حذف هذا التعليق؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.destructive,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('حذف'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final app = AppScope.read(context);
+    final repo = app.repositories.comments;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _deletedIds.add(comment.id));
+    try {
+      await repo.deleteComment(commentId: comment.id);
+      if (!mounted) {
+        return;
+      }
+      // Deleting a top-level comment decrements the post's comments_count via
+      // the DB trigger; refresh the feed so the badge updates outside the sheet.
+      app.notifyFeedChanged();
+      // Mirror that decrement onto the opener's badge immediately (replies
+      // don't count toward the post's comment total).
+      if (!comment.isReply) {
+        widget.onTopLevelCountDelta?.call(-1);
+      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تم حذف التعليق')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _deletedIds.remove(comment.id));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            userErrorMessage(error, fallback: 'تعذر حذف التعليق'),
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
@@ -290,9 +441,16 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
                         _optimisticComments.isEmpty) {
                       return const Center(child: CircularProgressIndicator());
                     }
+                    final viewerId = AppScope.read(context).profile?.id;
                     final comments = [
-                      ..._optimisticComments,
-                      ...(snapshot.data ?? const <CommentItem>[]),
+                      for (final raw in [
+                        ..._optimisticComments,
+                        ...(snapshot.data ?? const <CommentItem>[]),
+                      ])
+                        if (!_deletedIds.contains(raw.id))
+                          _editedContent.containsKey(raw.id)
+                              ? raw.copyWith(content: _editedContent[raw.id])
+                              : raw,
                     ];
                     if (comments.isEmpty) {
                       return const _EmptyCommentsState();
@@ -303,13 +461,21 @@ class _LinkedCommentsSheetState extends State<LinkedCommentsSheet> {
                       itemCount: comments.length,
                       itemBuilder: (context, index) {
                         final comment = comments[index];
+                        final isOwner =
+                            viewerId != null &&
+                            comment.authorId != null &&
+                            comment.authorId == viewerId &&
+                            !comment.id.startsWith('local-');
                         return _CommentTile(
                           comment: comment,
                           likesCount: _effectiveLikes(comment),
                           repliesCount: _effectiveReplies(comment),
                           isLiked: _isCommentLiked(comment),
+                          isOwner: isOwner,
                           onLikePressed: () => _toggleCommentLike(comment),
                           onReplyPressed: () => _startReply(comment),
+                          onEditPressed: () => _editComment(comment),
+                          onDeletePressed: () => _deleteComment(comment),
                         );
                       },
                     );
@@ -411,16 +577,22 @@ class _CommentTile extends StatelessWidget {
     required this.likesCount,
     required this.repliesCount,
     required this.isLiked,
+    required this.isOwner,
     required this.onLikePressed,
     required this.onReplyPressed,
+    required this.onEditPressed,
+    required this.onDeletePressed,
   });
 
   final CommentItem comment;
   final int likesCount;
   final int repliesCount;
   final bool isLiked;
+  final bool isOwner;
   final VoidCallback onLikePressed;
   final VoidCallback onReplyPressed;
+  final VoidCallback onEditPressed;
+  final VoidCallback onDeletePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +601,10 @@ class _CommentTile extends StatelessWidget {
         comment: comment,
         likesCount: likesCount,
         isLiked: isLiked,
+        isOwner: isOwner,
         onLikePressed: onLikePressed,
+        onEditPressed: onEditPressed,
+        onDeletePressed: onDeletePressed,
       );
     }
     return _TopLevelCommentTile(
@@ -437,8 +612,66 @@ class _CommentTile extends StatelessWidget {
       likesCount: likesCount,
       repliesCount: repliesCount,
       isLiked: isLiked,
+      isOwner: isOwner,
       onLikePressed: onLikePressed,
       onReplyPressed: onReplyPressed,
+      onEditPressed: onEditPressed,
+      onDeletePressed: onDeletePressed,
+    );
+  }
+}
+
+/// Overflow menu (تعديل / حذف) shown on comments the viewer owns.
+class _OwnerCommentMenu extends StatelessWidget {
+  const _OwnerCommentMenu({
+    required this.onEditPressed,
+    required this.onDeletePressed,
+    this.size = 18,
+  });
+
+  final VoidCallback onEditPressed;
+  final VoidCallback onDeletePressed;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size + 10,
+      height: size + 10,
+      child: PopupMenuButton<String>(
+        tooltip: 'خيارات',
+        padding: EdgeInsets.zero,
+        icon: Icon(Icons.more_horiz, size: size, color: context.appMuted),
+        onSelected: (value) {
+          if (value == 'edit') {
+            onEditPressed();
+          } else if (value == 'delete') {
+            onDeletePressed();
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, size: 18),
+                SizedBox(width: 10),
+                Text('تعديل'),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline, size: 18, color: AppColors.destructive),
+                SizedBox(width: 10),
+                Text('حذف', style: TextStyle(color: AppColors.destructive)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -455,16 +688,22 @@ class _TopLevelCommentTile extends StatelessWidget {
     required this.likesCount,
     required this.repliesCount,
     required this.isLiked,
+    required this.isOwner,
     required this.onLikePressed,
     required this.onReplyPressed,
+    required this.onEditPressed,
+    required this.onDeletePressed,
   });
 
   final CommentItem comment;
   final int likesCount;
   final int repliesCount;
   final bool isLiked;
+  final bool isOwner;
   final VoidCallback onLikePressed;
   final VoidCallback onReplyPressed;
+  final VoidCallback onEditPressed;
+  final VoidCallback onDeletePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -484,14 +723,25 @@ class _TopLevelCommentTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  comment.authorName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14.5,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        comment.authorName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                    ),
+                    if (isOwner)
+                      _OwnerCommentMenu(
+                        onEditPressed: onEditPressed,
+                        onDeletePressed: onDeletePressed,
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -525,7 +775,7 @@ class _TopLevelCommentTile extends StatelessWidget {
                                   : Icons.favorite_border,
                               size: 16,
                               color: isLiked
-                                  ? AppColors.blue
+                                  ? AppColors.roseAccent
                                   : context.appMuted,
                             ),
                             const SizedBox(width: 4),
@@ -533,7 +783,7 @@ class _TopLevelCommentTile extends StatelessWidget {
                               '$likesCount',
                               style: TextStyle(
                                 color: isLiked
-                                    ? AppColors.blue
+                                    ? AppColors.roseAccent
                                     : context.appMuted,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
@@ -592,13 +842,19 @@ class _ReplyCommentTile extends StatelessWidget {
     required this.comment,
     required this.likesCount,
     required this.isLiked,
+    required this.isOwner,
     required this.onLikePressed,
+    required this.onEditPressed,
+    required this.onDeletePressed,
   });
 
   final CommentItem comment;
   final int likesCount;
   final bool isLiked;
+  final bool isOwner;
   final VoidCallback onLikePressed;
+  final VoidCallback onEditPressed;
+  final VoidCallback onDeletePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -677,6 +933,14 @@ class _ReplyCommentTile extends StatelessWidget {
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
+                              if (isOwner) ...[
+                                const Spacer(),
+                                _OwnerCommentMenu(
+                                  onEditPressed: onEditPressed,
+                                  onDeletePressed: onDeletePressed,
+                                  size: 15,
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 1),
@@ -714,7 +978,7 @@ class _ReplyCommentTile extends StatelessWidget {
                                             : Icons.favorite_border,
                                         size: 13,
                                         color: isLiked
-                                            ? AppColors.blue
+                                            ? AppColors.roseAccent
                                             : context.appMuted,
                                       ),
                                       const SizedBox(width: 3),
@@ -722,7 +986,7 @@ class _ReplyCommentTile extends StatelessWidget {
                                         '$likesCount',
                                         style: TextStyle(
                                           color: isLiked
-                                              ? AppColors.blue
+                                              ? AppColors.roseAccent
                                               : context.appMuted,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w800,

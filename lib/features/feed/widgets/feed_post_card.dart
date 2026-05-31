@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/feed_post_model.dart';
 import '../../../models/saved_content.dart';
@@ -14,6 +15,7 @@ import '../../../state/app_scope.dart';
 import '../../profile/profile_screen.dart';
 import '../post_detail_screen.dart';
 import 'report_post_sheet.dart';
+import 'share_post_sheet.dart';
 
 /// Post card styled after the web `.feed-post` / `.pro-card` components:
 /// theme-tinted surface, 20px radius, soft border, and Lucide-equivalent
@@ -29,6 +31,7 @@ class FeedPostCard extends StatefulWidget {
 
 class _FeedPostCardState extends State<FeedPostCard> {
   late int _reactionCount;
+  late int _commentCount;
   bool _isLiked = false;
   Timer? _likeBurstTimer;
 
@@ -38,7 +41,37 @@ class _FeedPostCardState extends State<FeedPostCard> {
   void initState() {
     super.initState();
     _reactionCount = _parseReactionCount(post.reactions);
+    _commentCount = _parseReactionCount(post.comments);
     _isLiked = post.isLikedByViewer;
+  }
+
+  @override
+  void didUpdateWidget(covariant FeedPostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When a feed refresh delivers updated server counts for this post (e.g.
+    // after the viewer liked/commented from the detail screen or someone else
+    // interacted), adopt them. The local optimistic state is only the source
+    // of truth until the next refresh hands us authoritative DB values.
+    if (oldWidget.post.reactions != widget.post.reactions ||
+        oldWidget.post.isLikedByViewer != widget.post.isLikedByViewer) {
+      _reactionCount = _parseReactionCount(widget.post.reactions);
+      _isLiked = widget.post.isLikedByViewer;
+    }
+    if (oldWidget.post.comments != widget.post.comments) {
+      _commentCount = _parseReactionCount(widget.post.comments);
+    }
+  }
+
+  /// Optimistically nudges the comment badge when the viewer adds/removes a
+  /// top-level comment in the sheet, before the feed reload confirms it.
+  void _applyCommentDelta(int delta) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      final next = _commentCount + delta;
+      _commentCount = next < 0 ? 0 : next;
+    });
   }
 
   int _parseReactionCount(String value) {
@@ -93,10 +126,16 @@ class _FeedPostCardState extends State<FeedPostCard> {
     }
   }
 
-  void _openDetail() {
-    Navigator.of(context).push(
+  Future<void> _openDetail() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => PostDetailScreen(post: post)),
     );
+    if (!mounted) {
+      return;
+    }
+    // Liking, commenting, or reposting inside the detail screen changes the
+    // server counts; refresh the feed so this card reflects them on return.
+    AppScope.read(context).notifyFeedChanged();
   }
 
   Future<void> _deletePost() async {
@@ -193,6 +232,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (post.isRepost && (post.repostOriginalName?.isNotEmpty ?? false))
+            _RepostBanner(name: post.repostOriginalName!),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
@@ -350,27 +391,26 @@ class _FeedPostCardState extends State<FeedPostCard> {
                 // RTL start (visual right): like, comments, share.
                 _ActionButtonWithCount(
                   icon: _isLiked
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
+                      ? Icons.thumb_up_alt
+                      : Icons.thumb_up_alt_outlined,
                   count: '$_reactionCount',
-                  iconColor: _isLiked
-                      ? const Color(0xFFF43F5E)
-                      : context.appText,
-                  textColor: _isLiked ? const Color(0xFFF43F5E) : null,
+                  iconColor: _isLiked ? AppColors.blue : context.appText,
+                  textColor: _isLiked ? AppColors.blue : null,
                   onTap: _toggleLike,
                 ),
                 _ActionButtonWithCount(
                   icon: Icons.mode_comment_outlined,
-                  count: post.comments.replaceAll(RegExp(r'[^0-9]'), ''),
+                  count: '$_commentCount',
                   onTap: () => showLinkedCommentsSheet(
                     context,
                     targetType: 'post',
                     targetId: post.id,
+                    onTopLevelCountDelta: _applyCommentDelta,
                   ),
                 ),
                 _ActionButton(
                   icon: Icons.ios_share_rounded,
-                  onTap: () {},
+                  onTap: () => showSharePostSheet(context, post),
                 ),
                 const Spacer(),
                 // RTL end (visual left): save.
@@ -387,6 +427,44 @@ class _FeedPostCardState extends State<FeedPostCard> {
                   },
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Attribution strip shown atop reshared posts, crediting the original
+/// author. The card body below it still renders the resharer's identity,
+/// so this banner only needs to name the original creator.
+class _RepostBanner extends StatelessWidget {
+  const _RepostBanner({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      decoration: BoxDecoration(
+        color: context.appSurfaceAlt,
+        border: Border(bottom: BorderSide(color: context.appBorder)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.repeat_rounded, size: 16, color: context.appMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'تمت إعادة النشر من $name',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: context.appMuted,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

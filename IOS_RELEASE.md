@@ -15,7 +15,7 @@ Commands and steps to build the iOS app and publish it to the App Store.
 | Flutter package name | `tradeflow` |
 | Display name | المهندس |
 | Bundle Identifier | `com.almohandes.app` |
-| Version (marketing + build) | `2.0.0+4` (from `pubspec.yaml`) |
+| Version (marketing + build) | `2.0.0+5` (from `pubspec.yaml`) |
 | Minimum iOS | `15.0` (from `ios/Podfile`) |
 
 The version string is `MARKETING_VERSION+BUILD_NUMBER`. Apple requires the

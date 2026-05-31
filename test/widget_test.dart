@@ -161,25 +161,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Unliked: outline heart + the initial reaction count.
+    // Unliked: outline thumb-up + the initial reaction count.
     expect(find.text('77'), findsOneWidget);
-    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.thumb_up_alt_outlined), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.favorite_border_rounded));
+    await tester.tap(find.byIcon(Icons.thumb_up_alt_outlined));
     await tester.pump();
 
-    // Liked: filled heart in the brand "like" colour + incremented count.
+    // Liked: filled thumb-up in the brand "like" colour + incremented count.
     final likedIcon = tester.widget<Icon>(
-      find.byIcon(Icons.favorite_rounded),
+      find.byIcon(Icons.thumb_up_alt),
     );
     expect(find.text('78'), findsOneWidget);
-    expect(likedIcon.color, const Color(0xFFF43F5E));
+    expect(likedIcon.color, AppColors.blue);
 
-    await tester.tap(find.byIcon(Icons.favorite_rounded));
+    await tester.tap(find.byIcon(Icons.thumb_up_alt));
     await tester.pump();
 
-    // Back to the outline heart and original count.
-    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+    // Back to the outline thumb-up and original count.
+    expect(find.byIcon(Icons.thumb_up_alt_outlined), findsOneWidget);
     expect(find.text('77'), findsOneWidget);
   });
 
@@ -488,6 +488,17 @@ final class _FakeCommentRepository implements CommentRepository {
     required String commentId,
     required bool shouldLike,
   }) async {}
+
+  @override
+  Future<void> deleteComment({required String commentId}) async {}
+
+  @override
+  Future<CommentItem?> updateComment({
+    required String commentId,
+    required String content,
+  }) async {
+    return null;
+  }
 
   @override
   Future<({String targetType, String targetId})?> resolveCommentTarget(

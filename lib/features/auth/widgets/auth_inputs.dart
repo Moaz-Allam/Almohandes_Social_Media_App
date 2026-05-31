@@ -36,15 +36,7 @@ class PhoneInputRow extends StatelessWidget {
         textDirection: TextDirection.ltr,
         child: Row(
           children: [
-            _CountryChip(
-              country: country,
-              onTap: () async {
-                final selected = await _showCountryPicker(context, country);
-                if (selected != null) {
-                  onCountryChanged(selected);
-                }
-              },
-            ),
+            _CountryChip(country: country),
             Container(
               width: 1,
               height: 36,
@@ -88,165 +80,29 @@ class PhoneInputRow extends StatelessWidget {
 }
 
 class _CountryChip extends StatelessWidget {
-  const _CountryChip({required this.country, required this.onTap});
+  const _CountryChip({required this.country});
 
   final Country country;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(country.flag, style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 8),
-            Text(
-              country.dialCode,
-              style: const TextStyle(
-                color: AppColors.inkDark,
-                fontWeight: FontWeight.w800,
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 18,
-              color: AppColors.mutedDark,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Future<Country?> _showCountryPicker(BuildContext context, Country current) {
-  return showModalBottomSheet<Country>(
-    context: context,
-    backgroundColor: AppColors.surfaceDark,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (ctx) => _CountryPickerSheet(current: current),
-  );
-}
-
-class _CountryPickerSheet extends StatefulWidget {
-  const _CountryPickerSheet({required this.current});
-
-  final Country current;
-
-  @override
-  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
-}
-
-class _CountryPickerSheetState extends State<_CountryPickerSheet> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
-    final filtered = countries.where((c) {
-      if (_query.isEmpty) return true;
-      final q = _query.toLowerCase();
-      return c.nameAr.contains(q) ||
-          c.nameEn.toLowerCase().contains(q) ||
-          c.dialCode.contains(q);
-    }).toList(growable: false);
-
+    // Iraq-only: this is a fixed prefix, not a tappable picker.
     return Padding(
-      padding: EdgeInsets.only(bottom: viewInsets),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.borderDark,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'اختر الدولة',
-                style: TextStyle(
-                  color: AppColors.inkDark,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: TextField(
-                  onChanged: (v) => setState(() => _query = v),
-                  style: const TextStyle(color: AppColors.inkDark),
-                  decoration: InputDecoration(
-                    hintText: 'ابحث…',
-                    hintStyle: const TextStyle(color: AppColors.mutedDark),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: AppColors.mutedDark,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.surfaceAltDark,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  itemCount: filtered.length,
-                  itemBuilder: (context, i) {
-                    final c = filtered[i];
-                    final selected = c.code == widget.current.code;
-                    return ListTile(
-                      onTap: () => Navigator.of(context).pop(c),
-                      leading: Text(
-                        c.flag,
-                        style: const TextStyle(fontSize: 24),
-                      ),
-                      title: Text(
-                        c.nameAr,
-                        style: const TextStyle(
-                          color: AppColors.inkDark,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      trailing: Text(
-                        c.dialCode,
-                        style: TextStyle(
-                          color:
-                              selected ? AppColors.primaryGlow : AppColors.mutedDark,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          );
-        },
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(country.flag, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 8),
+          Text(
+            country.dialCode,
+            style: const TextStyle(
+              color: AppColors.inkDark,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+        ],
       ),
     );
   }

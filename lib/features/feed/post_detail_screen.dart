@@ -34,9 +34,13 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   late int _reactionCount;
+  late int _commentCount;
   bool _isLiked = false;
   bool _showLike = false;
   Timer? _likeBurstTimer;
+  // Lets the parent force the inline comments list to re-fetch (e.g. after the
+  // viewer adds a comment through the bottom-sheet composer).
+  final GlobalKey<_InlineCommentsSectionState> _commentsKey = GlobalKey();
 
   FeedPostModel get post => widget.post;
 
@@ -44,6 +48,44 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   void initState() {
     super.initState();
     _reactionCount = _parseReactionCount(post.reactions);
+    _commentCount = _parseReactionCount(post.comments);
+    _isLiked = post.isLikedByViewer;
+  }
+
+  /// The inline list reports the live top-level comment count after every
+  /// fetch. Mirror it onto the badge and let the rest of the app refresh the
+  /// post's `comments_count` badge "from outside" via a feed-version bump.
+  void _handleCommentCountChanged(int topLevelCount) {
+    if (!mounted || _commentCount == topLevelCount) {
+      return;
+    }
+    setState(() => _commentCount = topLevelCount);
+    AppScope.read(context).notifyFeedChanged();
+  }
+
+  Future<void> _openCommentsSheet() async {
+    await showLinkedCommentsSheet(
+      context,
+      targetType: 'post',
+      targetId: post.id,
+      // Instant badge feedback while the sheet is open; the reload below then
+      // reconciles against the authoritative server count.
+      onTopLevelCountDelta: (delta) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          final next = _commentCount + delta;
+          _commentCount = next < 0 ? 0 : next;
+        });
+      },
+    );
+    if (!mounted) {
+      return;
+    }
+    // The sheet may have added/removed comments; re-sync the inline list and
+    // the count badge with the server.
+    _commentsKey.currentState?.reload();
   }
 
   @override
@@ -214,18 +256,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               _PostDetailCard(
                 post: post,
                 reactionCount: _reactionCount,
+                commentCount: _commentCount,
                 isLiked: _isLiked,
                 onLike: _toggleLike,
-                onComment: () => showLinkedCommentsSheet(
-                  context,
-                  targetType: 'post',
-                  targetId: post.id,
-                ),
+                onComment: _openCommentsSheet,
                 onRepost: _confirmRepost,
                 onSend: _openSendFlow,
                 onMenuSelected: _handleMenuSelection,
               ),
-              _InlineCommentsSection(postId: post.id),
+              _InlineCommentsSection(
+                key: _commentsKey,
+                postId: post.id,
+                onTopLevelCountChanged: _handleCommentCountChanged,
+              ),
             ],
           ),
           LikeBurst(visible: _showLike, color: AppColors.blue),
@@ -239,6 +282,7 @@ class _PostDetailCard extends StatelessWidget {
   const _PostDetailCard({
     required this.post,
     required this.reactionCount,
+    required this.commentCount,
     required this.isLiked,
     required this.onLike,
     required this.onComment,
@@ -249,6 +293,7 @@ class _PostDetailCard extends StatelessWidget {
 
   final FeedPostModel post;
   final int reactionCount;
+  final int commentCount;
   final bool isLiked;
   final VoidCallback onLike;
   final VoidCallback onComment;
@@ -384,7 +429,10 @@ class _PostDetailCard extends StatelessWidget {
                   style: const TextStyle(color: AppColors.muted),
                 ),
                 const Spacer(),
-                Text(post.comments, style: TextStyle(color: context.appMuted)),
+                Text(
+                  '$commentCount تعليق',
+                  style: TextStyle(color: context.appMuted),
+                ),
               ],
             ),
           ),
@@ -458,9 +506,16 @@ class _RepostCredit extends StatelessWidget {
 }
 
 class _InlineCommentsSection extends StatefulWidget {
-  const _InlineCommentsSection({required this.postId});
+  const _InlineCommentsSection({
+    super.key,
+    required this.postId,
+    required this.onTopLevelCountChanged,
+  });
 
   final String postId;
+  // Reports the live count of top-level comments (replies excluded) after
+  // every fetch, so the parent can keep the post's comment badge in sync.
+  final ValueChanged<int> onTopLevelCountChanged;
 
   @override
   State<_InlineCommentsSection> createState() => _InlineCommentsSectionState();
@@ -479,14 +534,47 @@ class _InlineCommentsSectionState extends State<_InlineCommentsSection> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _commentsFuture = AppScope.read(context).repositories.comments
-        .fetchComments(targetType: 'post', targetId: widget.postId);
+    _setCommentsFuture(
+      AppScope.read(context).repositories.comments
+          .fetchComments(targetType: 'post', targetId: widget.postId),
+    );
   }
 
   @override
   void dispose() {
     _commentController.dispose();
     super.dispose();
+  }
+
+  /// Adopts a new comments future and, once it resolves, reports the number of
+  /// top-level comments up to the parent (matching `posts.comments_count`,
+  /// which excludes replies).
+  void _setCommentsFuture(Future<List<CommentItem>> future) {
+    _commentsFuture = future;
+    future.then((items) {
+      if (!mounted) {
+        return;
+      }
+      final topLevel = items.where((item) => !item.isReply).length;
+      widget.onTopLevelCountChanged(topLevel);
+    }).catchError((_) {});
+  }
+
+  /// Force a fresh fetch — used by the parent after the bottom-sheet composer
+  /// adds or removes comments.
+  void reload() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _setCommentsFuture(
+        AppScope.read(context).repositories.comments.fetchComments(
+              targetType: 'post',
+              targetId: widget.postId,
+              forceRefresh: true,
+            ),
+      );
+    });
   }
 
   Future<void> _submitComment() async {
@@ -506,10 +594,12 @@ class _InlineCommentsSectionState extends State<_InlineCommentsSection> {
         return;
       }
       setState(() {
-        _commentsFuture = comments.fetchComments(
-          targetType: 'post',
-          targetId: widget.postId,
-          forceRefresh: true,
+        _setCommentsFuture(
+          comments.fetchComments(
+            targetType: 'post',
+            targetId: widget.postId,
+            forceRefresh: true,
+          ),
         );
       });
       ScaffoldMessenger.of(

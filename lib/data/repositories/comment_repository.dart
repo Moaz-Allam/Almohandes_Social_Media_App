@@ -28,6 +28,17 @@ abstract interface class CommentRepository {
     required bool shouldLike,
   });
 
+  /// Deletes a comment the viewer owns. The delete is scoped to the current
+  /// profile, so it silently no-ops (throws) for comments owned by others.
+  Future<void> deleteComment({required String commentId});
+
+  /// Edits a comment the viewer owns. Returns the updated comment, or null if
+  /// nothing was changed (e.g. not the owner). Scoped to the current profile.
+  Future<CommentItem?> updateComment({
+    required String commentId,
+    required String content,
+  });
+
   /// Resolves which post/reel/project a comment belongs to, for notification
   /// deep links of the form `app://comment/<id>`. Returns null if unknown.
   Future<({String targetType, String targetId})?> resolveCommentTarget(
@@ -84,9 +95,9 @@ final class SupabaseCommentRepository implements CommentRepository {
     //   (c) parent_id missing
     //   (d) legacy post_comments / reel_comments fallback
     final attempts = <String>[
-      'id,content,created_at,parent_id,likes_count,replies_count,$_authorEmbed',
-      'id,content,created_at,parent_id,$_authorEmbed',
-      'id,content,created_at,$_authorEmbed',
+      'id,content,created_at,parent_id,likes_count,replies_count,profile_id,$_authorEmbed',
+      'id,content,created_at,parent_id,profile_id,$_authorEmbed',
+      'id,content,created_at,profile_id,$_authorEmbed',
     ];
     List<CommentItem>? fetched;
     for (final select in attempts) {
@@ -210,7 +221,9 @@ final class SupabaseCommentRepository implements CommentRepository {
       try {
         final rows = await remote
             .from(attempt.$1)
-            .select('id,content,created_at,profiles(full_name,avatar_url)')
+            .select(
+              'id,content,created_at,profile_id,profiles(full_name,avatar_url)',
+            )
             .eq(attempt.$2, targetId)
             .order('created_at', ascending: false)
             .limit(_commentsPageSize);
@@ -261,21 +274,21 @@ final class SupabaseCommentRepository implements CommentRepository {
           _InsertAttempt(
             includeParent: true,
             select:
-                'id,content,created_at,parent_id,likes_count,replies_count,$_authorEmbed',
+                'id,content,created_at,parent_id,likes_count,replies_count,profile_id,$_authorEmbed',
           ),
         if (hasParent)
           _InsertAttempt(
             includeParent: true,
-            select: 'id,content,created_at,parent_id,$_authorEmbed',
+            select: 'id,content,created_at,parent_id,profile_id,$_authorEmbed',
           ),
         _InsertAttempt(
           includeParent: false,
           select:
-              'id,content,created_at,parent_id,likes_count,replies_count,$_authorEmbed',
+              'id,content,created_at,parent_id,likes_count,replies_count,profile_id,$_authorEmbed',
         ),
         _InsertAttempt(
           includeParent: false,
-          select: 'id,content,created_at,$_authorEmbed',
+          select: 'id,content,created_at,profile_id,$_authorEmbed',
         ),
       ];
 
@@ -348,7 +361,9 @@ final class SupabaseCommentRepository implements CommentRepository {
               'profile_id': profileId,
               'content': content,
             })
-            .select('id,content,created_at,profiles(full_name,avatar_url)')
+            .select(
+              'id,content,created_at,profile_id,profiles(full_name,avatar_url)',
+            )
             .single();
         return _commentFromRow(Map<String, dynamic>.from(row), 0);
       } catch (_) {
@@ -364,10 +379,12 @@ final class SupabaseCommentRepository implements CommentRepository {
         : const <String, dynamic>{};
     final authorName = '${profile['full_name'] ?? 'مستخدم'}'.trim();
     final parentId = '${row['parent_id'] ?? ''}';
+    final authorId = '${row['profile_id'] ?? ''}'.trim();
     final likesCount = int.tryParse('${row['likes_count'] ?? 0}') ?? 0;
     final repliesCount = int.tryParse('${row['replies_count'] ?? 0}') ?? 0;
     return CommentItem(
       id: '${row['id']}',
+      authorId: authorId.isEmpty ? null : authorId,
       authorName: authorName.isEmpty ? 'مستخدم' : authorName,
       content: '${row['content'] ?? ''}',
       createdAt:
@@ -413,6 +430,130 @@ final class SupabaseCommentRepository implements CommentRepository {
     } catch (_) {
       // app_comment_likes is optional on older deployments; the UI keeps
       // the optimistic toggle either way.
+    }
+  }
+
+  @override
+  Future<void> deleteComment({required String commentId}) async {
+    final remote = client;
+    if (remote == null || commentId.isEmpty) {
+      return;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        throw const RepositoryFailure('سجل الدخول أولا');
+      }
+      // Owner-scoped delete: RLS + the explicit profile_id filter make this a
+      // no-op for comments the viewer doesn't own. `.select('id')` lets us
+      // detect that case and surface a clear error instead of a silent pass.
+      final deleted = await remote
+          .from('app_comments')
+          .delete()
+          .eq('id', commentId)
+          .eq('profile_id', profileId)
+          .select('id');
+      if ((deleted as List).isEmpty) {
+        // Fall back to the legacy tables which also carry profile_id.
+        final removed = await _deleteLegacyComment(
+          remote,
+          commentId: commentId,
+          profileId: profileId,
+        );
+        if (!removed) {
+          throw const RepositoryFailure('تعذر حذف التعليق');
+        }
+      }
+      _clearAllCaches();
+    } on RepositoryFailure {
+      rethrow;
+    } catch (error) {
+      throw RepositoryFailure('تعذر حذف التعليق', error);
+    }
+  }
+
+  Future<bool> _deleteLegacyComment(
+    SupabaseClient remote, {
+    required String commentId,
+    required String profileId,
+  }) async {
+    for (final table in const ['post_comments', 'reel_comments', 'comments']) {
+      try {
+        final removed = await remote
+            .from(table)
+            .delete()
+            .eq('id', commentId)
+            .eq('profile_id', profileId)
+            .select('id');
+        if ((removed as List).isNotEmpty) {
+          return true;
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Future<CommentItem?> updateComment({
+    required String commentId,
+    required String content,
+  }) async {
+    final remote = client;
+    final trimmed = content.trim();
+    if (remote == null || commentId.isEmpty || trimmed.isEmpty) {
+      return null;
+    }
+    try {
+      final profileId = await _currentProfileId(remote);
+      if (profileId == null) {
+        throw const RepositoryFailure('سجل الدخول أولا');
+      }
+      final selects = <String>[
+        'id,content,created_at,parent_id,likes_count,replies_count,profile_id,$_authorEmbed',
+        'id,content,created_at,parent_id,profile_id,$_authorEmbed',
+        'id,content,created_at,profile_id,$_authorEmbed',
+      ];
+      Object? firstError;
+      for (final select in selects) {
+        try {
+          final rows = await remote
+              .from('app_comments')
+              .update({'content': trimmed})
+              .eq('id', commentId)
+              .eq('profile_id', profileId)
+              .select(select);
+          final list = rows as List;
+          if (list.isEmpty) {
+            // Owner filter matched nothing — not the viewer's comment.
+            throw const RepositoryFailure('تعذر تعديل التعليق');
+          }
+          _clearAllCaches();
+          return _commentFromRow(
+            Map<String, dynamic>.from(list.first as Map),
+            0,
+          );
+        } on RepositoryFailure {
+          rethrow;
+        } catch (error) {
+          firstError ??= error;
+          continue;
+        }
+      }
+      throw RepositoryFailure('تعذر تعديل التعليق', firstError ?? 'unknown');
+    } on RepositoryFailure {
+      rethrow;
+    } catch (error) {
+      throw RepositoryFailure('تعذر تعديل التعليق', error);
+    }
+  }
+
+  /// Drops every cached comment thread. Used after a mutation that can affect
+  /// any target (delete/edit), since we don't always know the target here.
+  void _clearAllCaches() {
+    for (final cache in _caches.values) {
+      cache.clear();
     }
   }
 

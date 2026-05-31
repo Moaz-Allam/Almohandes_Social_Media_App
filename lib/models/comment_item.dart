@@ -7,6 +7,7 @@ final class CommentItem {
     required this.content,
     required this.createdAt,
     required this.color,
+    this.authorId,
     this.avatarUrl,
     this.likesCount = 0,
     this.repliesCount = 0,
@@ -15,6 +16,10 @@ final class CommentItem {
   });
 
   final String id;
+
+  /// Profile id of the author. Used to decide whether the current viewer can
+  /// edit/delete this comment. Null on legacy rows that don't expose it.
+  final String? authorId;
   final String authorName;
   final String content;
   final DateTime createdAt;
@@ -28,14 +33,16 @@ final class CommentItem {
   bool get isReply => parentId != null && parentId!.isNotEmpty;
 
   CommentItem copyWith({
+    String? content,
     int? likesCount,
     int? repliesCount,
     bool? isLikedByViewer,
   }) {
     return CommentItem(
       id: id,
+      authorId: authorId,
       authorName: authorName,
-      content: content,
+      content: content ?? this.content,
       createdAt: createdAt,
       color: color,
       avatarUrl: avatarUrl,

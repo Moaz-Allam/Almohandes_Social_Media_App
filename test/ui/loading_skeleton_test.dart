@@ -384,6 +384,17 @@ final class _FakeCommentRepository implements CommentRepository {
   }) async {}
 
   @override
+  Future<void> deleteComment({required String commentId}) async {}
+
+  @override
+  Future<CommentItem?> updateComment({
+    required String commentId,
+    required String content,
+  }) async {
+    return null;
+  }
+
+  @override
   Future<({String targetType, String targetId})?> resolveCommentTarget(
     String commentId,
   ) async {
