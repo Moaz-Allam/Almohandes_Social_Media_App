@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCy-NPyIMJqEqXJliVKU3BHpOugR0fOJLU</string>
+	<key>GCM_SENDER_ID</key>
+	<string>851572571996</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.almohandes.app</string>
+	<key>PROJECT_ID</key>
+	<string>almohandes-engineer-2026</string>
+	<key>STORAGE_BUCKET</key>
+	<string>almohandes-engineer-2026.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false/>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false/>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true/>
+	<key>IS_GCM_ENABLED</key>
+	<true/>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true/>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:851572571996:ios:97d8d3ed202aa123e90b99</string>
+</dict>
+</plist>
